@@ -20,16 +20,21 @@ class String:
         return self.value
 
 class Procedure:
-    """A user-defined Lisp/Scheme procedure that remembers its source code for saving."""
-    def __init__(self, parms: list[Symbol], body: Exp, env: Env):
+    """A user-defined or wrapped native Lisp/Scheme procedure that knows how to serialize itself."""
+    def __init__(self, parms: list[Symbol], body: Any, env: Env, native_fn: Callable = None, name: str = None):
         self.parms = parms
         self.body = body
         self.env = env
+        self.native_fn = native_fn  # Säilytetään alkuperäinen Python-funktio, jos kyseessä on natiivifunktio
+        self.name = name            # Natiivifunktion nimi (esim. 'log' tai '+')
 
     def __call__(self, *args: Any) -> Any:
-        # Suoritetaan funktio luomalla sille oma paikallinen skooppi
+        # Jos kyseessä on kääritty natiivifunktio, ajetaan se suoraan Pythonissa
+        if self.native_fn:
+            return self.native_fn(*args)
+        # Muuten ajetaan Lisp-funktio luomalla sille oma paikallinen skooppi
         return eval_exp(self.body, Env(self.parms, list(args), self.env))
-
+    
 class Env(dict):
     """An environment for lexical scoping, inheriting from dict."""
     def __init__(self, parms: list[Symbol] = None, args: list[Any] = None, outer: 'Env' = None):
@@ -46,42 +51,60 @@ class Env(dict):
             raise NameError(f"Undefined symbol: {var}")
         return self.outer.find(var)
 
-# --- Helper Functions for Workspace Save and Load (FINAL REPL FIX) ---
+# --- Helper Functions for Workspace Save and Load ---
 def save_workspace(filename: str) -> str:
-    """Saves all user-defined definitions from the global environment to a file as Lisp code."""
+    """Saves only user-defined variables and Lisp Procedures to a file, ignoring Python built-ins."""
     real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
     
-    # Luodaan puhdas standardiympäristö pelkkää nimitarkistusta varten
     std = standard_env()
     
     with open(real_filename, 'w', encoding='utf-8') as f:
-        # Käydään suoraan läpi yhteistä globaalia ympäristöä
         for key, value in global_env.items():
-            # Tallennetaan vain ne, joita ei ole standardiympäristössä ja jätetään 'nan' pois
-            if key not in std and key != 'nan':
-                f.write(f"(define {key} {lisp_str(value)})\n")
+            if key in std or key == 'nan':
+                continue
+                
+            # Jos kyseessä on jokin Pythonin oma funktio (esim. log), jätetään se tallentamatta
+            if callable(value) and type(value).__name__ != 'Procedure':
+                continue
+                
+            # Kirjoitetaan puhdasta Lisp-koodia tiedostoon
+            f.write(f"(define {key} {lisp_str(value)})\n")
+            
     return f"Workspace saved to {real_filename}"
 
 def load_workspace(filename: str) -> str:
-    """Loads and evaluates Lisp definitions from a file into the global environment."""
+    """Loads and evaluates all Lisp definitions from a file safely, preventing REPL leaks."""
     real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
     
     with open(real_filename, 'r', encoding='utf-8') as f:
-        content = f.read()
+        content = f.read().strip()
     
-    lines = [line.strip() for line in content.split('\n') if line.strip()]
-    for line in lines:
-        ast = parse(line)
-        eval_exp(ast, global_env) # Ajetaan koodi suoraan yhteisessä globaalissa ympäristössä
+    # Kääritään tiedosto yhteen begin-lohkoon
+    full_program = f"(begin {content})"
+    
+    ast = parse(full_program)
+    
+    # Ajetaan koodi globaalissa ympäristössä.
+    # Kaapataan tulos muuttujaan, jotta se ei vuoda REPLin suoraan syötteeseen!
+    _ = eval_exp(ast, global_env)
         
     return f"Workspace loaded from {real_filename}"
 
 # --- Standard Environment Definitions ---
 def standard_env() -> Env:
-    """Create a global environment with standard Lisp/Scheme operations."""
+    """Create a global environment where ALL operations are wrapped inside Procedure objects."""
     env = Env()
-    env.update(vars(math)) # Includes pow, sin, cos, pi, e, etc.
-    env.update({
+    
+    # 1. Kääritään math-kirjaston funktiot (kuten log, sin, cos, pow, pi)
+    for key, value in vars(math).items():
+        if callable(value):
+            # Luodaan Procedure, joka tietää oman nimensä
+            env[key] = Procedure(parms=['x'], body=None, env=env, native_fn=value, name=key)
+        else:
+            env[key] = value # pi ja e säilyvät numeroina
+            
+    # 2. Luodaan perusoperaattorit valmiiksi käärittyinä
+    primitives = {
         '+': op.add, 'plus': op.add,
         '-': op.sub, '*': op.mul, '/': op.truediv,
         '>': op.gt, '<': op.lt, '>=': op.ge, '<=': op.le, '=': op.eq,
@@ -94,19 +117,18 @@ def standard_env() -> Env:
         'null?': lambda x: x == [],
         'number?': lambda x: isinstance(x, (int, float)),
         'symbol?': lambda x: isinstance(x, str),
-        
-        # Functional programming tools
         'map': lambda proc, items: list(map(proc, items)),
         'filter': lambda proc, items: list(filter(proc, items)),
-        
-        # Clojure-style aliases
         'first': lambda x: x if x else [],
         'rest': lambda x: x[1:],
         'empty?': lambda x: x == [],
-        
-        # Dictionary lookup tool
         'get': lambda collection, key: collection.get(key, []) if isinstance(collection, dict) else [],
-    })
+    }
+    
+    for key, value in primitives.items():
+        # Kaikki perusfunktiot kääritään siististi Procedure-olioiksi!
+        env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
+        
     return env
 
 global_env = standard_env()
@@ -292,56 +314,69 @@ def atom(token: str) -> Atom:
             return float(token)
         except ValueError:
             return Symbol(token)
+ # --- ANSI Color Codes for Terminal Clarity ---
+COLOR_RESET = "\033[0m"
+COLOR_PROMPT = "\033[94m"   # Bright Blue for 'lis.py>'
+COLOR_RESULT = "\033[92m"   # Bright Green for successful output
+COLOR_ERROR = "\033[91m"    # Bright Red for errors
+COLOR_INFO = "\033[96m"     # Cyan for greeting/status text
 
 # --- Interaction and REPL Printing ---
 def lisp_str(exp: Any) -> str:
-    """Convert a Python object back into a Lisp-readable string format."""
-    if isinstance(exp, list):
+    """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""
+    # KORJAUKSEN YDIN: Tarkistetaan tyypit nimen perusteella, jotta dataclassit ja oliot tunnistetaan satavarmasti!
+    type_name = type(exp).__name__
+    
+    if type_name == 'Procedure':
+        # Jos kyseessä on natiivifunktio (body on None tai native_fn on olemassa)
+        if exp.native_fn is not None:
+            # Jos oliolla on nimi (kuten log tai +), tulostetaan se. 
+            # Jos nimeä ei ole, käytetään tunnistettavaa nimeä.
+            return exp.name if exp.name else "<native-function>"
+        
+        # Jos se on käyttäjän aito Lisp-lambda-funktio
+        return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
+    elif type_name == 'String':
+        return f'"{exp.value}"'
+    elif isinstance(exp, list):
         return '(' + ' '.join(map(lisp_str, exp)) + ')'
     elif isinstance(exp, tuple):
         return '[' + ' '.join(map(lisp_str, exp)) + ']'
     elif isinstance(exp, dict):
         pairs = [f"{lisp_str(k)} {lisp_str(v)}" for k, v in exp.items()]
         return '{' + ' '.join(pairs) + '}'
-    elif isinstance(exp, String):
-        return f'"{exp.value}"'
-    elif isinstance(exp, Procedure):
-        # Muutetaan funktio takaisin muotoon: (lambda [argumentit] body)
-        return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
-
     return str(exp)
 
 def repl(prompt: str = "lispy3> ") -> None:
-    """An interactive Read-Eval-Print Loop for the modern Lispy interpreter."""
-    print("Modern Python 3 Lispy Interpreter Started.")
-    print("Features: Unclosed brackets are fixed, Clojure map/vector types supported.")
-    print("Workspace functions: (save \"name\") and (load \"name\") are active.")
-    print("Type 'exit' to quit.\n")
+    """An interactive Read-Eval-Print Loop with ANSI color support."""
+    print(f"{COLOR_INFO}Modern Python 3 Lispy Interpreter Started.{COLOR_RESET}")
+    print(f"{COLOR_INFO}Features: Unclosed brackets are fixed, Clojure map/vector types supported.{COLOR_RESET}")
+    print(f"{COLOR_INFO}Workspace functions: (save \"name\") and (load \"name\") are active.{COLOR_RESET}")
+    print(f"{COLOR_INFO}Type 'exit' to quit.{COLOR_RESET}\n")
     
-    # KORJAUKSEN YDIN: Käytetään samaa globaalia ympäristöä kuin save ja load!
     env = global_env 
-       
+    colored_prompt = f"{COLOR_PROMPT}{prompt}{COLOR_RESET}"
+    
     while True:
         try:
-            line = input(prompt).strip()
+            line = input(colored_prompt).strip()
             if not line:
                 continue
             if line.lower() == 'exit':
-                print("Goodbye!")
+                print(f"{COLOR_INFO}Goodbye!{COLOR_RESET}")
                 break
                 
             ast = parse(line)
             val = eval_exp(ast, env)
             
             if val is not None:
-                print(lisp_str(val))
+                print(f"{COLOR_RESULT}{lisp_str(val)}{COLOR_RESET}")
                 
         except (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError) as e:
-            print(f"Error: {e}")
+            print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}")
         except (KeyboardInterrupt, EOFError):
-            print("\nGoodbye!")
+            print(f"\n{COLOR_INFO}Goodbye!{COLOR_RESET}")
             break
 
 if __name__ == "__main__":
     repl()
-
