@@ -1,4 +1,4 @@
-# Lispy-Modern: A Modern Clojure-Infused Lisp Interpreter in Python 3
+# Lispy3: A Modern Clojure-Infused Lisp Interpreter in Python 3
 
 A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Python 3. This project is a deeply evolutionized version of Peter Norvig's classic `lis.py`, incorporating modern Python features and powerful Clojure-inspired constructs.
 
@@ -20,7 +20,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 
 Run the interpreter directly using Python 3:
 
-    python lispy.py
+    python lispy3.py
 
 ### REPL Example Usage
 
@@ -28,13 +28,13 @@ Run the interpreter directly using Python 3:
     Features: Unclosed brackets are fixed, Clojure map/vector types supported.
     Workspace functions: (save "name") and (load "name") are active.
 
-    lis.py> (define user {:name "Tony" :status "Trusty"})
-    lis.py> (:name user)
+    lispy3> (define user {:name "Tony" :status "Trusty"})
+    lispy3> (:name user)
     "Tony"
 
-    lis.py> (define square (lambda [x] (* x x)))
-    lis.py> (square 9)
+    lispy3> (define square (lambda [x] (* x x)))
+    lispy3> (square 9)
     81
 
-    lis.py> (save "my_workspace")
+    lispy3> (save "my_workspace")
     Workspace saved to my_workspace.lisp
