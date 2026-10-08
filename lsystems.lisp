@@ -41,6 +41,6 @@
   (pd)
   (speed 0)
   (tracer 0)
-  (lsys_draw (lsys_run (seq "F") {"F" "F+F-F-F+F"} 3) 5 90)
+  (lsys_draw (lsys_run (seq "F") {["F"] "F+F-F-F+F"} 3) 5 90)
   (update)
   (bye))
