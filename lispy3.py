@@ -93,8 +93,8 @@ def load_workspace(filename: str) -> str:
             if isinstance(exp, list) and len(exp) >= 2 and exp[0] == 'define':
                 defined_symbols.append(exp[1])
 
-    # Run the code in the global environment.
-    # Capture the result into a variable so it doesn't leak directly into the REPL output!
+    # Ajetaan koodi globaalissa ympäristössä.
+    # Kaapataan tulos muuttujaan, jotta se ei vuoda REPLin suoraan syötteeseen!
     _ = eval_exp(ast, global_env)
 
     if defined_symbols:
