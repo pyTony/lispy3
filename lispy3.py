@@ -143,6 +143,7 @@ def standard_env() -> Env:
         'empty?': lambda x: x == [],
         'get': lambda collection, key: collection.get(key, []) if isinstance(collection, dict) else [],
         'seq': lambda x: [Char(c) for c in x.value] if isinstance(x, String) else ([Char(c) for c in x] if isinstance(x, str) else list(x)),
+        'str': str,
     }
     
     for key, value in primitives.items():
@@ -255,7 +256,36 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 return target.get(keyword, [])
             raise TypeError(f"Cannot lookup keyword {keyword} on non-dictionary object")
 
-        # 16. (proc args...) -> Standard function application
+        # 16. Python Method Dispatch flavor: obj/method -> obj.method()
+        case [str() as method_call, *args_exp] if '/' in method_call and method_call != '/':
+            obj_name, method_name = method_call.split('/', 1)
+
+            # Special case for str/join specifically acting on list of Char/String to return String
+            if obj_name == 'str' and method_name == 'join':
+                args = [eval_exp(arg, env) for arg in args_exp]
+                if len(args) == 1:
+                    seq = args[0]
+                    sep = ""
+                else:
+                    sep = args[0].value if isinstance(args[0], (String, Char)) else str(args[0])
+                    seq = args[1]
+                joined = sep.join(c.value if isinstance(c, (Char, String)) else str(c) for c in (seq if isinstance(seq, (list, tuple)) else [seq]))
+                return String(joined)
+
+            obj = eval_exp(obj_name, env)
+            args = [eval_exp(arg, env) for arg in args_exp]
+
+            # Evaluate native Python arguments properly, e.g. String wrapper to native string
+            native_args = [a.value if isinstance(a, (String, Char)) else a for a in args]
+
+            method = getattr(obj, method_name)
+            result = method(*native_args)
+
+            if isinstance(result, str):
+                return String(result)
+            return result
+
+        # 17. (proc args...) -> Standard function application
         case [proc_exp, *args_exp]:
             proc = eval_exp(proc_exp, env)
             args = [eval_exp(arg, env) for arg in args_exp]

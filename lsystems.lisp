@@ -1,19 +1,29 @@
-(define koch (lambda [d n]
+(define rewrite (lambda [state rule]
+  (if (empty? state)
+      []
+      (append (if (= (first state) #\F)
+                  (seq rule)
+                  (list (first state)))
+              (rewrite (rest state) rule)))))
+
+(define generate (lambda [state rule n]
   (if (= n 0)
-      (fd d)
+      state
+      (generate (rewrite state rule) rule (- n 1)))))
+
+(define draw (lambda [state d]
+  (if (empty? state)
+      []
       (begin
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))
-        (rt 120)
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))))))
+        (if (= (first state) #\F) (fd d) [])
+        (if (= (first state) #\+) (lt 60) [])
+        (if (= (first state) #\-) (rt 120) [])
+        (draw (rest state) d)))))
 
 (begin
   (pu)
   (goto -200 0)
   (pd)
   (speed 0)
-  (koch 400 3)
+  (draw (generate (seq "F") "F+F--F+F" 3) (/ 400 27))
   (bye))
