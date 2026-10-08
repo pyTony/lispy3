@@ -1,46 +1,19 @@
-(define koch (lambda [d n]
-  (if (= n 0)
-      (fd d)
-      (begin
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))
-        (rt 120)
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))))))
+;; 1. Draw a single character. If it's F and depth > 0, expand the rule natively.
+(define draw-node
+  (lambda (c rule depth step angle)
+    (if (= c #\F)
+      (if (= depth 0)
+        (fd step)
+        (draw-sys (seq rule) rule (- depth 1) step angle))
+      (if (= c #\+)
+        (lt angle)
+        (if (= c #\-)
+          (rt angle)
+          [])))))
 
-(define lsys_step (lambda [sys rules]
-  (if (empty? sys) []
-      (let [ch (first sys)]
-        (append
-           (if (= (get rules ch) "") [ch] (seq (get rules ch)))
-           (lsys_step (rest sys) rules))))))
-
-(define lsys_run (lambda [sys rules n]
-  (if (= n 0) sys
-      (lsys_run (lsys_step sys rules) rules (- n 1)))))
-
-(define draw_step (lambda [sys len ang]
-    (if (empty? sys) "Done"
-      (let [ch (first sys)]
-         (if (= ch "F") (fd len)
-         (if (= ch "+") (lt ang)
-         (if (= ch "-") (rt ang)
-         "Skip")))))))
-
-(define lsys_draw (lambda [sys len ang]
-  (if (empty? sys) "Done"
-      (begin
-         (draw_step sys len ang)
-         (lsys_draw (rest sys) len ang)))))
-
-(begin
-  (pu)
-  (goto -200 100)
-  (pd)
-  (speed 0)
-  (tracer 0)
-  (lsys_draw (lsys_run (seq "F") {"F" "F+F-F-F+F"} 3) 5 90)
-  (update)
-  (bye))
+;; 2. Map over a sequence. Native `map` handles horizontal iteration without recursion.
+(define draw-sys
+  (lambda (commands rule depth step angle)
+    (map (lambda (c) 
+           (draw-node c rule depth step angle)) 
+         commands)))
