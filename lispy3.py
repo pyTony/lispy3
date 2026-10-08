@@ -133,7 +133,7 @@ def standard_env() -> Env:
         'first': lambda x: (String(x.value[0]) if x.value else String("")) if isinstance(x, String) else x[0] if isinstance(x, list) and x else x if x else [],
         'rest': lambda x: x[1:] if not isinstance(x, String) else String(x.value[1:]),
         'empty?': lambda x: x == [] or (isinstance(x, String) and x.value == ""),
-        'explode': lambda x: [String(c) for c in x.value] if isinstance(x, String) else [String(c) for c in x] if isinstance(x, str) else list(x),
+        'seq': lambda x: [String(c) for c in x.value] if isinstance(x, String) else [String(c) for c in x] if isinstance(x, str) else list(x),
         'get': lambda collection, key: collection.get(key.value if isinstance(key, String) else key, "") if isinstance(collection, dict) else "",
     }
     
