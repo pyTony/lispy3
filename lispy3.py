@@ -27,14 +27,14 @@ class Procedure:
         self.parms = parms
         self.body = body
         self.env = env
-        self.native_fn = native_fn  # Säilytetään alkuperäinen Python-funktio, jos kyseessä on natiivifunktio
-        self.name = name            # Natiivifunktion nimi (esim. 'log' tai '+')
+        self.native_fn = native_fn  # Store the original Python function if it's a native function
+        self.name = name            # Name of the native function (e.g., 'log' or '+')
 
     def __call__(self, *args: Any) -> Any:
-        # Jos kyseessä on kääritty natiivifunktio, ajetaan se suoraan Pythonissa
+        # If it is a wrapped native function, run it directly in Python
         if self.native_fn:
             return self.native_fn(*args)
-        # Muuten ajetaan Lisp-funktio luomalla sille oma paikallinen skooppi
+        # Otherwise, run the Lisp function by creating its own local scope
         return eval_exp(self.body, Env(self.parms, list(args), self.env))
     
 class Env(dict):
@@ -65,11 +65,11 @@ def save_workspace(filename: str) -> str:
             if key in std or key == 'nan':
                 continue
                 
-            # Jos kyseessä on jokin Pythonin oma funktio (esim. log), jätetään se tallentamatta
+            # If it's a Python built-in function (e.g., log), do not save it
             if callable(value) and type(value).__name__ != 'Procedure':
                 continue
                 
-            # Kirjoitetaan puhdasta Lisp-koodia tiedostoon
+            # Write pure Lisp code to the file
             f.write(f"(define {key} {lisp_str(value)})\n")
             
     return f"Workspace saved to {real_filename}"
@@ -81,7 +81,7 @@ def load_workspace(filename: str) -> str:
     with open(real_filename, 'r', encoding='utf-8') as f:
         content = f.read().strip()
     
-    # Kääritään tiedosto yhteen begin-lohkoon
+    # Wrap the file into a single begin block
     full_program = f"(begin {content})"
     
     ast = parse(full_program)
@@ -106,15 +106,15 @@ def standard_env() -> Env:
     """Create a global environment where ALL operations are wrapped inside Procedure objects."""
     env = Env()
     
-    # 1. Kääritään math-kirjaston funktiot (kuten log, sin, cos, pow, pi)
+    # 1. Wrap math library functions (like log, sin, cos, pow, pi)
     for key, value in vars(math).items():
         if callable(value):
-            # Luodaan Procedure, joka tietää oman nimensä
+            # Create a Procedure that knows its own name
             env[key] = Procedure(parms=['x'], body=None, env=env, native_fn=value, name=key)
         else:
-            env[key] = value # pi ja e säilyvät numeroina
+            env[key] = value # pi and e remain as numbers
             
-    # 2. Luodaan perusoperaattorit valmiiksi käärittyinä
+    # 2. Create basic operators already wrapped
     primitives = {
         '+': op.add, 'plus': op.add,
         '-': op.sub, '*': op.mul, '/': op.truediv,
@@ -138,7 +138,7 @@ def standard_env() -> Env:
     }
     
     for key, value in primitives.items():
-        # Kaikki perusfunktiot kääritään siististi Procedure-olioiksi!
+        # All basic functions are cleanly wrapped into Procedure objects!
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
 
     # 3. Add turtle graphics support
@@ -208,7 +208,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         # 11. (lambda (parms...) body) or (lambda [parms...] body)
         case ['lambda', list(parms) | tuple(parms), body]:
             actual_parms = list(parms) if isinstance(parms, tuple) else parms
-            return Procedure(actual_parms, body, env) # Palauttaa nyt Procedure-olion!
+            return Procedure(actual_parms, body, env) # Now returns a Procedure object!
 
         # 12. (begin exp1 exp2 ... expN)
         case ['begin', *exps]:
@@ -228,7 +228,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
             local_env = Env(vars_local, vals_local, env)
             return eval_exp(body, local_env)
             
-        # 14. Workspace save and load hooks (Päivitetty)
+        # 14. Workspace save and load hooks (Updated)
         case ['save', filename_exp]:
             filename = eval_exp(filename_exp, env)
             fn_str = filename.value if isinstance(filename, String) else str(filename)
@@ -344,17 +344,17 @@ COLOR_INFO = "\033[96m"     # Cyan for greeting/status text
 # --- Interaction and REPL Printing ---
 def lisp_str(exp: Any) -> str:
     """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""
-    # KORJAUKSEN YDIN: Tarkistetaan tyypit nimen perusteella, jotta dataclassit ja oliot tunnistetaan satavarmasti!
+    # CORE FIX: Check types by name so that dataclasses and objects are reliably identified!
     type_name = type(exp).__name__
     
     if type_name == 'Procedure':
-        # Jos kyseessä on natiivifunktio (body on None tai native_fn on olemassa)
+        # If it is a native function (body is None or native_fn exists)
         if exp.native_fn is not None:
-            # Jos oliolla on nimi (kuten log tai +), tulostetaan se. 
-            # Jos nimeä ei ole, käytetään tunnistettavaa nimeä.
+            # If the object has a name (like log or +), print it.
+            # If there is no name, use a recognizable name.
             return exp.name if exp.name else "<native-function>"
         
-        # Jos se on käyttäjän aito Lisp-lambda-funktio
+        # If it is a true user-defined Lisp lambda function
         return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
     elif type_name == 'String':
         return f'"{exp.value}"'
