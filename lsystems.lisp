@@ -12,7 +12,7 @@
 
 (begin
   (pu)
-  (goto -200 -100)
+  (goto -200 0)
   (pd)
   (speed 0)
   (koch 400 3)
