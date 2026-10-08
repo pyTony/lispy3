@@ -1,15 +1,17 @@
-from typing import Any, TypeAlias, Callable
+
+from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
 import math
 import operator as op
 import re
+import turtle
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
 Number: TypeAlias = int | float
-Atom: TypeAlias = Symbol | Number | 'String'
+Atom: TypeAlias = Union[Symbol, Number, 'String']
 List: TypeAlias = list['Exp']
-Exp: TypeAlias = Atom | List | tuple['Exp', ...] | dict['Exp', 'Exp']
+Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
 
 @dataclass(frozen=True)
 class String:
@@ -21,7 +23,7 @@ class String:
 
 class Procedure:
     """A user-defined or wrapped native Lisp/Scheme procedure that knows how to serialize itself."""
-    def __init__(self, parms: list[Symbol], body: Any, env: Env, native_fn: Callable = None, name: str = None):
+    def __init__(self, parms: list[Symbol], body: Any, env: 'Env', native_fn: Callable = None, name: str = None):
         self.parms = parms
         self.body = body
         self.env = env
@@ -84,10 +86,19 @@ def load_workspace(filename: str) -> str:
     
     ast = parse(full_program)
     
+    # Extract defined symbols
+    defined_symbols = []
+    if isinstance(ast, list) and ast and ast[0] == 'begin':
+        for exp in ast[1:]:
+            if isinstance(exp, list) and len(exp) >= 2 and exp[0] == 'define':
+                defined_symbols.append(exp[1])
+
     # Ajetaan koodi globaalissa ympäristössä.
     # Kaapataan tulos muuttujaan, jotta se ei vuoda REPLin suoraan syötteeseen!
     _ = eval_exp(ast, global_env)
-        
+
+    if defined_symbols:
+        return f"Workspace loaded from {real_filename}. Defined: {', '.join(defined_symbols)}"
     return f"Workspace loaded from {real_filename}"
 
 # --- Standard Environment Definitions ---
@@ -108,7 +119,7 @@ def standard_env() -> Env:
         '+': op.add, 'plus': op.add,
         '-': op.sub, '*': op.mul, '/': op.truediv,
         '>': op.gt, '<': op.lt, '>=': op.ge, '<=': op.le, '=': op.eq,
-        'append': op.add,
+        'append': lambda x, y: String((x.value if isinstance(x, String) else x) + (y.value if isinstance(y, String) else y)) if isinstance(x, (str, String)) and isinstance(y, (str, String)) else op.add(x, y),
         'car': lambda x: x if x else [],
         'cdr': lambda x: x[1:],
         'cons': lambda x, y: [x] + y,
@@ -119,22 +130,31 @@ def standard_env() -> Env:
         'symbol?': lambda x: isinstance(x, str),
         'map': lambda proc, items: list(map(proc, items)),
         'filter': lambda proc, items: list(filter(proc, items)),
-        'first': lambda x: x if x else [],
-        'rest': lambda x: x[1:],
-        'empty?': lambda x: x == [],
-        'get': lambda collection, key: collection.get(key, []) if isinstance(collection, dict) else [],
+        'first': lambda x: (String(x.value[0]) if x.value else String("")) if isinstance(x, String) else x[0] if isinstance(x, list) and x else x if x else [],
+        'rest': lambda x: x[1:] if not isinstance(x, String) else String(x.value[1:]),
+        'empty?': lambda x: x == [] or (isinstance(x, String) and x.value == ""),
+        'explode': lambda x: [String(c) for c in x.value] if isinstance(x, String) else [String(c) for c in x] if isinstance(x, str) else list(x),
+        'get': lambda collection, key: collection.get(key.value if isinstance(key, String) else key, "") if isinstance(collection, dict) else "",
     }
     
     for key, value in primitives.items():
         # Kaikki perusfunktiot kääritään siististi Procedure-olioiksi!
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
-        
+
+    # 3. Add turtle graphics support
+    for key in turtle.__all__:
+        value = getattr(turtle, key)
+        if callable(value):
+            env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
+        else:
+            env[key] = value
+
     return env
 
 global_env = standard_env()
 
 # --- Evaluation Engine ---
-def eval_exp(x: Exp, env: Env = global_env) -> Any:
+def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
     """Evaluate an expression in an environment using Structural Pattern Matching."""
     match x:
         # 1. Clojure-style Keywords: keywords starting with ':' evaluate to themselves
@@ -161,7 +181,7 @@ def eval_exp(x: Exp, env: Env = global_env) -> Any:
         case dict(d):
             evaluated_dict = {}
             for k, v in d.items():
-                eval_k = k if isinstance(k, str) else eval_exp(k, env)
+                eval_k = k.value if isinstance(k, String) else k if isinstance(k, str) else eval_exp(k, env); eval_k = tuple(eval_k) if isinstance(eval_k, list) else eval_k.value if isinstance(eval_k, String) else eval_k
                 eval_v = eval_exp(v, env)
                 evaluated_dict[eval_k] = eval_v
             return evaluated_dict
@@ -290,7 +310,7 @@ def read_from_tokens(tokens: list[str]) -> Exp:
             if not tokens or tokens[0] == '}':
                 break
             val = read_from_tokens(tokens)
-            D[key] = val
+            D[key.value if isinstance(key, String) else tuple(key) if isinstance(key, list) else tuple(key) if type(key).__name__ == 'list' else key] = val
             
         if tokens and tokens[0] == '}':
             tokens.pop(0) # Remove '}'
