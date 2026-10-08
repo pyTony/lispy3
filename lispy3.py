@@ -86,10 +86,19 @@ def load_workspace(filename: str) -> str:
     
     ast = parse(full_program)
     
+    # Extract defined symbols
+    defined_symbols = []
+    if isinstance(ast, list) and ast and ast[0] == 'begin':
+        for exp in ast[1:]:
+            if isinstance(exp, list) and len(exp) >= 2 and exp[0] == 'define':
+                defined_symbols.append(exp[1])
+
     # Ajetaan koodi globaalissa ympäristössä.
     # Kaapataan tulos muuttujaan, jotta se ei vuoda REPLin suoraan syötteeseen!
     _ = eval_exp(ast, global_env)
-        
+
+    if defined_symbols:
+        return f"Workspace loaded from {real_filename}. Defined: {', '.join(defined_symbols)}"
     return f"Workspace loaded from {real_filename}"
 
 # --- Standard Environment Definitions ---
