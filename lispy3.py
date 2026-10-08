@@ -9,13 +9,21 @@ import turtle
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
 Number: TypeAlias = int | float
-Atom: TypeAlias = Union[Symbol, Number, 'String']
+Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char']
 List: TypeAlias = list['Exp']
 Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
 
 @dataclass(frozen=True)
 class String:
     """A wrapper to distinguish pure string literals from Lisp symbols."""
+    value: str
+
+    def __repr__(self) -> str:
+        return self.value
+
+@dataclass(frozen=True)
+class Char:
+    """A wrapper to distinguish characters from strings and symbols."""
     value: str
 
     def __repr__(self) -> str:
@@ -130,10 +138,11 @@ def standard_env() -> Env:
         'symbol?': lambda x: isinstance(x, str),
         'map': lambda proc, items: list(map(proc, items)),
         'filter': lambda proc, items: list(filter(proc, items)),
-        'first': lambda x: x if x else [],
+        'first': lambda x: x[0] if isinstance(x, list) and x else (x if x else []),
         'rest': lambda x: x[1:],
         'empty?': lambda x: x == [],
         'get': lambda collection, key: collection.get(key, []) if isinstance(collection, dict) else [],
+        'seq': lambda x: [Char(c) for c in x.value] if isinstance(x, String) else ([Char(c) for c in x] if isinstance(x, str) else list(x)),
     }
     
     for key, value in primitives.items():
@@ -168,8 +177,8 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         case int() | float():
             return x
             
-        # 4. Pure string literals (dataclass String)
-        case String(s):
+        # 4. Pure string literals (dataclass String) and Characters
+        case String(s) | Char(s):
             return x
             
         # 5. Clojure-style data Vector [1 2 3] (tuple in Python) -> evaluates its contents
@@ -268,7 +277,7 @@ def tokenize(chars: str) -> list[str]:
     chars = chars.replace("'", " ' ")
     
     # Advanced regex tokenizer to keep string literals intact and catch tokens
-    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|[^\s()\[\]{}]+', chars)
+    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|#\\[^\s()\[\]{}]+|[^\s()\[\]{}]+', chars)
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -326,6 +335,11 @@ def atom(token: str) -> Atom:
     """Numbers become numbers, "strings" lose quotes and become String objects, others are symbols."""
     if token.startswith('"') and token.endswith('"'):
         return String(token[1:-1]) # Wrap pure string text in String dataclass
+    if token.startswith('#\\'):
+        char_map = {'#\\newline': '\n', '#\\space': ' ', '#\\tab': '\t'}
+        if token in char_map:
+            return Char(char_map[token])
+        return Char(token[2:]) # Wrap single character like #\c
     try:
         return int(token)
     except ValueError:
@@ -357,6 +371,11 @@ def lisp_str(exp: Any) -> str:
         return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
     elif type_name == 'String':
         return f'"{exp.value}"'
+    elif type_name == 'Char':
+        reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab'}
+        if exp.value in reverse_char_map:
+            return reverse_char_map[exp.value]
+        return f"#\\{exp.value}"
     elif isinstance(exp, list):
         return '(' + ' '.join(map(lisp_str, exp)) + ')'
     elif isinstance(exp, tuple):
