@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import math
 import operator as op
 import re
+import sys
+import time
 import turtle
 
 # --- Types and Data Structures ---
@@ -255,6 +257,12 @@ def standard_env() -> Env:
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
         'reinit-turtle': reinit_turtle,
         'reset': reinit_turtle,
+        # Mutable vectors (Python lists), a timer and plain output
+        'make-vector': lambda n, fill=0: [fill] * int(n),
+        'vector-ref': lambda v, i: v[i],
+        'vector-set!': lambda v, i, x: v.__setitem__(i, x),
+        'clock': time.perf_counter,          # seconds as a float
+        'display': lambda *x: print(*x, sep=''),
     }
     
     for key, value in primitives.items():
@@ -357,6 +365,13 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
             local_env = Env(vars_local, vals_local, env)
             return eval_exp(body, local_env)
             
+        # (while test body...) -> iterative loop, so it needs no recursion depth
+        case ['while', test, *body]:
+            while eval_exp(test, env):
+                for exp in body:
+                    eval_exp(exp, env)
+            return None
+
         # 14. Workspace save and load hooks (Updated)
         case ['save', filename_exp]:
             filename = eval_exp(filename_exp, env)
@@ -569,5 +584,31 @@ def repl(prompt: str = "lispy3> ") -> None:
             print(f"\n{COLOR_INFO}Goodbye!{COLOR_RESET}")
             break
 
+def run_file(filename: str) -> bool:
+    """Run a Lisp program file like a script. Returns True if it finished without error."""
+    try:
+        load_workspace(filename)
+        return True
+    except turtle.Terminator:
+        print(f"{COLOR_ERROR}Error: Turtle window was closed.{COLOR_RESET}", file=sys.stderr)
+    except (SyntaxError, NameError, TypeError, ZeroDivisionError,
+            FileNotFoundError, IndexError, KeyError) as e:
+        print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}", file=sys.stderr)
+    return False
+
 if __name__ == "__main__":
-    repl()
+    # python lispy3.py            -> REPL
+    # python lispy3.py prog.lisp  -> run prog.lisp and exit
+    # python lispy3.py -i prog.lisp -> run prog.lisp, then stay in the REPL
+    args = sys.argv[1:]
+    interactive = bool(args) and args[0] == '-i'
+    if interactive:
+        args = args[1:]
+    if args:
+        ok = run_file(args[0])
+        if interactive:
+            repl()
+        elif not ok:
+            sys.exit(1)
+    else:
+        repl()
