@@ -216,7 +216,32 @@ def reinit_turtle():
     s = turtle.Screen()
     s.setup()
     turtle.resetscreen()
+    # bye() above leaves turtle's "running" flag False, which would make the very
+    # next drawing call raise Terminator again. The new window is alive, so say so.
+    turtle.TurtleScreen._RUNNING = True
     return "Turtle window reopened."
+
+# --- Turtle poses, for the [ and ] of branching L-systems ---
+_pose_stack: list = []
+
+def push_pose() -> None:
+    """Remember the turtle's position, heading and pen state."""
+    _pose_stack.append((turtle.position(), turtle.heading(), turtle.isdown()))
+
+def pop_pose() -> None:
+    """Move the turtle back to the last remembered pose without drawing."""
+    if not _pose_stack:
+        raise IndexError("pop-pose: no pose to return to")
+    position, heading, pen_down = _pose_stack.pop()
+    turtle.penup()
+    turtle.setposition(position)
+    turtle.setheading(heading)
+    if pen_down:
+        turtle.pendown()
+
+def clear_poses() -> None:
+    """Forget all remembered poses."""
+    _pose_stack.clear()
 
 # --- Standard Environment Definitions ---
 def standard_env() -> Env:
@@ -263,6 +288,9 @@ def standard_env() -> Env:
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
         'clock': time.perf_counter,          # seconds as a float
         'display': lambda *x: print(*x, sep=''),
+        'push-pose': push_pose,
+        'pop-pose': pop_pose,
+        'clear-poses': clear_poses,
     }
     
     for key, value in primitives.items():
@@ -409,13 +437,13 @@ def tokenize(chars: str) -> list[str]:
     # 1. Strip comments (anything from ';' until end of the line)
     chars = re.sub(r';.*', '', chars)
 
-    # 2. Ensure spaces around brackets for easy text processing
-    for bracket in "()[]{}":
-        chars = chars.replace(bracket, f" {bracket} ")
+    # 2. Separate the quote mark. Brackets need no padding here: the regex below
+    #    already makes each one its own token, and padding them would also rewrite
+    #    the inside of string literals such as "F[+F]" and break the characters #\[ and #\].
     chars = chars.replace("'", " ' ")
-    
+
     # 3. Advanced regex tokenizer to keep string literals intact and catch tokens
-    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|#\\[^\s()\[\]{}]+|[^\s()\[\]{}]+', chars)
+    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|#\\[()\[\]{}]|#\\[^\s()\[\]{}]+|[^\s()\[\]{}]+', chars)
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -577,7 +605,8 @@ def repl(prompt: str = "lispy3> ") -> None:
         except turtle.Terminator:
             buffer = ""
             print(f"{COLOR_ERROR}Error: Turtle window was closed. Call (reinit-turtle) to reopen.{COLOR_RESET}")
-        except (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError) as e:
+        except (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError,
+                IndexError, KeyError) as e:
             buffer = ""
             print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}")
         except (KeyboardInterrupt, EOFError):
@@ -608,10 +637,10 @@ if __name__ == "__main__":
     # python lispy3.py            -> REPL
     # python lispy3.py prog.lisp  -> run prog.lisp, keep a turtle window open, then exit
     # python lispy3.py -i prog.lisp -> run prog.lisp, then stay in the REPL
+    #                                  (-i may also come after the file name)
     args = sys.argv[1:]
-    interactive = bool(args) and args[0] == '-i'
-    if interactive:
-        args = args[1:]
+    interactive = '-i' in args
+    args = [a for a in args if a != '-i']
     if args:
         ok = run_file(args[0])
         if interactive:
