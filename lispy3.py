@@ -470,7 +470,7 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         return atom(token)
 
 def atom(token: str) -> Atom:
-    """Numbers become numbers, "strings" become String, #\c become Char, others are symbols."""
+    r"""Numbers become numbers, "strings" become String, #\c become Char, others are symbols."""
     if token.startswith('"') and token.endswith('"'):
         return String(token[1:-1])
     if token.startswith('#\\'):
@@ -596,9 +596,17 @@ def run_file(filename: str) -> bool:
         print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}", file=sys.stderr)
     return False
 
+def hold_turtle_window() -> None:
+    """If the program drew with turtle, keep the window open until the user closes it."""
+    if turtle.Turtle._screen is not None:
+        try:
+            turtle.mainloop()
+        except turtle.Terminator:
+            pass
+
 if __name__ == "__main__":
     # python lispy3.py            -> REPL
-    # python lispy3.py prog.lisp  -> run prog.lisp and exit
+    # python lispy3.py prog.lisp  -> run prog.lisp, keep a turtle window open, then exit
     # python lispy3.py -i prog.lisp -> run prog.lisp, then stay in the REPL
     args = sys.argv[1:]
     interactive = bool(args) and args[0] == '-i'
@@ -608,7 +616,9 @@ if __name__ == "__main__":
         ok = run_file(args[0])
         if interactive:
             repl()
-        elif not ok:
+        elif ok:
+            hold_turtle_window()
+        else:
             sys.exit(1)
     else:
         repl()
