@@ -1,0 +1,36 @@
+(define sieve-size 8192)
+(define flags (make-vector (+ sieve-size 1) 1))
+(define cnt 0)
+
+(define run-sieve
+  (lambda [iterations]
+    (begin
+      (define i 1)
+      (define j 1)
+      (define k 0)
+      (define prime 0)
+      (while (<= i iterations)
+        (set! cnt 0)
+        (set! j 1)
+        (while (<= j sieve-size)
+          (vector-set! flags j 1)
+          (set! j (+ j 1)))
+        (set! j 1)
+        (while (<= j sieve-size)
+          (if (= (vector-ref flags j) 1)
+              (begin
+                (set! prime (+ (+ j j) 3))
+                (set! k (+ j prime))
+                (while (<= k sieve-size)
+                  (vector-set! flags k 0)
+                  (set! k (+ k prime)))
+                (set! cnt (+ cnt 1)))
+              0)
+          (set! j (+ j 1)))
+        (set! i (+ i 1))))))
+
+(display "Starting 10 iterations of the Sieve...")
+(define t0 (clock))
+(run-sieve 10)
+(define elapsed (/ (floor (* (- (clock) t0) 100)) 100))
+(display "Done. Primes found: " cnt " TIME " elapsed)

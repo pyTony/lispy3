@@ -1,46 +1,52 @@
-(define koch (lambda [d n]
-  (if (= n 0)
-      (fd d)
-      (begin
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))
-        (rt 120)
-        (koch (/ d 3) (- n 1))
-        (lt 60)
-        (koch (/ d 3) (- n 1))))))
+;; 1. Draw a single character. If it's F and depth > 0, expand the rule natively.
+;;    F = line forward, + = turn left, - = turn right,
+;;    [ = remember position and heading (start a branch), ] = go back to them.
+(define draw-node
+  (lambda (c rule depth step angle)
+    (if (= c #\F)
+      (if (= depth 0)
+        (fd step)
+        (draw-sys (seq rule) rule (- depth 1) step angle))
+      (if (= c #\+)
+        (lt angle)
+        (if (= c #\-)
+          (rt angle)
+          (if (= c #\[)
+            (push-pose)
+            (if (= c #\])
+              (pop-pose)
+              [])))))))
 
-(define lsys_step (lambda [sys rules]
-  (if (empty? sys) []
-      (let [ch (first sys)]
-        (append
-           (if (= (get rules ch) "") [ch] (seq (get rules ch)))
-           (lsys_step (rest sys) rules))))))
+;; 2. Map over a sequence. Native `map` handles horizontal iteration without recursion.
+(define draw-sys
+  (lambda (commands rule depth step angle)
+    (map (lambda (c)
+           (draw-node c rule depth step angle))
+         commands)))
 
-(define lsys_run (lambda [sys rules n]
-  (if (= n 0) sys
-      (lsys_run (lsys_step sys rules) rules (- n 1)))))
+;; 3. Draw a whole L-system with one call:
+;;    (lsystem-from axiom rule generations step angle x y heading)
+;;    generations = how many times the rule is applied
+;;    step        = length of one line, in pixels
+;;    x y         = where the drawing starts
+;;    heading     = starting direction in degrees (0 = right, 90 = up)
+;;    Drawing runs with automatic redrawing off (much faster). It is switched
+;;    back on at the end, so commands typed afterwards, like (rt 180), show up.
+(define lsystem-from
+  (lambda (axiom rule generations step angle x y heading)
+    (begin
+      (tracer 0 0)
+      (clear)
+      (clear-poses)
+      (pu)
+      (goto x y)
+      (setheading heading)
+      (pd)
+      (draw-sys (seq axiom) rule generations step angle)
+      (update)
+      (tracer 1 10))))
 
-(define draw_step (lambda [sys len ang]
-    (if (empty? sys) "Done"
-      (let [ch (first sys)]
-         (if (= ch "F") (fd len)
-         (if (= ch "+") (lt ang)
-         (if (= ch "-") (rt ang)
-         "Skip")))))))
-
-(define lsys_draw (lambda [sys len ang]
-  (if (empty? sys) "Done"
-      (begin
-         (draw_step sys len ang)
-         (lsys_draw (rest sys) len ang)))))
-
-(begin
-  (pu)
-  (goto -200 100)
-  (pd)
-  (speed 0)
-  (tracer 0)
-  (lsys_draw (lsys_run (seq "F") {["F"] "F+F-F-F+F"} 3) 5 90)
-  (update)
-  (bye))
+;; Same, starting towards the right: (lsystem axiom rule generations step angle x y)
+(define lsystem
+  (lambda (axiom rule generations step angle x y)
+    (lsystem-from axiom rule generations step angle x y 0)))
