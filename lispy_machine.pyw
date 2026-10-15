@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-lispy_machine.py - a Lisp-Machine style editor for the lispy3 interpreter.
+lispy_machine.pyw - a Lisp-Machine style editor for the lispy3 interpreter.
 
 Features
   * Multiple editor buffers (tabs) with Lisp syntax highlighting
@@ -13,7 +13,7 @@ Features
   * Open / Save / Save-As / Close buffers
   * Menu + status bar showing the current "package" (USER) and buffer
 
-Run:  python lispy_machine.py
+Run:  python lispy_machine.pyw
 """
 import io
 import contextlib
@@ -83,7 +83,7 @@ def find_top_level_form(text: str, pos: int):
     stack = []
     i = 0
     in_str = False
-    while i < len(text) and i <= pos:
+    while i < len(text) and i < pos:
         c = text[i]
         if in_str:
             if c == "\\":
@@ -231,6 +231,10 @@ class EditorTab(tk.Frame):
                                        foreground="#000000")
         t.tag_configure("paren_bad",   background=COLORS["paren_bad"],
                                        foreground="#ffffff")
+        t.tag_configure("search_all",  background="#5c4d00",
+                                       foreground="#ffffff")
+        t.tag_configure("search_current", background="#ffd700",
+                                        foreground="#000000")
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -446,7 +450,249 @@ class EditorTab(tk.Frame):
         self._suppress_modified = False
         self._schedule_highlight()
 
+# =============================================================================
+# Inline find / replace bar
+# =============================================================================
+class SearchBar(tk.Frame):
+    """An inline find/replace bar, shared by every editor buffer."""
 
+    def __init__(self, master, app):
+        super().__init__(master, bg=COLORS["side_bg"])
+        self.app = app
+        self.matches: list[tuple[int, int]] = []
+        self.current_idx = -1
+
+        # ---------- Row 1: Find ----------
+        row1 = tk.Frame(self, bg=COLORS["side_bg"])
+        row1.pack(fill="x", padx=6, pady=(5, 2))
+
+        tk.Label(row1, text="Find:", bg=COLORS["side_bg"], fg="#ddd",
+                 font=FONT_UI).pack(side="left")
+
+        self.find_var = tk.StringVar()
+        self.find_entry = tk.Entry(
+            row1, textvariable=self.find_var,
+            bg=COLORS["entry_bg"], fg=COLORS["entry_fg"],
+            insertbackground="#fff", font=FONT_MONO,
+            borderwidth=0, highlightthickness=1,
+            highlightbackground="#333", highlightcolor=COLORS["prompt"])
+        self.find_entry.pack(side="left", fill="x", expand=True,
+                             padx=(6, 6), ipady=3)
+
+        self.case_var  = tk.BooleanVar(value=False)
+        self.word_var  = tk.BooleanVar(value=False)
+        self.regex_var = tk.BooleanVar(value=False)
+        for label, var in (("Aa", self.case_var),
+                           ("W",  self.word_var),
+                           (".*", self.regex_var)):
+            tk.Checkbutton(
+                row1, text=label, variable=var, command=self._refresh,
+                bg=COLORS["side_bg"], fg="#ddd",
+                selectcolor=COLORS["entry_bg"],
+                activebackground=COLORS["side_bg"], activeforeground="#fff",
+                font=FONT_UI, borderwidth=0, highlightthickness=0, padx=4,
+            ).pack(side="left")
+
+        for text, delta in (("▲", -1), ("▼", 1)):
+            tk.Button(row1, text=text, command=lambda d=delta: self._nav(d),
+                      bg=COLORS["side_bg"], fg="#ddd", font=FONT_UI,
+                      borderwidth=0, padx=6, activebackground=COLORS["side_sel"]
+                      ).pack(side="left", padx=(4, 0))
+
+        tk.Button(row1, text="✕", command=self.hide_bar,
+                  bg=COLORS["side_bg"], fg="#ddd", font=FONT_UI,
+                  borderwidth=0, padx=6, activebackground=COLORS["side_sel"]
+                  ).pack(side="left", padx=(4, 0))
+
+        # ---------- Row 2: Replace ----------
+        self.row2 = tk.Frame(self, bg=COLORS["side_bg"])
+
+        tk.Label(self.row2, text="Repl:", bg=COLORS["side_bg"], fg="#ddd",
+                 font=FONT_UI).pack(side="left")
+
+        self.replace_var = tk.StringVar()
+        self.replace_entry = tk.Entry(
+            self.row2, textvariable=self.replace_var,
+            bg=COLORS["entry_bg"], fg=COLORS["entry_fg"],
+            insertbackground="#fff", font=FONT_MONO,
+            borderwidth=0, highlightthickness=1,
+            highlightbackground="#333", highlightcolor=COLORS["prompt"])
+        self.replace_entry.pack(side="left", fill="x", expand=True,
+                                padx=(6, 6), ipady=3)
+
+        tk.Button(self.row2, text="Replace", command=self._replace_one,
+                  bg=COLORS["side_bg"], fg="#ddd", font=FONT_UI,
+                  borderwidth=0, padx=6, activebackground=COLORS["side_sel"]
+                  ).pack(side="left", padx=(0, 4))
+        tk.Button(self.row2, text="All", command=self._replace_all,
+                  bg=COLORS["side_bg"], fg="#ddd", font=FONT_UI,
+                  borderwidth=0, padx=6, activebackground=COLORS["side_sel"]
+                  ).pack(side="left")
+
+        # ---------- Status strip ----------
+        self.status = tk.Label(self, text="", bg=COLORS["side_bg"],
+                               fg="#888", font=FONT_UI, anchor="w")
+        self.status.pack(fill="x", padx=8, pady=(0, 4))
+
+        # ---------- Bindings ----------
+        self.find_var.trace_add("write", lambda *a: self._refresh())
+        self.find_entry.bind("<Return>",       lambda e: (self._nav(1),  "break")[1])
+        self.find_entry.bind("<Shift-Return>", lambda e: (self._nav(-1), "break")[1])
+        self.find_entry.bind("<Escape>",       lambda e: (self.hide_bar(), "break")[1])
+        self.find_entry.bind("<Down>",         lambda e: (self._nav(1),  "break")[1])
+        self.find_entry.bind("<Up>",           lambda e: (self._nav(-1), "break")[1])
+        self.replace_entry.bind("<Return>",    lambda e: (self._replace_one(), "break")[1])
+        self.replace_entry.bind("<Escape>",    lambda e: (self.hide_bar(), "break")[1])
+
+    # ------------------------------------------------------------------ visibility
+    def show_bar(self, with_replace: bool = False):
+        if not self.winfo_ismapped():
+            self.pack(side="top", fill="x", before=self.app.notebook)
+        if with_replace:
+            self.row2.pack(fill="x", padx=6, pady=(0, 6))
+            self.replace_entry.focus_set()
+            self.replace_entry.select_range(0, "end")
+        else:
+            self.row2.pack_forget()
+            self.find_entry.focus_set()
+            self.find_entry.select_range(0, "end")
+        self._refresh()
+
+    def hide_bar(self):
+        self.pack_forget()
+        self.app._clear_search_highlights()
+        # give focus back to the current buffer
+        tab = self.app.current_tab()
+        if tab:
+            tab.text.focus_set()
+
+    # ------------------------------------------------------------------ finding
+    def _pattern(self):
+        raw = self.find_var.get()
+        if not raw:
+            return None
+        pat = raw if self.regex_var.get() else re.escape(raw)
+        if self.word_var.get():
+            pat = r"\b" + pat + r"\b"
+        flags = 0 if self.case_var.get() else re.IGNORECASE
+        try:
+            return re.compile(pat, flags)
+        except re.error as e:
+            self.status.configure(text=f"Bad pattern: {e}", fg=COLORS["error"])
+            return None
+
+    def _refresh(self, follow: bool = True):
+        tab = self.app.current_tab()
+        if tab is None:
+            return
+        content = tab.text.get("1.0", "end-1c")
+        pat = self._pattern()
+        self.matches = ([] if pat is None
+                        else [(m.start(), m.end()) for m in pat.finditer(content)])
+
+        # Draw "all matches" highlights
+        tab.text.tag_remove("search_all",     "1.0", "end")
+        tab.text.tag_remove("search_current", "1.0", "end")
+        for s, e in self.matches:
+            tab.text.tag_add("search_all",
+                             offset_to_pos(content, s),
+                             offset_to_pos(content, e))
+
+        if not self.matches:
+            self.current_idx = -1
+            self.status.configure(
+                text=("No matches" if self.find_var.get() else ""), fg="#888")
+            return
+
+        if not (0 <= self.current_idx < len(self.matches)):
+            self.current_idx = 0
+        if follow:
+            self._goto_current()
+        self.status.configure(text=f"{self.current_idx + 1} / {len(self.matches)}")
+
+    def _goto_current(self):
+        tab = self.app.current_tab()
+        if tab is None or self.current_idx < 0:
+            return
+        content = tab.text.get("1.0", "end-1c")
+        s, e = self.matches[self.current_idx]
+        start = offset_to_pos(content, s)
+        end   = offset_to_pos(content, e)
+
+        t = tab.text
+        t.tag_remove("search_current", "1.0", "end")
+        t.tag_add("search_current", start, end)
+        t.see(start)
+        t.tag_remove("sel", "1.0", "end")
+        t.tag_add("sel", start, end)
+
+    def _nav(self, direction: int):
+        if not self.matches:
+            self._refresh()
+            return
+        self.current_idx = (self.current_idx + direction) % len(self.matches)
+        self._goto_current()
+        self.status.configure(text=f"{self.current_idx + 1} / {len(self.matches)}")
+
+    # ------------------------------------------------------------------ replacing
+    @staticmethod
+    def _literal_repl(s: str) -> str:
+        """Escape a replacement string so re.sub treats it literally."""
+        return s.replace("\\", "\\\\")
+
+    def _replace_one(self):
+        tab = self.app.current_tab()
+        if tab is None or self.current_idx < 0 or not self.matches:
+            return
+        content = tab.text.get("1.0", "end-1c")
+        pat = self._pattern()
+        if pat is None:
+            return
+
+        s, e = self.matches[self.current_idx]
+        repl = self.replace_var.get()
+        if self.regex_var.get():
+            m = pat.match(content, s)
+            new_text = m.expand(repl) if m else repl
+        else:
+            new_text = repl
+
+        start = offset_to_pos(content, s)
+        end   = offset_to_pos(content, e)
+        tab.text.delete(start, end)
+        tab.text.insert(start, new_text)
+        tab.text.edit_modified(True)
+
+        # Re-scan from scratch, then advance one step so we don't re-replace
+        # the text we just wrote.
+        self.current_idx = min(self.current_idx, max(0, len(self.matches) - 1))
+        self._refresh(follow=False)
+        self._nav(1)
+
+    def _replace_all(self):
+        tab = self.app.current_tab()
+        if tab is None:
+            return
+        pat = self._pattern()
+        if pat is None or not self.matches:
+            self.status.configure(text="No matches", fg="#888")
+            return
+
+        content = tab.text.get("1.0", "end-1c")
+        repl = self.replace_var.get()
+        if not self.regex_var.get():
+            repl = self._literal_repl(repl)
+        new_content, count = pat.subn(repl, content)
+
+        # Single delete + insert so it's one undo step.
+        tab.text.delete("1.0", "end")
+        tab.text.insert("1.0", new_content)
+        tab.text.edit_modified(True)
+
+        self.current_idx = -1
+        self._refresh(follow=False)
+        self.status.configure(text=f"Replaced {count} occurrence(s)")
+        
 # =============================================================================
 # Main application
 # =============================================================================
@@ -591,11 +837,16 @@ class LispMachine(tk.Tk):
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
 
-        # ---- editor notebook ----
-        self.notebook = ttk.Notebook(top)
-        self.notebook.pack(side="left", fill="both", expand=True)
-        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_change)
+        # ---- right-hand area: search bar (hidden) + editor notebook ----
+        right_area = tk.Frame(top, bg=COLORS["bg"])
+        right_area.pack(side="left", fill="both", expand=True)
 
+        self.search_bar = SearchBar(right_area, self)   # not packed yet
+
+        self.notebook = ttk.Notebook(right_area)
+        self.notebook.pack(side="top", fill="both", expand=True)
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_change)
+        
         # ---- listener at the bottom of the outer paned window ----
         listener_frame = tk.Frame(outer, bg=COLORS["listener_bg"])
         outer.add(listener_frame, minsize=140)
@@ -645,6 +896,10 @@ class LispMachine(tk.Tk):
         self.bind_all("<Control-w>", lambda e: self.close_current())
         self.bind_all("<Control-q>", lambda e: self._on_close())
         self.bind_all("<Control-e>", lambda e: self.listener_input.focus_set())
+        self.bind_all("<Control-f>",  lambda e: (self.search_bar.show_bar(False), "break")[1])
+        self.bind_all("<Control-h>",  lambda e: (self.search_bar.show_bar(True),  "break")[1])
+        self.bind_all("<F3>",         lambda e: (self.search_bar._nav(1),  "break")[1])
+        self.bind_all("<Shift-F3>",   lambda e: (self.search_bar._nav(-1), "break")[1])
 
     # =========================================================================
     # Buffer management
@@ -696,7 +951,13 @@ class LispMachine(tk.Tk):
         tab = self.current_tab()
         if tab:
             self.status_right.configure(text=f"buffer: {tab.name}")
-
+        # Refresh search highlights for the new buffer, or clear them.
+        if self.search_bar.winfo_ismapped():
+            self.search_bar.current_idx = -1
+            self.search_bar._refresh(follow=False)
+        else:
+            self._clear_search_highlights()
+            
     def close_current(self):
         tab = self.current_tab()
         if not tab:
@@ -763,15 +1024,36 @@ class LispMachine(tk.Tk):
     # =========================================================================
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
+        import turtle as _turtle
+
+        # The turtle Screen is a process-wide singleton whose _RUNNING flag
+        # can be flipped to False by transient WM events when a second Tk
+        # root (the editor) exists in the same process. Force it back on
+        # before every evaluation.
+        _turtle.TurtleScreen._RUNNING = True
+
         writer = _ListenerWriter(self)
         try:
             with contextlib.redirect_stdout(writer):
                 ast = L.parse(code)
                 val = L.eval_exp(ast, L.global_env)
             return val, None
+        except _turtle.Terminator:
+            # Same transient condition; the window is actually alive.
+            _turtle.TurtleScreen._RUNNING = True
+            try:
+                writer = _ListenerWriter(self)
+                with contextlib.redirect_stdout(writer):
+                    ast = L.parse(code)
+                    val = L.eval_exp(ast, L.global_env)
+                return val, None
+            except _turtle.Terminator:
+                # A genuine close — invite the user to reopen.
+                return None, RuntimeError(
+                    "Turtle window was closed. Use (reinit-turtle) or reopen it.")
         except Exception as e:                # noqa: BLE001
             return None, e
-            
+        
     def eval_form_at_cursor(self):
         tab = self.current_tab()
         if not tab:
@@ -794,25 +1076,73 @@ class LispMachine(tk.Tk):
         val, err = self._run(form)
         self._report_eval(val, err)
 
+    def _parse_top_level_forms(self, content: str):
+        """Split buffer text into a list of top-level forms using the interpreter's own parser."""
+        tokens = L.tokenize(content)
+        forms = []
+        while tokens:
+            forms.append(L.read_from_tokens(tokens))
+        return forms
+
     def eval_buffer(self):
         tab = self.current_tab()
         if not tab:
             return
         content = tab.get_content()
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
-        val, err = self._run(f"(begin {content})")
-        self._report_eval(val, err, show_value=False)
-        self.listener_write(f";; --- done ---\n", "info")
+
+        if not content.strip():
+            self.listener_write(";; (empty buffer)\n", "info")
+            self.listener_write(";; --- done ---\n", "info")
+            return
+
+        try:
+            forms = self._parse_top_level_forms(content)
+        except Exception as e:                       # noqa: BLE001
+            self.listener_write(f"Parse error: {e}\n", "error")
+            self.listener_write(";; --- done ---\n", "info")
+            return
+
+        writer = _ListenerWriter(self)
+        for form in forms:
+            try:
+                form_str = L.lisp_str(form)
+            except Exception:
+                form_str = repr(form)
+            if len(form_str) > 120:
+                form_str = form_str[:117] + "..."
+            self.listener_write(f"USER> {form_str}\n", "prompt")
+
+            try:
+                with contextlib.redirect_stdout(writer):
+                    val = L.eval_exp(form, L.global_env)
+            except Exception as e:                   # noqa: BLE001
+                self.listener_write(f"Error: {e}\n", "error")
+                self.set_inspector(f"Error: {e}")
+                self.listener_write(";; --- aborted ---\n", "info")
+                return
+
+            if val is None:
+                self.listener_write(";; ok\n", "info")
+                self.set_inspector("(none)")
+            else:
+                try:
+                    val_str = L.lisp_str(val)
+                except Exception:
+                    val_str = repr(val)
+                self.listener_write(val_str + "\n", "result")
+                try:
+                    self.set_inspector(L.pretty_print(val, width=34))
+                except Exception:
+                    self.set_inspector(val_str)
+
+        self.listener_write(";; --- done ---\n", "info")
 
     def _report_eval(self, val, err, show_value=True):
         if err is not None:
-            self.listener_write(f"Error: {err}\n", "error")
-            self.set_inspector(f"Error: {err}")
-            return
-        if val is None:
-            if show_value:
-                self.listener_write(";; ok\n", "info")
-            self.set_inspector("(none)")
+            msg = str(err) or type(err).__name__
+            self.listener_write(f"Error: {msg}\n", "error")
+            self.set_inspector(f"Error: {msg}")
             return
         try:
             val_str = L.lisp_str(val)
@@ -910,6 +1240,14 @@ class LispMachine(tk.Tk):
             chunks.append(n)
         text += "  " + ", ".join(chunks)
         self.listener_write(text + "\n", "info")
+
+    def _clear_search_highlights(self):
+        tab = self.current_tab()
+        if tab is None:
+            return
+        tab.text.tag_remove("search_all",     "1.0", "end")
+        tab.text.tag_remove("search_current", "1.0", "end")
+        tab.text.tag_remove("sel",            "1.0", "end")
 
     def _about(self):
         messagebox.showinfo(
