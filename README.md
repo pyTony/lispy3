@@ -210,7 +210,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
 Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 
-The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon.
+The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. On Windows, `python icons/make_shortcut.py` puts a *Lispy Machine* shortcut with this icon on your desktop.
 
 `lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 
