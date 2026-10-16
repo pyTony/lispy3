@@ -5,10 +5,8 @@ https://norvig.com/lispy.html
 Lispy started as a Python 3 version of Norvig's lis.py, so everything his page
 shows should keep working. The examples are his, in his order, with his
 expected results. Where Lispy behaves differently on purpose, the test says so
-in a comment and checks Lispy's behaviour. Things his lis.py has and Lispy does
-not have yet are in KnownGapsTest at the end: they are expected failures, so
-the suite stays green, and they turn into "unexpected success" (a failure) once
-the feature is added, as a reminder to move the test up.
+in a comment and checks Lispy's behaviour. The built-ins from his
+standard_env() that Lispy gained later are in NorvigStandardEnvTest.
 
 The last group, NorvigLispyTestSuite, is the lis_tests list from Norvig's own
 lispytest.py (also in https://github.com/fluentpython/lispy).
@@ -105,7 +103,7 @@ class ReplTest(LispyTestCase):
         # 314.159265359
         # lis.py> (if (> (* 11 11) 120) (* 7 6) oops)
         # 42
-        # lis.py> (list (+ 1 1) (+ 2 2) (* 2 3) (expt 2 3))   -> see KnownGapsTest for expt
+        # lis.py> (list (+ 1 1) (+ 2 2) (* 2 3) (expt 2 3))   -> see NorvigStandardEnvTest for expt
         self.ev("(define r 10)")
         self.assertEqual(self.show("(* pi (* r r))"), "314.1592653589793")
         self.assertEqual(self.show("(if (> (* 11 11) 120) (* 7 6) oops)"), "42")
@@ -167,7 +165,7 @@ class LanguageTest(LispyTestCase):
         self.assertEqual(self.ev("(rest (list 1 2 3))"), [2, 3])
 
     def test_count(self):
-        # Norvig's count uses equal? (see KnownGapsTest); = does the same job in Lispy.
+        # Norvig's count uses equal? (see NorvigStandardEnvTest); = does the same job in Lispy.
         # It also relies on (+ #t ...) counting #t as 1, as in Python.
         self.ev_all("(define first car)", "(define rest cdr)",
                     "(define count (lambda (item L) (if L (+ (= item (first L)) (count item (rest L))) 0)))")
@@ -337,49 +335,39 @@ class NorvigLispyTestSuite(LispyTestCase):
                 self.assertEqual(self.ev(source), expected)
 
 
-class KnownGapsTest(LispyTestCase):
-    """Procedures in Norvig's standard_env() that Lispy does not have yet (TODO.md).
+class NorvigStandardEnvTest(LispyTestCase):
+    """Procedures in Norvig's standard_env() that Lispy used to lack.
 
-    Each is an expected failure. When one is implemented, unittest reports an
-    "unexpected success": remove its @expectedFailure so it becomes a normal test.
+    They were expected failures until the Gemini Argon version added them.
     """
 
-    @unittest.expectedFailure
     def test_equal(self):
         self.assertIs(self.ev("(equal? (list 1 2) (list 1 2))"), True)
 
-    @unittest.expectedFailure
     def test_count_with_equal(self):
         self.ev_all("(define first car)", "(define rest cdr)",
                     "(define count (lambda (item L) (if L (+ (equal? item (first L)) (count item (rest L))) 0)))")
         self.assertEqual(self.ev("(count 0 (list 0 1 2 3 0 0))"), 3)
 
-    @unittest.expectedFailure
     def test_eq(self):
         self.ev("(define a (list 1))")
         self.assertIs(self.ev("(eq? a a)"), True)
 
-    @unittest.expectedFailure
     def test_expt(self):
         self.assertEqual(self.show("(list (+ 1 1) (+ 2 2) (* 2 3) (expt 2 3))"), "(2 4 6 8)")
 
-    @unittest.expectedFailure
     def test_apply(self):
         self.assertEqual(self.ev("(apply + (list 1 2))"), 3)
 
-    @unittest.expectedFailure
     def test_list_predicate(self):
         self.assertIs(self.ev("(list? (list 1))"), True)
 
-    @unittest.expectedFailure
     def test_procedure_predicate(self):
         self.assertIs(self.ev("(procedure? car)"), True)
 
-    @unittest.expectedFailure
     def test_print(self):
         self.ev("(print 1)")
 
-    @unittest.expectedFailure
     def test_map_over_two_lists(self):
         # Norvig's map is Python's map, so it takes several lists.
         self.assertEqual(self.ev("(map + (list 1 2) (list 10 20))"), [11, 22])

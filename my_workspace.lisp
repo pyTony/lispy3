@@ -1,8 +1,18 @@
 (define ln log)
 (define user {:name "Tony" :status "Trusty"})
 (define square (lambda [x] (* x x)))
-(define fact (lambda [n] (if (< n 2) 1 (* (fact (- n 1)) n))))
+(define fact-iter
+  (lambda [n acc]
+    (if (< n 2)
+        acc
+        (fact-iter (- n 1) (* n acc)))))
+
+(define fact
+    (lambda [n]
+      (fact-iter n 1)))
+  
 (define bitlength (lambda [n] (if (>= n 1) (+ 1 (bitlength (/ n 2))) 0)))
+
 (define to-binary
   (lambda [n]
     (begin
