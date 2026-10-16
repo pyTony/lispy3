@@ -76,6 +76,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
+| `tests/` | Regression tests from Norvig's [lispy.html](https://norvig.com/lispy.html). Run `python -m unittest` in this folder; no window opens. |
 
 `lispy_machine.pyw` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
 
