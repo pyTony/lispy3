@@ -1122,13 +1122,27 @@ class LispMachine(tk.Tk):
         offset = sum(len(l) + 1 for l in lines[: line - 1]) + col
         span = find_top_level_form(content, offset)
         if span is None:
-            self.listener_write(";; No form at cursor.\n", "error")
-            return
+            # An unclosed form: write the brackets the reader would add into the buffer
+            closed, closers = L.auto_close(content)
+            span = find_top_level_form(closed, offset) if closers else None
+            if span is None:
+                self.listener_write(";; No form at cursor.\n", "error")
+                return
+            content = self._write_closers(tab, content, closers)
         start, end = span
         form = content[start:end]
         self.listener_write(f"USER> {form.strip()}\n", "prompt")
         val, err = self._run(form)
         self._report_eval(val, err, code=form)
+
+    def _write_closers(self, tab, content: str, closers: str) -> str:
+        """Put the missing `closers` at the end of the last code line and say so."""
+        pos = L.close_position(content)
+        index = offset_to_pos(content, pos)
+        tab.text.insert(index, closers)
+        tab._schedule_highlight()
+        self.listener_write(f";; added {closers} at the end of line {index.split('.')[0]}\n", "info")
+        return content[:pos] + closers + content[pos:]
 
     def _parse_top_level_forms(self, content: str):
         """Split buffer text into a list of top-level forms using the interpreter's own parser."""
@@ -1144,6 +1158,9 @@ class LispMachine(tk.Tk):
             return
         content = tab.get_content()
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
+        closers = L.missing_closers(content)
+        if closers:
+            content = self._write_closers(tab, content, closers)
 
         if not content.strip():
             self.listener_write(";; (empty buffer)\n", "info")
@@ -1309,9 +1326,16 @@ class LispMachine(tk.Tk):
         self.listener_input.delete(0, "end")
         if not code.strip():
             return
+        pos = L.close_position(code)
+        code, closers = L.auto_close(code)   # show the brackets the reader adds
         self.listener_history.append(code)
         self.listener_hist_idx = len(self.listener_history)
-        self.listener_write(f"USER> {code}\n", "prompt")
+        if closers:
+            self.listener_write(f"USER> {code[:pos]}", "prompt")
+            self.listener_write(closers, "info")
+            self.listener_write(f"{code[pos + len(closers):]}\n", "prompt")
+        else:
+            self.listener_write(f"USER> {code}\n", "prompt")
         # handle "exit" like the console REPL
         if code.strip().lower() == "exit":
             self._on_close()

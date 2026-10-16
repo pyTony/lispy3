@@ -689,6 +689,42 @@ def count_balance(text: str) -> int:
     closes = cleaned.count(')') + cleaned.count(']') + cleaned.count('}')
     return max(0, opens - closes)
 
+_CLOSER = {'(': ')', '[': ']', '{': '}'}
+_OPENER = {')': '(', ']': '[', '}': '{'}
+
+def missing_closers(text: str) -> str:
+    """Return the closing brackets the reader adds by itself at the end of `text`.
+
+    "(+ 1 [2 (* 3 4" gives ")])". Strings, characters and comments are skipped.
+    """
+    stack = []
+    for token in TOKEN_RE.findall(text):
+        if token in _CLOSER:
+            stack.append(token)
+        elif token in _OPENER:
+            # A wrong closer also ends the inner brackets, as read_from_tokens does
+            while stack and stack[-1] != _OPENER[token]:
+                stack.pop()
+            if stack:
+                stack.pop()
+    return ''.join(_CLOSER[c] for c in reversed(stack))
+
+def close_position(text: str) -> int:
+    """Offset just after the last code token, where missing closers go (before a trailing ; comment)."""
+    end = 0
+    for m in TOKEN_RE.finditer(text):
+        if not m.group().startswith(';'):
+            end = m.end()
+    return end
+
+def auto_close(text: str) -> tuple[str, str]:
+    """Return (text with the missing closers written in, the closers added)."""
+    closers = missing_closers(text)
+    if not closers:
+        return text, ''
+    pos = close_position(text)
+    return text[:pos] + closers + text[pos:], closers
+
 # --- Interaction and REPL Printing ---
 def lisp_str(exp: Any) -> str:
     """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""

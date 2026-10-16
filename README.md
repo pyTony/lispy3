@@ -258,6 +258,8 @@ F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` 
 
 F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely what `python lispy3.py file.lisp` does under the hood, so the results are identical.
 
+Lispy closes brackets you leave open. When it does, you see the brackets it added: in the Listener they are printed at the end of your line, and with F5 or F6 they are written into the buffer at the end of the last line of code (before any `;` comment), with a `;; added ))` note in the Listener. `Ctrl+Z` takes them out again.
+
 ### Inspector
 
 After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. Long lists of atoms are packed into rows instead of one item per line. A `(define name …)` returns nothing, so the Inspector then shows the new value of `name`; press `F7` on any symbol to look at a variable later. If evaluation raised, the Inspector shows the error.
