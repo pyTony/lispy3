@@ -191,7 +191,9 @@ def save_workspace(filename: str) -> str:
     
     with open(real_filename, 'w', encoding='utf-8') as f:
         for key, value in global_env.items():
-            if key in std or key == 'nan':
+            # Skip built-ins, but keep a user's own function even if it reuses a built-in name
+            user_fn = isinstance(value, Procedure) and value.native_fn is None
+            if (key in std and not user_fn) or key == 'nan':
                 continue
                 
             # Jos kyseessä on jokin Pythonin oma funktio (esim. log), jätetään se tallentamatta
