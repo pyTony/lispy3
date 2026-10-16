@@ -1,6 +1,6 @@
 # Lispy3: A Modern Clojure-Infused Lisp Interpreter in Python 3 — with a Lisp-Machine Editor
 
-A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Python 3, plus a companion Tkinter editor (`lispy_machine.pyww`) that turns it into an interactive Lisp-Machine style environment. This project is a deeply evolutionized version of Peter Norvig's classic `lis.py`, incorporating modern Python features and powerful Clojure-inspired constructs.
+A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Python 3, plus a companion Tkinter editor (`lispy_machine.pyw`) that turns it into an interactive Lisp-Machine style environment. This project is a deeply evolutionized version of Peter Norvig's classic `lis.py`, incorporating modern Python features and powerful Clojure-inspired constructs.
 
 The roots of this project date back to a spark of inspiration from a 1981 Finnish computer magazine (*Prosessori*), leading to a Python 2 adaptation on the DaniWeb forums in 2011, and finally culminating in this modern, pattern-matching Python 3 masterpiece.
 
@@ -53,7 +53,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - **Workspace State Management**: Built-in environment persistence via `(save "filename")` and `(load "filename")`, which serialize/deserialize user functions and variables as valid, human-readable Lisp source code.
 - **Turtle Graphics**: Every `turtle.*` name is available as a Lisp procedure; `push-pose` / `pop-pose` / `clear-poses` implement the `[` … `]` branching of L-systems.
 
-**Editor (`lispy_machine.pyww`)**
+**Editor (`lispy_machine.pyw`)**
 
 - **Multiple editor buffers** with syntax colouring read from `syntax/*.json` (Lisp and Python included).
 - **Persistent Listener** with history, coloured prompts/results/errors.
@@ -200,13 +200,16 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
 # Lispy3 Machine — the editor
 
-`lispy_machine.pyww` is a Tkinter editor that turns the interpreter into a small Lisp-Machine style environment: several buffers, one persistent Listener, an Inspector, and one-key evaluation of whatever is at the cursor. It is a *client* of `lispy3.py` — the interpreter itself is untouched.
+`lispy_machine.pyw` is a Tkinter editor that turns the interpreter into a small Lisp-Machine style environment: several buffers, one persistent Listener, an Inspector, and one-key evaluation of whatever is at the cursor. It is a *client* of `lispy3.py` — the interpreter itself is untouched.
 
 ### Running the editor
 
-    python lispy_machine.pyww
+    python lispy_machine.pyw
+    python lispy_machine.pyw tree.lisp      # open a file instead of the welcome example
 
-`lispy_machine.pyww` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
+Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
+
+`lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 
 ### The layout
 
