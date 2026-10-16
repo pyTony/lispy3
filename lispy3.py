@@ -63,6 +63,10 @@ class Env(dict):
             raise NameError(f"Undefined symbol: {var}")
         return self.outer.find(var)
 
+def string_literal(text: str) -> str:
+    """Write text as a Lispy string literal that reads back as the same text."""
+    return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
 def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
     """Format an AST or value into an indented string fitting within `width` columns."""
     pad = "  " * indent
@@ -81,7 +85,7 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
 
     # 2. String and Character Literals
     if type_name == 'String':
-        return f'"{exp.value}"'
+        return string_literal(exp.value)
     if type_name == 'Char':
         reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab'}
         return reverse_char_map.get(exp.value, f"#\\{exp.value}")
@@ -557,18 +561,20 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
 def parse(program: str) -> Exp:
     """Read a Lisp expression from a string program."""
     return read_from_tokens(tokenize(program))
+# String literals: """raw text""" (may hold " and newlines, no escapes) or "text" with escapes
+STRING_PATTERN = r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"'
+CHAR_PATTERN = r'#\\[()\[\]{}]|#\\[^\s()\[\]{}]+'
+TOKEN_RE = re.compile(CHAR_PATTERN + '|' + STRING_PATTERN +
+                      r'|;[^\n]*|\[|\]|\(|\)|\{|\}|\'|[^\s()\[\]{}";\']+')
+STRING_ESCAPES = {'n': '\n', 't': '\t', '"': '"', '\\': '\\'}
+
 def tokenize(chars: str) -> list[str]:
-    """Convert a string into a list of tokens, stripping comments and splitting brackets."""
-    # 1. Strip comments (anything from ';' until end of the line)
-    chars = re.sub(r';.*', '', chars)
+    """Convert a string into a list of tokens, dropping ; comments.
 
-    # 2. Separate the quote mark. Brackets need no padding here: the regex below
-    #    already makes each one its own token, and padding them would also rewrite
-    #    the inside of string literals such as "F[+F]" and break the characters #\[ and #\].
-    chars = chars.replace("'", " ' ")
-
-    # 3. Advanced regex tokenizer to keep string literals intact and catch tokens
-    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|#\\[()\[\]{}]|#\\[^\s()\[\]{}]+|[^\s()\[\]{}]+', chars)
+    Strings and characters are matched first, so a ; or ' inside "text",
+    or the characters #\\; and #\\', are kept as they are.
+    """
+    return [t for t in TOKEN_RE.findall(chars) if not t.startswith(';')]
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -624,8 +630,10 @@ def read_from_tokens(tokens: list[str]) -> Exp:
 
 def atom(token: str) -> Atom:
     r"""Numbers become numbers, "strings" become String, #\c become Char, others are symbols."""
-    if token.startswith('"') and token.endswith('"'):
-        return String(token[1:-1])
+    if len(token) >= 6 and token.startswith('"""') and token.endswith('"""'):
+        return String(token[3:-3])
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        return String(re.sub(r'\\(.)', lambda m: STRING_ESCAPES.get(m.group(1), m.group(0)), token[1:-1]))
     if token.startswith('#\\'):
         char_map = {'#\\newline': '\n', '#\\space': ' ', '#\\tab': '\t'}
         if token in char_map:
@@ -649,11 +657,14 @@ RECURSION_HINT = ("recursion too deep (a few hundred calls is the limit). "
                   "Use while, map or filter for long lists and big counts.")
 
 def count_balance(text: str) -> int:
-    """Return the balance of opening vs closing brackets, ignoring strings and comments."""
-    # Strip comments first
-    cleaned = re.sub(r';.*', '', text)
-    # Strip string literals
-    cleaned = re.sub(r'"[^"]*"', '', cleaned)
+    """Return the balance of opening vs closing brackets, ignoring strings and comments.
+
+    An unfinished string counts as one open bracket, so the REPL keeps reading
+    the lines of a multi-line string.
+    """
+    cleaned = re.sub(CHAR_PATTERN + '|' + STRING_PATTERN + r'|;[^\n]*', '', text)
+    if '"' in cleaned:
+        return 1
     opens = cleaned.count('(') + cleaned.count('[') + cleaned.count('{')
     closes = cleaned.count(')') + cleaned.count(']') + cleaned.count('}')
     return max(0, opens - closes)
@@ -675,7 +686,7 @@ def lisp_str(exp: Any) -> str:
         return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
 
     elif type_name == 'String':
-        return f'"{exp.value}"'
+        return string_literal(exp.value)
     elif type_name == 'Char':
         reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab'}
         if exp.value in reverse_char_map:

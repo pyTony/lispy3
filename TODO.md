@@ -37,6 +37,10 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 - [ ] `substring`, `string-ref`, `upcase`, `downcase`, `split`, `list->string`
 - [ ] `string->number` and a `string?` test
 - [ ] `str` should return a real string, so `(= (str 12) "12")` is true
+- [ ] More string escapes: `\r`, hex and Unicode (`\x41;`, `\u00e4`)
+- [ ] More character names: `#\return`, `#\nul`, `#\x41`
+- [ ] String formatting: `format`, or `str` taking several values
+- [ ] Editor: a `;` inside a string is still coloured as a comment
 
 ## Maps
 

@@ -8,7 +8,8 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 |-------|---------|
 | `(f a b)` | call `f` with `a` and `b` |
 | `42` `3.14` | numbers |
-| `"text"` | string |
+| `"text"` | string; escapes `\"` `\\` `\n` `\t`; may span lines |
+| `"""text"""` | raw string: no escapes, may hold `"` |
 | `#\a` `#\space` `#\newline` `#\tab` | characters |
 | `name` | variable |
 | `:key` | keyword, stands for itself |
@@ -95,6 +96,6 @@ False in a test: `False`, `0`, `0.0`, `()`. Everything else is true, including `
 ## TO BE IMPLEMENTED
 
 Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md), the list in [TODO.md](../TODO.md)):
-`cond`, `and`, `or`, `#t`/`#f`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `string?`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`.
+`cond`, `and`, `or`, `#t`/`#f`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `string?`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`.
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.

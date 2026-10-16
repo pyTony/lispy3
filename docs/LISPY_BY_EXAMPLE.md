@@ -74,6 +74,44 @@ Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log
 
 A string is text in double quotes. A character is written `#\a`; `#\space`, `#\newline` and `#\tab` are the special ones.
 
+### Writing strings
+
+| Write | You get |
+|-------|---------|
+| `"hello"` | `hello` |
+| `"say \"hi\""` | `say "hi"` |
+| `"back\\slash"` | `back\slash` |
+| `"tab\there"` | `tab`, a tab, `here` |
+| `"one\ntwo"` | `one` and `two` on two lines |
+| `"""He said "hi"; ok"""` | `He said "hi"; ok` |
+
+In `"..."` a backslash starts an escape: `\"` quote, `\\` backslash, `\n` new line, `\t` tab. Any other backslash stays as it is, so `"C:\Users"` is fine.
+
+`"""..."""` is a raw string, as in Python: no escapes, and it may hold `"` freely. It ends at the next `"""`.
+
+Both kinds may run over several lines, and the REPL keeps reading until the string is closed:
+
+    lispy3> (display "first line
+    ... (1)> second line")
+    first line
+    second line
+
+A `;` or `'` inside a string is just text, and so are the characters `#\;`, `#\'` and `#\"`.
+
+    lispy3> (length "don't; stop")
+    11
+
+When Lispy prints a string, or `save` writes one, it adds the escapes back, so the file reads in as the same text:
+
+    lispy3> "say \"hi\""
+    "say \"hi\""
+    lispy3> (display "say \"hi\"")
+    say "hi"
+
+**TO BE IMPLEMENTED:** `\r`, hex and Unicode escapes such as `\x41;` or `\u00e4`, more character names (`#\return`, `#\nul`, `#\x41`), and string formatting (`format`, or `str` taking several values).
+
+### Working with strings
+
     lispy3> (length "hello")
     5
     lispy3> (append "Hello, " "world")
