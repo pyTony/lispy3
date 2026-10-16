@@ -1167,7 +1167,7 @@ class LispMachine(tk.Tk):
                     val_str = L.lisp_str(val)
                 except Exception:
                     val_str = repr(val)
-                self.listener_write(val_str + "\n", "result")
+                self.listener_write(self._fmt_result(val, val_str) + "\n", "result")
                 try:
                     self.set_inspector(L.pretty_print(val, width=self._inspector_cols()))
                 except Exception:
@@ -1185,6 +1185,17 @@ class LispMachine(tk.Tk):
         if isinstance(form, list) and len(form) >= 2 and form[0] == 'define' and isinstance(form[1], str):
             return form[1]
         return None
+
+    def _fmt_result(self, val, flat):
+        """Listener text for a value: functions and long structures are shown in full."""
+        try:
+            import tkinter.font as tkfont
+            char_w = tkfont.Font(font=self.listener_text.cget("font")).measure("0") or 8
+            cols = max(40, (self.listener_text.winfo_width() - 24) // char_w)
+            text = L.pretty_print(val, width=cols)
+            return text if text.strip() else flat
+        except Exception:                            # noqa: BLE001
+            return flat
 
     def _inspector_cols(self):
         """Text columns that fit in the Inspector now (follows the draggable divider)."""
@@ -1251,7 +1262,7 @@ class LispMachine(tk.Tk):
         except Exception:
             val_str = repr(val)
         if show_value:
-            self.listener_write(val_str + "\n", "result")
+            self.listener_write(self._fmt_result(val, val_str) + "\n", "result")
         try:
             pretty = L.pretty_print(val, width=self._inspector_cols())
         except Exception:
@@ -1264,7 +1275,7 @@ class LispMachine(tk.Tk):
             self.listener_write(f"Error: {err}\n", "error")
         elif val is not None:
             try:
-                self.listener_write(L.lisp_str(val) + "\n", "result")
+                self.listener_write(self._fmt_result(val, L.lisp_str(val)) + "\n", "result")
             except Exception:
                 pass
 
