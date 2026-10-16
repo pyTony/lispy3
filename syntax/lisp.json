@@ -1,0 +1,67 @@
+{
+  "name": "Lisp",
+  "extensions": [
+    ".lisp",
+    ".lsp",
+    ".scm",
+    ".lispy"
+  ],
+  "line_comment": ";",
+  "env_words": true,
+  "colors": {
+    "comment": "#6a9955",
+    "string": "#ce9178",
+    "char": "#d7ba7d",
+    "keyword": "#c586c0",
+    "special": "#569cd6",
+    "constant": "#569cd6",
+    "number": "#b5cea8",
+    "builtin": "#4ec9b0",
+    "variable": "#9cdcfe"
+  },
+  "rules": [
+    {
+      "tag": "char",
+      "pattern": "#\\\\[()\\[\\]{}]|#\\\\[^\\s()\\[\\]{}]+"
+    },
+    {
+      "tag": "string",
+      "pattern": "\"\"\"[\\s\\S]*?(?:\"\"\"|\\Z)"
+    },
+    {
+      "tag": "string",
+      "pattern": "\"(?:[^\"\\\\]|\\\\[\\s\\S])*(?:\"|\\Z)"
+    },
+    {
+      "tag": "comment",
+      "pattern": ";[^\\n]*"
+    },
+    {
+      "tag": "constant",
+      "pattern": "#[tf](?![^\\s()\\[\\]{}\";'])"
+    },
+    {
+      "tag": "keyword",
+      "pattern": ":[^\\s()\\[\\]{}\";']+"
+    },
+    {
+      "tag": "number",
+      "pattern": "[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?(?![^\\s()\\[\\]{}\";'])"
+    }
+  ],
+  "word_pattern": "[^\\s()\\[\\]{}\";']+",
+  "words": {
+    "special": [
+      "quote",
+      "if",
+      "define",
+      "set!",
+      "lambda",
+      "begin",
+      "let",
+      "while",
+      "save",
+      "load"
+    ]
+  }
+}
