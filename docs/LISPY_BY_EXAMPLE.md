@@ -22,6 +22,7 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
 - [Printing](#printing)
 - [Files and workspaces](#files-and-workspaces)
 - [Turtle graphics](#turtle-graphics)
+- [Macros](#macros)
 - [Gotchas](#gotchas)
 - [Coming from Scheme or lis.py](#coming-from-scheme-or-lispy)
 - [Further reading](#further-reading)
@@ -200,9 +201,38 @@ Comparisons give `True` or `False`.
 
 In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
 
+    lispy3> (if '() "yes" "no")
+    "no"
+    lispy3> (if "" "yes" "no")
+    "yes"
+
 `True` and `False` are printed results, not names you can type: `(if x True False)` gives *Undefined symbol: True*. Write `(= 1 1)` for true and `(= 1 0)` for false if you need them as values.
 
-**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b".
+**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b". Until then, `save` writes a true or false variable as `True` / `False`, which `load` cannot read back.
+
+### What things return
+
+| Expression | Returns | Shown at the prompt |
+|------------|---------|---------------------|
+| a test: `(< 1 2)`, `(null? x)`, `(not x)` | `True` / `False` | `True` / `False` |
+| `(define ...)`, `(set! ...)`, `(while ...)`, `(display ...)`, `(vector-set! ...)`, `(begin)` | nothing (Python `None`) | nothing |
+| `(car '())`, `(get map :missing)`, `(:missing map)` | the empty list | `()` |
+| `(if ...)`, `(begin ...)`, `(let ...)`, a lambda call | the value of the last expression | that value |
+
+"Nothing" is not printed at the prompt, but it shows up as `None` if you put it in a list: `(list (display 1))` gives `(None)`. Lispy has no `nil`; the empty list `()` does that job, as in Scheme.
+
+### How other Lisps do it
+
+| | true / false written as | printed as | false in a test | "no value" |
+|---|---|---|---|---|
+| **Lispy** | (none yet) | `True` / `False` | `False`, `0`, `()` | `None`, not printed |
+| Norvig's `lis.py` | (none) | `True` / `False` | `False`, `0`, `()` (Python rules) | `None` |
+| Norvig's `lispy.py` | `#t` / `#f` | `#t` / `#f` | `False`, `0`, `()` (Python rules) | `None` |
+| Scheme (R7RS, Racket, Guile) | `#t` / `#f` | `#t` / `#f` | **only** `#f` | unspecified |
+| Common Lisp | `t` / `nil` | `T` / `NIL` | **only** `nil`, which is also `()` | `nil` |
+| Clojure | `true` / `false` | `true` / `false` | `false` and `nil` | `nil` |
+
+So Lispy follows its parent `lis.py`: Python's own `True`, `False` and truth rules. In real Scheme `0` and `()` are true, and only `#f` is false. Norvig's second interpreter, [`lispy.py`](https://norvig.com/lispy2.html), added `#t` / `#f` literals and printing but kept Python's truth rules; a copy is in [fluentpython/lispy](https://github.com/fluentpython/lispy) under `original/norvig/lispy.py`.
 
 ## Choosing: if
 
@@ -428,6 +458,36 @@ Every name in Python's `turtle` module is a Lispy function:
     lispy3> (square-shape 100)
 
 `(help 'fd)` explains any turtle name. For drawing plants and snowflakes see the L-system section of the [README](../README.md#l-systems-with-turtle-graphics). If you close the window, type `(reinit-turtle)`.
+
+## Macros
+
+**TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `eval`, no `gensym`. `(help)` lists no macro forms for that reason.
+
+A macro is a function that runs on **code** before it is evaluated, and returns new code. That is how a Lisp adds forms like `unless`, `and`, `or` or `cond` in Lisp itself. Norvig's [`lispy.py`](https://norvig.com/lispy2.html) has `define-macro` with quasiquote, and defines `and` that way:
+
+    (define-macro and (lambda args
+       (if (null? args) #t
+           (if (= (length args) 1) (car args)
+               `(if ,(car args) (and ,@(cdr args)) #f)))))
+
+(This does **not** run in Lispy; it is the reference for the TODO item, in `original/norvig/lispy.py` of fluentpython/lispy.)
+
+What works today: `quote` gives you code as data, which you can take apart and build with list functions:
+
+    lispy3> (define code '(if (< x 1) "small" "big"))
+    lispy3> (car code)
+    if
+    lispy3> (car (cdr code))
+    (< x 1)
+
+and a new control form can be a function that takes its body as a lambda with no parameters, so the body only runs when called:
+
+    lispy3> (define unless
+    ...       (lambda [test body]
+    ...         (if test '() (body))))
+    lispy3> (unless (= 1 2) (lambda [] (begin (display "ran") 42)))
+    ran
+    42
 
 ## Gotchas
 

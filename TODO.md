@@ -12,7 +12,8 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 - [ ] `cond` for a chain of tests *(ref: mylis_2 `cond_form`)*
 - [ ] `and` / `or`, short-circuit, so they must be special forms *(ref: mylis_2 `and_form`, `or_form`)*
-- [ ] `#t` / `#f` (or `true` / `false`) literals
+- [ ] `#t` / `#f` (or `true` / `false`) literals, and print true and false the same way. Today `save` writes `True`/`False`, which `load` cannot read *(ref: Norvig `original/norvig/lispy.py`, `atom` and `to_string`)*
+- [ ] Macros: `define-macro`, quasiquote `` ` `` with `,` and `,@`, `eval`, `gensym` *(ref: Norvig `original/norvig/lispy.py`, `expand` and `expand_quasiquote`)*
 - [ ] `(define (f x) body)` shorthand *(ref: py3.10 `lis.py`, `case ['define', [Symbol(name), *parms], *body]`)*
 - [ ] Several body expressions in `lambda` and `let` without `begin` *(ref: py3.10 `lis.py`, `case ['lambda', [*parms], *body]`)*
 - [ ] Proper tail calls, so tail recursion is not limited to about 200 calls *(ref: mylis_2 `evaluate`, the `while True` loop with `TCO_ENABLED`)*
