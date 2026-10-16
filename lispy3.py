@@ -5,6 +5,7 @@ import itertools
 import math
 import operator as op
 import re
+import sys
 import time
 import turtle
 
@@ -89,26 +90,154 @@ def gensym(prefix: Any = "G__") -> Symbol:
     p = prefix.value if isinstance(prefix, (String, Char)) else str(prefix)
     return Symbol(f"{p}{next(_gensym_counter)}")
 
-# --- Help Topics ---
-HELP_TOPICS: dict[str, str] = {
-    'make-vector': "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0",
-    'vector-ref': "(vector-ref v i) - item i of v",
-    'vector-set!': "(vector-set! v i x) - put x into item i of v",
-    'clock': "(clock) - seconds as a decimal number, for timing",
-    'cond': "(cond (test1 exp1...) (test2 exp2...) (else expN...))",
-    'and': "(and exp1 exp2 ...) - Short-circuit logical AND.",
-    'or': "(or exp1 exp2 ...) - Short-circuit logical OR.",
-    'define-macro': "(define-macro (name parms...) body) or (define-macro name (lambda ...))",
-    'quasiquote': "`(a ,b ,@c) - Quasiquote template with unquote (,) and unquote-splicing (,@).",
-    'try': "(try expr (catch e handler_expr)) - Catch runtime errors.",
-    'error': "(error msg) - Raise a recoverable runtime error.",
-    'dotimes': "(dotimes [i count] body...) - Loop i from 0 to count-1.",
-    'for-each': "(for-each proc list1 ...) - Apply proc to each element for side-effects.",
-    'numbers': "Variadic +, -, *, /, <, <=, =, >=, >, modulo, quotient, expt.",
-    'lists': "reverse, nth, last, range, reduce, fold, apply, sort, member, append, list?, procedure?, eq?, equal?.",
-    'strings': "substring, string-ref, upcase, downcase, split, list->string, string->number, format, str.",
-    'maps': "assoc, dissoc, keys, vals, contains?.",
+# --- Built-in help: (help) lists everything, (help 'name) explains one name ---
+HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
+    "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
+        ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
+        ("set!", "(set! name value) - change an existing variable"),
+        ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
+        ("if", "(if test then else) - the else part may be left out"),
+        ("cond", "(cond (test1 exp1...) (test2 exp2...) (else expN...)) - the first true test wins"),
+        ("and", "(and e1 e2 ...) - stops at the first false value, else gives the last"),
+        ("or", "(or e1 e2 ...) - stops at the first true value"),
+        ("begin", "(begin e1 e2 ...) - run each, return the last value"),
+        ("let", "(let [a 1 b 2] body...) - local names; later ones may use earlier ones"),
+        ("while", "(while test body...) - loop while test is true, no recursion depth used"),
+        ("dotimes", "(dotimes [i count] body...) - run body with i = 0, 1, ... count-1"),
+        ("try", "(try exp (catch e handler...)) - run exp; on an error, run handler with e = the message"),
+        ("quote", "(quote x) or 'x - x itself, not evaluated"),
+        ("quasiquote", "`(a ,b ,@c) - a template: ,b puts in the value of b, ,@c splices the list c"),
+        ("define-macro", "(define-macro (name parms...) body) - a function that writes code, run before evaluation"),
+        ("#t", "#t and #f - true and false. False in a test: #f, 0 and (); everything else is true"),
+        ("save", "(save \"name\") - write your definitions to name.lisp"),
+        ("load", "(load \"name\") - run name.lisp"),
+    ],
+    "Lists and sequences": [
+        ("car", "(car lst) - first item; same as first. () for an empty list"),
+        ("first", "(first lst) - first item (the head)"),
+        ("cdr", "(cdr lst) - everything but the first item; same as rest"),
+        ("rest", "(rest lst) - everything but the first item (the tail)"),
+        ("cons", "(cons x lst) - a new list with x in front"),
+        ("list", "(list a b ...) - a list of the values"),
+        ("length", "(length x) - number of items in a list or characters in a string"),
+        ("null?", "(null? lst) - true for the empty list; same as empty?"),
+        ("empty?", "(empty? x) - true for an empty list, string or map"),
+        ("append", "(append a b ...) - join lists, or join strings"),
+        ("last", "(last lst) - the last item"),
+        ("nth", "(nth lst i) - item i, counting from 0; also works on a string"),
+        ("reverse", "(reverse lst) - the items backwards; also works on a string"),
+        ("range", "(range 5), (range 1 6), (range 0 10 2) - a list of whole numbers"),
+        ("seq", "(seq \"abc\") - a string as a list of characters (#\\a #\\b #\\c)"),
+        ("map", "(map f lst ...) - a list of (f item) for each item; several lists go side by side"),
+        ("filter", "(filter f lst) - the items for which (f item) is true"),
+        ("for-each", "(for-each f lst ...) - call f on each item, for its side effects"),
+        ("reduce", "(reduce f lst) or (reduce f init lst) - combine the items with f; also fold"),
+        ("apply", "(apply f a ... lst) - call f with the items of lst as its arguments"),
+        ("sort", "(sort lst) or (sort lst less?) - a sorted copy"),
+        ("member", "(member x lst) - the tail of lst starting at x, or #f"),
+        ("list?", "(list? x) - true for a list"),
+        ("procedure?", "(procedure? x) - true for a function"),
+        ("eq?", "(eq? a b) - the same thing (numbers, symbols, strings compare by value)"),
+        ("equal?", "(equal? a b) - equal values, lists compared item by item"),
+    ],
+    "Numbers and comparison": [
+        ("+", "(+ a b ...) - add any number of numbers (also plus)"),
+        ("-", "(- a b ...) - subtract; (- a) is minus a"),
+        ("*", "(* a b ...) - multiply"),
+        ("/", "(/ a b ...) - divide, gives a decimal"),
+        ("quotient", "(quotient a b) - whole-number division, rounding toward zero"),
+        ("modulo", "(modulo a b) - remainder, with the sign of b"),
+        ("expt", "(expt a b) - a to the power b, exact for whole numbers"),
+        ("=", "(= a b ...) - equal; works on numbers, symbols, strings and characters"),
+        ("<", "(< a b ...), also > <= >= - true when each value is in order with the next"),
+        ("not", "(not x) - #t if x is #f, 0 or empty, else #f"),
+        ("abs", "(abs x) - absolute value"),
+        ("min", "(min a b ...) - smallest"),
+        ("max", "(max a b ...) - largest"),
+        ("round", "(round x) - nearest whole number"),
+        ("number?", "(number? x) - true for a number"),
+        ("boolean?", "(boolean? x) - true for #t and #f"),
+        ("math", "every name in Python's math module: sqrt floor fmod log sin cos pi e ... try (help 'sqrt)"),
+    ],
+    "Strings and characters": [
+        ("str", "(str a b ...) - the values joined as one string"),
+        ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~% newline"),
+        ("substring", "(substring s start end) - part of s; end may be left out"),
+        ("string-ref", "(string-ref s i) - character i of s"),
+        ("upcase", "(upcase s), (downcase s) - change the case"),
+        ("split", "(split s) or (split s sep) - a list of the parts"),
+        ("list->string", "(list->string chars) - join characters into a string; string->list goes back"),
+        ("string->number", "(string->number \"42\") - the number, or #f"),
+        ("number->string", "(number->string 42) - the string \"42\""),
+        ("string?", "(string? x) - true for a string; also char?, symbol?"),
+        ("string->symbol", "(string->symbol \"car\") - the symbol car"),
+        ("symbol->string", "(symbol->string 'car) - the string \"car\""),
+    ],
+    "Maps": [
+        ("get", "(get map key) or (get map key default) - look up a key; also (:key map)"),
+        ("assoc", "(assoc map k v ...) - a copy of map with the keys set"),
+        ("dissoc", "(dissoc map k ...) - a copy of map without the keys"),
+        ("keys", "(keys map), (vals map) - the keys or the values as a list"),
+        ("contains?", "(contains? map k) - true if map has the key k"),
+        ("map?", "(map? x) - true for a map"),
+    ],
+    "Vectors, time and output": [
+        ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
+        ("vector-ref", "(vector-ref v i) - item i of v"),
+        ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
+        ("clock", "(clock) - seconds as a decimal number, for timing"),
+        ("display", "(display a b ...) - print the values with nothing between them, then a new line"),
+        ("print", "(print a b ...) - print the values with spaces between them"),
+        ("newline", "(newline) - print an empty line"),
+        ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
+        ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
+        ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
+        ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
+        ("gensym", "(gensym) - a new, unused symbol, for macros"),
+    ],
+    "Turtle graphics": [
+        ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
+        ("push-pose", "(push-pose) - remember position, heading and pen"),
+        ("pop-pose", "(pop-pose) - go back to the last remembered pose, without drawing"),
+        ("clear-poses", "(clear-poses) - forget all remembered poses"),
+        ("reinit-turtle", "(reinit-turtle) - reopen a closed turtle window; also reset"),
+    ],
 }
+
+_HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
+for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset': 'reinit-turtle',
+                      '>': '<', '<=': '<', '>=': '<', 'fold': 'reduce', 'downcase': 'upcase',
+                      'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
+                      'symbol?': 'string?', 'else': 'cond', 'catch': 'try'}.items():
+    _HELP_INDEX[_alias] = _HELP_INDEX[_name]
+
+def lisp_help(*args: Any) -> None:
+    """(help) lists the built-ins; (help 'name) or (help name) explains one of them."""
+    if not args:
+        for topic, entries in HELP_TOPICS.items():
+            print(f"{topic}:")
+            print("  " + " ".join(name for name, _ in entries))
+        print("More: docs/QUICK_START.md, docs/LISPY_BY_EXAMPLE.md, docs/QUICK_REFERENCE.md")
+        return
+    what = args[0]
+    if isinstance(what, Procedure):
+        if what.native_fn is None:
+            print(pretty_print(what, width=60))
+            return
+        name = what.name
+    else:
+        name = what.value if isinstance(what, String) else lisp_str(what)
+    if name in _HELP_INDEX:
+        print(_HELP_INDEX[name])
+        return
+    for module in (math, turtle):
+        obj = getattr(module, name, None)
+        doc = obj.__doc__ if callable(obj) else None
+        if doc:
+            print(f"({name} ...) - from Python's {module.__name__}: {doc.strip().splitlines()[0]}")
+            return
+    print(f"No help for {name}. Type (help) for the list of built-ins.")
 
 # --- Pretty Printer ---
 def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
@@ -125,11 +254,8 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
             return f"(define {exp.name}\n{pad}  (lambda {parms}\n{pad}    {body_s}))"
         return f"(lambda {parms}\n{pad}  {body_s})"
 
-    if type_name == 'String':
-        return f'"{exp.value}"'
-    if type_name == 'Char':
-        reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab', '\r': '#\\return', '\0': '#\\nul'}
-        return reverse_char_map.get(exp.value, f"#\\{exp.value}")
+    if type_name in ('String', 'Char'):
+        return lisp_str(exp)
 
     if isinstance(exp, Env):
         return "<env>"
@@ -190,7 +316,7 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
         rest_s = "\n".join(f"{pad}  {pretty_print(e, indent + 1, width).lstrip()}" for e in exp[1:])
         return f"({head_s}\n{rest_s})"
 
-    return str(exp)
+    return lisp_str(exp)
 
 # --- Helper Functions for Workspace Save and Load ---
 def save_workspace(filename: str) -> str:
@@ -200,11 +326,15 @@ def save_workspace(filename: str) -> str:
     
     with open(real_filename, 'w', encoding='utf-8') as f:
         for key, value in global_env.items():
-            if key in std or key == 'nan':
+            # Skip built-ins, but keep a user's own function even if it reuses a built-in name
+            user_fn = isinstance(value, Procedure) and value.native_fn is None
+            if (key in std and not user_fn) or key == 'nan':
                 continue
             if callable(value) and type(value).__name__ != 'Procedure':
                 continue
-            f.write(f"(define {key} {lisp_str(value)})\n")
+            # Lists and symbols are data: quote them so loading does not run them as code
+            quote = "'" if isinstance(value, (list, str)) and value != [] else ""
+            f.write(f"(define {key} {quote}{lisp_str(value)})\n")
             
     return f"Workspace saved to {real_filename}"
 
@@ -232,27 +362,24 @@ def load_workspace(filename: str) -> str:
     return f"Workspace loaded from {real_filename}"
 _turtle_pose_stack: list[tuple[float, float, float]] = []
 
-def push_pose() -> list:
-    """Save the turtle's current (x, y, heading) onto the pose stack."""
-    _turtle_pose_stack.append((turtle.xcor(), turtle.ycor(), turtle.heading()))
-    return []
+def push_pose() -> None:
+    """Remember the turtle's position, heading and pen state."""
+    _turtle_pose_stack.append((turtle.position(), turtle.heading(), turtle.isdown()))
 
-def pop_pose() -> list:
-    """Restore the turtle's last saved (x, y, heading) without drawing a line."""
-    if _turtle_pose_stack:
-        x, y, h = _turtle_pose_stack.pop()
-        was_down = turtle.isdown()
-        turtle.penup()
-        turtle.goto(x, y)
-        turtle.setheading(h)
-        if was_down:
-            turtle.pendown()
-    return []
+def pop_pose() -> None:
+    """Move the turtle back to the last remembered pose without drawing."""
+    if not _turtle_pose_stack:
+        raise IndexError("pop-pose: no pose to return to")
+    position, heading, pen_down = _turtle_pose_stack.pop()
+    turtle.penup()
+    turtle.setposition(position)
+    turtle.setheading(heading)
+    if pen_down:
+        turtle.pendown()
 
-def clear_poses() -> list:
-    """Empty the saved turtle pose stack."""
+def clear_poses() -> None:
+    """Forget all remembered poses."""
     _turtle_pose_stack.clear()
-    return []
 
 def reinit_turtle():
     """Completely recreates the Turtle window if it was closed."""
@@ -266,6 +393,9 @@ def reinit_turtle():
     s.setup()
     s.title("Lispy3 Graphics")
     turtle.resetscreen()
+    # bye() above leaves turtle's "running" flag False, which would make the very
+    # next drawing call raise Terminator again. The new window is alive, so say so.
+    turtle.TurtleScreen._RUNNING = True
     return "Turtle window reopened."
 
 # --- Variadic & Primitive Helpers ---
@@ -307,6 +437,10 @@ def _lisp_eq(a: Any, b: Any) -> bool:
     return a == b
 
 def _quotient(a: Number, b: Number) -> int:
+    """Whole-number division rounding toward zero, exact for big whole numbers."""
+    if isinstance(a, int) and isinstance(b, int):
+        q = abs(a) // abs(b)
+        return q if (a < 0) == (b < 0) else -q
     return int(math.trunc(a / b))
 
 def _modulo(a: Number, b: Number) -> Number:
@@ -394,6 +528,12 @@ def _format_lisp(fmt: Any, *args: Any) -> String:
         res = raw_fmt.format(*unwrapped_args)
     return String(res)
 
+def _append(*items: Any) -> Any:
+    """(append a b ...) joins lists, or joins strings when every argument is a string."""
+    if items and all(isinstance(x, (String, str)) for x in items):
+        return String("".join(_unwrap_str(x) for x in items))
+    return [elem for lst in items for elem in lst]
+
 def _assoc(d: dict, *kvs: Any) -> dict:
     if len(kvs) % 2 != 0:
         raise ValueError("assoc requires an even number of key-value arguments")
@@ -446,7 +586,7 @@ def standard_env() -> Env:
 
         # Type & Equality Predicates
         'null?': lambda x: x == [],
-        'empty?': lambda x: len(x) == 0 if isinstance(x, (list, tuple, dict, str, String)) else False,
+        'empty?': lambda x: len(_unwrap_str(x) if isinstance(x, String) else x) == 0 if isinstance(x, (list, tuple, dict, str, String)) else False,
         'number?': lambda x: isinstance(x, (int, float)) and not isinstance(x, bool),
         'symbol?': lambda x: isinstance(x, str),
         'string?': lambda x: isinstance(x, String),
@@ -460,7 +600,7 @@ def standard_env() -> Env:
         'equal?': _lisp_eq,
 
         # Lists & Sequences
-        'append': lambda *lists: [elem for lst in lists for elem in lst],
+        'append': _append,
         'car': lambda x: x[0] if isinstance(x, (list, tuple)) and x else [],
         'cdr': lambda x: list(x[1:]) if isinstance(x, (list, tuple)) else [],
         'cons': lambda x, y: [x] + (list(y) if isinstance(y, tuple) else (y if isinstance(y, list) else [y])),
@@ -508,7 +648,7 @@ def standard_env() -> Env:
         'eval': lambda x: eval_exp(expand(x, toplevel=True), global_env),
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
-        'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep='', end=''),
+        'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: [fill] * int(n),
         'vector-ref': lambda v, i: v[i],
@@ -517,7 +657,11 @@ def standard_env() -> Env:
         'newline': lambda: print(),
         'pretty-print': lambda exp: print(pretty_print(exp, width=40)),
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
-        'help': lambda *topic: HELP_TOPICS.get(_unwrap_str(topic[0]), f"Topics: {', '.join(HELP_TOPICS.keys())}") if topic else f"Topics: {', '.join(HELP_TOPICS.keys())}",
+        'help': lisp_help,
+        'read': lambda text: parse(_unwrap_str(text)),
+        'string->symbol': lambda text: Symbol(_unwrap_str(text)),
+        'symbol->string': lambda sym: String(str(sym)),
+        'vector': lambda *x: list(x),
         'push-pose': push_pose,
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
@@ -658,10 +802,48 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     return [expand(e, False) for e in x]
 
+SPECIAL_FORMS = frozenset({'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
+                           'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load'})
+
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
 def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
     """Evaluate an expression in an environment with TCO loop and Structural Pattern Matching."""
     while True:
+        # Fast path for the commonest cases: variables and numbers
+        kind = type(x)
+        if kind is str:
+            return x if x.startswith(':') else env.find(x)[x]
+        if kind is int or kind is float:
+            return x
+        # (proc args...): function application, unless the head is a special form,
+        # a :keyword lookup or an obj/method call. TCO: a Lisp procedure's body
+        # replaces x in this loop instead of growing the Python call stack.
+        if kind is list and x:
+            proc_exp = x[0]
+            if not (type(proc_exp) is str and (proc_exp in SPECIAL_FORMS or proc_exp.startswith(':')
+                                               or ('/' in proc_exp and proc_exp != '/'))):
+                if type(proc_exp) is str and proc_exp in macro_table:
+                    x = macro_table[proc_exp](*x[1:])
+                    continue
+                proc = eval_exp(proc_exp, env)
+                args = [eval_exp(arg, env) for arg in x[1:]]
+                if isinstance(proc, Procedure):
+                    if proc.native_fn is not None:
+                        # If calling `apply`, unpack and trampoline if the target is a Lisp Procedure
+                        if proc.name == 'apply' and len(args) >= 2 and isinstance(args[0], Procedure) and args[0].native_fn is None:
+                            target_proc = args[0]
+                            flat_args = list(args[1:-1]) + list(args[-1])
+                            x = target_proc.body
+                            env = target_proc.bind_env(flat_args)
+                            continue
+                        return proc.native_fn(*args)
+                    x = proc.body
+                    env = proc.bind_env(args)
+                    continue
+                if callable(proc):
+                    return proc(*args)
+                hint = " (a string is data; use (string->symbol ...) to make a name)" if isinstance(proc, String) else ""
+                raise TypeError(f"{lisp_str(proc)} is not a function{hint}")
         match x:
             case None:
                 return None
@@ -741,9 +923,8 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     return True
                 for exp in exps[:-1]:
                     val = eval_exp(exp, env)
-                    if not val and val is not None and val != 0 or val is False or val == []:
-                        if not val:
-                            return val
+                    if not val:
+                        return val
                 x = exps[-1]
                 continue
 
@@ -893,6 +1074,8 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     return String(joined)
 
                 obj = eval_exp(obj_name, env)
+                if isinstance(obj, (String, Char)):
+                    obj = obj.value
                 args = [eval_exp(arg, env) for arg in args_exp]
                 native_args = [a.value if isinstance(a, (String, Char)) else a for a in args]
                 
@@ -903,33 +1086,6 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     return String(result)
                 return result
 
-            # 17. (proc args...) -> Macro check + Standard function application with TCO
-            case [proc_exp, *args_exp]:
-                if isinstance(proc_exp, str) and proc_exp in macro_table:
-                    x = macro_table[proc_exp](*args_exp)
-                    continue
-
-                proc = eval_exp(proc_exp, env)
-                args = [eval_exp(arg, env) for arg in args_exp]
-                
-                if isinstance(proc, Procedure):
-                    if proc.native_fn is not None:
-                        # If calling `apply`, unpack and trampoline if the target is a Lisp Procedure
-                        if proc.name == 'apply' and len(args) >= 2 and isinstance(args[0], Procedure) and args[0].native_fn is None:
-                            target_proc = args[0]
-                            flat_args = list(args[1:-1]) + list(args[-1])
-                            x = target_proc.body
-                            env = target_proc.bind_env(flat_args)
-                            continue
-                        return proc.native_fn(*args)
-                    # TCO: Update x and env in-place instead of growing the Python call stack!
-                    x = proc.body
-                    env = proc.bind_env(args)
-                    continue
-                elif callable(proc):
-                    return proc(*args)
-                raise TypeError(f"{lisp_str(proc)} is not callable")
-                
             case _:
                 raise SyntaxError(f"Unknown syntax: {x}")
 
@@ -937,25 +1093,25 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
 def parse(program: str) -> Exp:
     """Read and macro-expand a Lisp expression from a string program."""
     tokens = tokenize(program)
-    if not tokens:
-        return None
     ast = read_from_tokens(tokens)
     return expand(ast, toplevel=True)
 
+# String literals: """raw text""" (may hold " and newlines, no escapes) or "text" with escapes
+STRING_PATTERN = r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"'
+CHAR_PATTERN = r'#\\[a-zA-Z0-9]+;?|#\\.'      # named/hex chars (#\newline, #\x41;) and any single char
+TOKEN_RE = re.compile(
+    CHAR_PATTERN
+    + '|' + STRING_PATTERN
+    + r'|;[^\n]*'                         # comment
+    + r'|,@'                              # unquote-splicing
+    + r"|['`,]"                           # quote, quasiquote, unquote
+    + r'|[\[\](){}]'                      # brackets
+    + r'|[^\s()\[\]{}"\'`,;]+'            # symbols and numbers
+)
+
 def tokenize(chars: str) -> list[str]:
     """Convert a string into a list of tokens, handling comments, quotes, quasiquotes, and strings."""
-    token_pattern = re.compile(
-        r'"(?:\\.|[^"\\])*"'                  # String literal with escapes
-        r'|;[^\n]*'                           # Comment
-        r'|,@'                                # Unquote-splicing
-        r"|['`,]"                             # Quote, quasiquote, unquote
-        r'|#\\[a-zA-Z0-9]+;?'                 # Named/hex char literal (#\newline, #\x41)
-        r'|#\\.'                              # Any single-char literal (#\[, #\], #\F, etc.)
-        r'|[\[\](){}]'                        # Brackets
-        r'|[^\s()\[\]{}"\'`,;]+'              # Symbols / numbers
-    )
-    raw_tokens = token_pattern.findall(chars)
-    return [t for t in raw_tokens if not t.startswith(';')]
+    return [t for t in TOKEN_RE.findall(chars) if not t.startswith(';')]
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -993,7 +1149,7 @@ def read_from_tokens(tokens: list[str]) -> Exp:
             if not tokens or tokens[0] == '}':
                 break
             val = read_from_tokens(tokens)
-            D[key] = val
+            D[tuple(key) if isinstance(key, list) else key] = val
             
         if tokens and tokens[0] == '}':
             tokens.pop(0)
@@ -1030,14 +1186,15 @@ def _unescape_string(raw: str) -> str:
 
     return re.sub(r'\\(?:x[0-9a-fA-F]+;?|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', replace_match, raw)
 
-def _strip_non_code(text: str) -> str:
-    """Replace strings, comments, and #\\x char literals with spaces of the same length."""
-    pattern = re.compile(r'"(?:\\.|[^"\\])*"|;[^\n]*|#\\[a-zA-Z0-9]+;?|#\\.')
-    return pattern.sub(lambda m: " " * len(m.group(0)), text)
-
 def atom(token: str) -> Atom:
     """Numbers become numbers, "strings" become String, #\\c become Char, others are symbols."""
-    if token.startswith('"') and token.endswith('"'):
+    if token == '#t':
+        return True
+    if token == '#f':
+        return False
+    if len(token) >= 6 and token.startswith('"""') and token.endswith('"""'):
+        return String(token[3:-3])
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
         return String(_unescape_string(token[1:-1]))
     if token.startswith('#\\'):
         char_map = {
@@ -1077,42 +1234,55 @@ COLOR_RESULT = "\033[92m"   # Bright Green for successful output
 COLOR_ERROR = "\033[91m"    # Bright Red for errors
 COLOR_INFO = "\033[96m"     # Cyan for greeting/status text
 
-def _strip_non_code(text: str) -> str:
-    """Mask strings, comments, and #\\x char literals with spaces of identical length."""
-    pattern = re.compile(r'"(?:\\.|[^"\\])*"|;[^\n]*|#\\[a-zA-Z0-9]+;?|#\\.')
-    return pattern.sub(lambda m: " " * len(m.group(0)), text)
+RECURSION_HINT = ("recursion too deep (a few hundred nested calls is the limit; tail calls are free). "
+                  "Use while, map or filter for long lists and big counts.")
 
 def count_balance(text: str) -> int:
-    """Return the balance of opening vs closing brackets, ignoring strings, chars, and comments."""
-    cleaned = _strip_non_code(text)
+    """Return the balance of opening vs closing brackets, ignoring strings and comments.
+
+    An unfinished string counts as one open bracket, so the REPL keeps reading
+    the lines of a multi-line string.
+    """
+    cleaned = re.sub(CHAR_PATTERN + '|' + STRING_PATTERN + r'|;[^\n]*', '', text)
+    if '"' in cleaned:
+        return 1
     opens = cleaned.count('(') + cleaned.count('[') + cleaned.count('{')
     closes = cleaned.count(')') + cleaned.count(']') + cleaned.count('}')
     return max(0, opens - closes)
 
+_CLOSER = {'(': ')', '[': ']', '{': '}'}
+_OPENER = {')': '(', ']': '[', '}': '{'}
+
 def missing_closers(text: str) -> str:
-    """Return the string of closing brackets needed to balance `text`."""
-    cleaned = _strip_non_code(text)
-    stack: list[str] = []
-    pairs = {'(': ')', '[': ']', '{': '}'}
-    for c in cleaned:
-        if c in pairs:
-            stack.append(pairs[c])
-        elif c in (')', ']', '}'):
+    """Return the closing brackets the reader adds by itself at the end of `text`.
+
+    "(+ 1 [2 (* 3 4" gives ")])". Strings, characters and comments are skipped.
+    """
+    stack = []
+    for token in TOKEN_RE.findall(text):
+        if token in _CLOSER:
+            stack.append(token)
+        elif token in _OPENER:
+            # A wrong closer also ends the inner brackets, as read_from_tokens does
+            while stack and stack[-1] != _OPENER[token]:
+                stack.pop()
             if stack:
                 stack.pop()
-    return "".join(reversed(stack))
+    return ''.join(_CLOSER[c] for c in reversed(stack))
 
 def close_position(text: str) -> int:
-    """Return the character offset right after the last non-comment, non-whitespace token."""
-    no_comments = re.sub(r';[^\n]*', lambda m: " " * len(m.group(0)), text)
-    stripped = no_comments.rstrip()
-    return len(stripped)
+    """Offset just after the last code token, where missing closers go (before a trailing ; comment)."""
+    end = 0
+    for m in TOKEN_RE.finditer(text):
+        if not m.group().startswith(';'):
+            end = m.end()
+    return end
 
 def auto_close(text: str) -> tuple[str, str]:
-    """Return `(closed_text, closers)` with missing closing brackets inserted at `close_position`."""
+    """Return (text with the missing closers written in, the closers added)."""
     closers = missing_closers(text)
     if not closers:
-        return text, ""
+        return text, ''
     pos = close_position(text)
     return text[:pos] + closers + text[pos:], closers
 
@@ -1147,10 +1317,13 @@ def lisp_str(exp: Any) -> str:
         return '{' + ' '.join(pairs) + '}'
     return str(exp)
 
+RUNTIME_ERRORS = (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError,
+                  LispyError, ValueError, IndexError, KeyError, AttributeError)
+
 def repl(prompt: str = "lispy3> ") -> None:
     """An interactive Read-Eval-Print Loop showing open bracket count."""
     print(f"{COLOR_INFO}Modern Python 3 Lispy Interpreter Started.{COLOR_RESET}")
-    print(f"{COLOR_INFO}Type 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}\n")
+    print(f"{COLOR_INFO}Type (help) for the built-ins, 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}\n")
     
     env = global_env
     colored_prompt = f"{COLOR_PROMPT}{prompt}{COLOR_RESET}"
@@ -1189,12 +1362,52 @@ def repl(prompt: str = "lispy3> ") -> None:
         except turtle.Terminator:
             buffer = ""
             print(f"{COLOR_ERROR}Error: Turtle window was closed. Call (reinit-turtle) to reopen.{COLOR_RESET}")
-        except (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError, LispyError, ValueError, IndexError) as e:
+        except RUNTIME_ERRORS as e:
             buffer = ""
             print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}")
+        except RecursionError:
+            buffer = ""
+            print(f"{COLOR_ERROR}Error: {RECURSION_HINT}{COLOR_RESET}")
         except (KeyboardInterrupt, EOFError):
             print(f"\n{COLOR_INFO}Goodbye!{COLOR_RESET}")
             break
 
+def run_file(filename: str) -> bool:
+    """Run a Lisp program file like a script. Returns True if it finished without error."""
+    try:
+        load_workspace(filename)
+        return True
+    except turtle.Terminator:
+        print(f"{COLOR_ERROR}Error: Turtle window was closed.{COLOR_RESET}", file=sys.stderr)
+    except RUNTIME_ERRORS as e:
+        print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}", file=sys.stderr)
+    except RecursionError:
+        print(f"{COLOR_ERROR}Error: {RECURSION_HINT}{COLOR_RESET}", file=sys.stderr)
+    return False
+
+def hold_turtle_window() -> None:
+    """If the program drew with turtle, keep the window open until the user closes it."""
+    if turtle.Turtle._screen is not None:
+        try:
+            turtle.mainloop()
+        except turtle.Terminator:
+            pass
+
 if __name__ == "__main__":
-    repl()
+    # python lispy3.py            -> REPL
+    # python lispy3.py prog.lisp  -> run prog.lisp, keep a turtle window open, then exit
+    # python lispy3.py -i prog.lisp -> run prog.lisp, then stay in the REPL
+    #                                  (-i may also come after the file name)
+    args = sys.argv[1:]
+    interactive = '-i' in args
+    args = [a for a in args if a != '-i']
+    if args:
+        ok = run_file(args[0])
+        if interactive:
+            repl()
+        elif ok:
+            hold_turtle_window()
+        else:
+            sys.exit(1)
+    else:
+        repl()
