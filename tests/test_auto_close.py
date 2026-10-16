@@ -4,7 +4,7 @@ Run:  python -m unittest discover tests
 """
 import unittest
 
-from support import lispy3 as L        # imports lispy3 with the shared turtle stub
+from support import lispy3 as L
 
 
 class AutoClose(unittest.TestCase):

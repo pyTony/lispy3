@@ -62,8 +62,7 @@ COLORS = {
 LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
 DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
 SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
-BUILTIN_NAMES = frozenset(L.standard_env())
-
+BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 
 def user_defined_names():
     """Globals the user made: new names, or their own function under a built-in name."""
@@ -276,13 +275,14 @@ class EditorTab(tk.Frame):
         t.bind("<Return>",       self._on_return)
         t.bind("<Tab>",          self._on_tab)
         t.bind("<Control-space>", self._complete)
+        t.bind("<Control-Key-space>", self._complete)  # Added fallback for Windows/Linux window managers
         t.bind("<Control-slash>", self._toggle_comment)
 
         # Eval bindings
-        t.bind("<F5>",                 lambda e: (self.app.eval_form_at_cursor(), "break")[1])
-        t.bind("<Control-Return>",     lambda e: (self.app.eval_form_at_cursor(), "break")[1])
-        t.bind("<F6>",                 lambda e: (self.app.eval_buffer(), "break")[1])
-        t.bind("<Control-Shift-Return>", lambda e: (self.app.eval_buffer(), "break")[1])
+        t.bind("<F5>",                      lambda e: (self.app.eval_form_at_cursor(), "break")[1])
+        t.bind("<Control-Return>",          lambda e: (self.app.eval_form_at_cursor(), "break")[1])
+        t.bind("<F6>",                      lambda e: (self.app.eval_buffer(), "break")[1])
+        t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer(), "break")[1])
 
     # ---------- highlighting ----------
     def set_language(self):
@@ -372,11 +372,16 @@ class EditorTab(tk.Frame):
         line = t.get(f"{line_idx}.0", f"{line_idx}.end")
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
-        extra = 0
+        
         opens  = line.count("(") + line.count("[") + line.count("{")
         closes = line.count(")") + line.count("]") + line.count("}")
-        extra = max(0, opens - closes)
-        t.insert("insert", "\n" + " " * (indent + extra * 2))
+        
+        # Keep the current line's indent level as the base, adding extra only for unclosed openings.
+        # Do not reduce indent when closing brackets are present.
+        extra = 2 if opens > closes else 0
+        target_indent = indent + extra
+        
+        t.insert("insert", "\n" + " " * target_indent)
         return "break"
 
     def _on_tab(self, event=None):
@@ -431,7 +436,7 @@ class EditorTab(tk.Frame):
         for m2 in re.finditer(r"\(define\s+([\w\-+*/<>=!?]+)", content):
             candidates.add(m2.group(1))
         matches = sorted(c for c in candidates
-                         if c.startswith(prefix) and c != prefix
+                         if c.startswith(prefix)
                          and not c.startswith("_"))
         if not matches:
             return "break"
@@ -747,6 +752,7 @@ class LispMachine(tk.Tk):
     def __init__(self, files=()):
         super().__init__()
         self.title("Lispy3 Machine")
+        self._set_icon()
         self.geometry("1280x820")
         self.configure(bg=COLORS["bg"])
         self.minsize(900, 600)
@@ -786,6 +792,24 @@ class LispMachine(tk.Tk):
         self.listener_input.focus_set()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ---------- window icon ----------
+    def _set_icon(self):
+        """Use icons/lispy_machine.ico (Windows) or .png for the window and taskbar.
+
+        Only the icon picture changes: the taskbar button still belongs to
+        Python, so its list of recently opened files keeps working. A missing
+        or unreadable icon file just leaves the default icon.
+        """
+        icons = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+        try:
+            if sys.platform == "win32":
+                self.iconbitmap(default=os.path.join(icons, "lispy_machine.ico"))
+            else:
+                self._icon_image = tk.PhotoImage(file=os.path.join(icons, "lispy_machine.png"))
+                self.iconphoto(True, self._icon_image)
+        except tk.TclError:
+            pass
 
     # ---------- ttk style ----------
     def _setup_style(self):
@@ -852,6 +876,51 @@ class LispMachine(tk.Tk):
 
         self.config(menu=bar)
 
+    def _listener_complete(self, event=None):
+        before = self.listener_input.get()
+        m = re.search(r"[\w\-+*/<>=!?]+$", before)
+        prefix = m.group(0) if m else ""
+        
+        candidates = set(L.global_env.keys())
+        matches = sorted(c for c in candidates
+                         if c.startswith(prefix) and c != prefix
+                         and not c.startswith("_"))
+        if not matches:
+            return "break"
+        if len(matches) == 1:
+            self.listener_input.insert("insert", matches[0][len(prefix):])
+            return "break"
+            
+        # Popup listbox for listener
+        popup = tk.Toplevel(self)
+        popup.wm_overrideredirect(True)
+        popup.configure(bg="#333")
+        x = self.listener_input.winfo_rootx() + 20
+        y = self.listener_input.winfo_rooty() - 120
+        popup.wm_geometry(f"+{x}+{y}")
+
+        lb = tk.Listbox(popup, bg="#1e1e1e", fg="#d4d4d4",
+                        selectbackground="#264f78", font=FONT_MONO,
+                        borderwidth=0, highlightthickness=0,
+                        activestyle="none", height=min(10, len(matches)))
+        for s in matches:
+            lb.insert("end", s)
+        lb.pack()
+
+        def choose(evt=None):
+            sel = lb.curselection()
+            if sel:
+                self.listener_input.insert("insert", matches[sel[0]][len(prefix):])
+            popup.destroy()
+
+        lb.bind("<Return>", choose)
+        lb.bind("<Double-Button-1>", choose)
+        lb.bind("<Escape>", lambda e: popup.destroy())
+        popup.bind("<FocusOut>", lambda e: popup.destroy())
+        lb.focus_set()
+        lb.selection_set(0)
+        return "break"
+    
     # ---------- layout ----------
     def _build_layout(self):
         # --- status bar first (bottom-docked)
@@ -962,6 +1031,8 @@ class LispMachine(tk.Tk):
             highlightcolor=COLORS["prompt"])
         self.listener_input.pack(side="left", fill="x", expand=True, ipady=4)
         self.listener_input.bind("<Return>",  lambda e: (self._listener_submit(), "break")[1])
+        self.listener_input.bind("<Control-space>", self._listener_complete)
+        self.listener_input.bind("<Control-Key-space>", self._listener_complete)
         self.listener_input.bind("<Up>",      self._history_up)
         self.listener_input.bind("<Down>",    self._history_down)
         self.listener_input.bind("<Control-l>", lambda e: (self.clear_listener(), "break")[1])
@@ -1483,16 +1554,16 @@ WELCOME = r''';; Welcome to Lispy3 Machine.
     (if (< n 2)
         1
         (* n (fact (- n 1))))))
-(fact 10)
+(fact 100)
 
 ;; Clojure-style data
 (define user {:name "Tony" :status "Trusty"})
 (:name user)
 
 ;; Turtle graphics — load the engine, then draw:
-;; (load "lsystems")
-;; (lsystem-from "F" "F[+F]F[-F]F" 4 3 23.5 0 -250 90)
-;; (lsystem-from "F" "FF-[-F+F+F]+[+F-F-F]" 3 6 23 -50 -250 90)
+(load "lsystems")
+(lsystem-from "F" "F[+F]F[-F]F" 4 3 23.5 0 -250 90)
+(lsystem-from "F" "FF-[-F+F+F]+[+F-F-F]" 3 6 23 -50 -250 90)
 '''
 
 
