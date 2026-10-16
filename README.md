@@ -73,6 +73,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lsystems.lisp` | The L-system drawing engine used by every example. |
 | `tree.lisp`, `plant.lisp`, `snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
+| `pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
