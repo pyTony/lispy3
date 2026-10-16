@@ -12,7 +12,7 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 - [ ] `cond` for a chain of tests *(ref: mylis_2 `cond_form`)*
 - [ ] `and` / `or`, short-circuit, so they must be special forms *(ref: mylis_2 `and_form`, `or_form`)*
-- [ ] `#t` / `#f` (or `true` / `false`) literals
+- [ ] Macros: `define-macro`, quasiquote `` ` `` with `,` and `,@`, `gensym` (`eval` exists) *(ref: Norvig `original/norvig/lispy.py`, `expand` and `expand_quasiquote`)*
 - [ ] `(define (f x) body)` shorthand *(ref: py3.10 `lis.py`, `case ['define', [Symbol(name), *parms], *body]`)*
 - [ ] Several body expressions in `lambda` and `let` without `begin` *(ref: py3.10 `lis.py`, `case ['lambda', [*parms], *body]`)*
 - [ ] Proper tail calls, so tail recursion is not limited to about 200 calls *(ref: mylis_2 `evaluate`, the `while True` loop with `TCO_ENABLED`)*
@@ -35,8 +35,12 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 ## Strings
 
 - [ ] `substring`, `string-ref`, `upcase`, `downcase`, `split`, `list->string`
-- [ ] `string->number` and a `string?` test
+- [ ] `string->number`
 - [ ] `str` should return a real string, so `(= (str 12) "12")` is true
+- [ ] More string escapes: `\r`, hex and Unicode (`\x41;`, `\u00e4`)
+- [ ] More character names: `#\return`, `#\nul`, `#\x41`
+- [ ] String formatting: `format`, or `str` taking several values
+- [ ] Editor: a `;` inside a string is still coloured as a comment
 
 ## Maps
 

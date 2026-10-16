@@ -94,6 +94,10 @@ def find_top_level_form(text: str, pos: int):
                 continue
             if c == '"':
                 in_str = False
+        elif text.startswith('"""', i):
+            end = text.find('"""', i + 3)
+            i = len(text) if end < 0 else end + 3
+            continue
         elif c == '"':
             in_str = True
         elif c == ";":
@@ -123,6 +127,10 @@ def find_top_level_form(text: str, pos: int):
                 continue
             if c == '"':
                 in_str = False
+        elif text.startswith('"""', j):
+            end = text.find('"""', j + 3)
+            j = len(text) if end < 0 else end + 3
+            continue
         elif c == '"':
             in_str = True
         elif c == ";":
@@ -285,7 +293,7 @@ class EditorTab(tk.Frame):
         content = t.get("1.0", "end-1c")
 
         # strings (with escaped quotes)
-        for m in re.finditer(r'"(?:[^"\\]|\\.)*"', content):
+        for m in re.finditer(r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"', content):
             self._tag("string", content, m.start(), m.end())
 
         # comments (skip inside strings — do a quick pass after strings)

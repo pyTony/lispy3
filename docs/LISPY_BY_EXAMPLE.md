@@ -9,6 +9,7 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
 - [Getting help inside Lispy](#getting-help-inside-lispy)
 - [Numbers](#numbers)
 - [Strings and characters](#strings-and-characters)
+- [Atoms, symbols and strings](#atoms-symbols-and-strings)
 - [Variables](#variables)
 - [Functions](#functions)
 - [True and false](#true-and-false)
@@ -22,6 +23,7 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
 - [Printing](#printing)
 - [Files and workspaces](#files-and-workspaces)
 - [Turtle graphics](#turtle-graphics)
+- [Macros](#macros)
 - [Gotchas](#gotchas)
 - [Coming from Scheme or lis.py](#coming-from-scheme-or-lispy)
 - [Further reading](#further-reading)
@@ -74,6 +76,44 @@ Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log
 
 A string is text in double quotes. A character is written `#\a`; `#\space`, `#\newline` and `#\tab` are the special ones.
 
+### Writing strings
+
+| Write | You get |
+|-------|---------|
+| `"hello"` | `hello` |
+| `"say \"hi\""` | `say "hi"` |
+| `"back\\slash"` | `back\slash` |
+| `"tab\there"` | `tab`, a tab, `here` |
+| `"one\ntwo"` | `one` and `two` on two lines |
+| `"""He said "hi"; ok"""` | `He said "hi"; ok` |
+
+In `"..."` a backslash starts an escape: `\"` quote, `\\` backslash, `\n` new line, `\t` tab. Any other backslash stays as it is, so `"C:\Users"` is fine.
+
+`"""..."""` is a raw string, as in Python: no escapes, and it may hold `"` freely. It ends at the next `"""`.
+
+Both kinds may run over several lines, and the REPL keeps reading until the string is closed:
+
+    lispy3> (display "first line
+    ... (1)> second line")
+    first line
+    second line
+
+A `;` or `'` inside a string is just text, and so are the characters `#\;`, `#\'` and `#\"`.
+
+    lispy3> (length "don't; stop")
+    11
+
+When Lispy prints a string, or `save` writes one, it adds the escapes back, so the file reads in as the same text:
+
+    lispy3> "say \"hi\""
+    "say \"hi\""
+    lispy3> (display "say \"hi\"")
+    say "hi"
+
+**TO BE IMPLEMENTED:** `\r`, hex and Unicode escapes such as `\x41;` or `\u00e4`, more character names (`#\return`, `#\nul`, `#\x41`), and string formatting (`format`, or `str` taking several values).
+
+### Working with strings
+
     lispy3> (length "hello")
     5
     lispy3> (append "Hello, " "world")
@@ -109,10 +149,67 @@ Turn a number into text with `str`:
     lispy3> (length (str 12345))
     5
 
-**TO BE IMPLEMENTED:** `substring`, `string-ref`, `upcase`/`downcase`, `split`, `string->number`, `list->string` and a `string?` test. Today, work on the character list from `seq`. Character number `k` of a string, using `nth` from [Head and tail recursion](#head-and-tail-recursion):
+**TO BE IMPLEMENTED:** `substring`, `string-ref`, `upcase`/`downcase`, `split`, `string->number` and `list->string`. Today, work on the character list from `seq`. Character number `k` of a string, using `nth` from [Head and tail recursion](#head-and-tail-recursion):
 
     lispy3> (nth (seq "lispy") 1)
     #\i
+
+## Atoms, symbols and strings
+
+Everything in Lispy is either a **list** (or vector or map) or an **atom**. An atom is any single value that is not a collection:
+
+| Atom | Looks like | Evaluates to | Test |
+|------|-----------|--------------|------|
+| number | `42` `3.14` | itself | `number?` |
+| string | `"car"` | itself: the text `car` | `string?` |
+| character | `#\c` | itself | |
+| true / false | `#t` `#f` | itself | |
+| keyword | `:name` | itself | `symbol?` |
+| **symbol** | `car` `x` `my-list` | **the value the name stands for** | `symbol?` |
+
+A **symbol** is a name. Evaluating it looks the name up; quoting it gives you the name itself:
+
+    lispy3> (define x 10)
+    lispy3> x
+    10
+    lispy3> 'x
+    x
+    lispy3> (symbol? 'x)
+    #t
+
+A **string** is text. It never looks anything up and always evaluates to itself, so `"x"` stays the text `x`:
+
+    lispy3> "x"
+    "x"
+    lispy3> (string? "x")
+    #t
+    lispy3> (symbol? "x")
+    #f
+
+In a call `(f a b)` Lispy evaluates `f` and calls the result, so the head must give a function. A symbol such as `car` does; a string does not, it is just text:
+
+    lispy3> ("car" '(1 2))
+    Error: "car" is not a function (a string is data; use (string->symbol ...) to make a name)
+
+To go between the two, convert explicitly, as Scheme does:
+
+    lispy3> (string->symbol "car")
+    car
+    lispy3> (symbol->string 'car)
+    "car"
+    lispy3> (eval (list (string->symbol "car") ''(1 2)))
+    1
+
+or turn a whole piece of text into code with `read`, and run it with `eval`:
+
+    lispy3> (read "(car '(1 2))")
+    (car (quote (1 2)))
+    lispy3> (eval (read "(car '(1 2))"))
+    1
+
+Why not just treat a string at the head of a list as a name? Because then a string would mean text in one place and a name in another, a typo like `("cra" x)` would read as a call to look up, and lists of text such as `("apples" "pears")` could no longer be kept as plain data. Keeping strings as data and converting on purpose is what Scheme, Common Lisp and Clojure all do.
+
+One leftover: `str` turns a value into a **symbol**-like name, not a string, so `(symbol? (str 12))` is `#t` and `(= (str 12) "12")` is `#f`. Use `(symbol->string (str 12))` when you need a real string. **TO BE IMPLEMENTED:** `str` returning a string.
 
 ## Variables
 
@@ -151,20 +248,51 @@ The body is one expression; use `begin` for more:
 
 ## True and false
 
-Comparisons give `True` or `False`.
+True is written `#t` and false `#f`, as in Scheme. Comparisons give one of them.
 
     lispy3> (< 1 2)
-    True
+    #t
     lispy3> (= "abc" "abc")
-    True
+    #t
     lispy3> (not (= 1 2))
-    True
+    #t
+    lispy3> (if #f "yes" "no")
+    "no"
 
-In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
+In a test, `#f`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
 
-`True` and `False` are printed results, not names you can type: `(if x True False)` gives *Undefined symbol: True*. Write `(= 1 1)` for true and `(= 1 0)` for false if you need them as values.
+    lispy3> (if '() "yes" "no")
+    "no"
+    lispy3> (if "" "yes" "no")
+    "yes"
 
-**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b".
+`save` writes true and false as `#t` and `#f`, so they load back unchanged.
+
+**TO BE IMPLEMENTED:** `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b".
+
+### What things return
+
+| Expression | Returns | Shown at the prompt |
+|------------|---------|---------------------|
+| a test: `(< 1 2)`, `(null? x)`, `(not x)` | `#t` / `#f` | `#t` / `#f` |
+| `(define ...)`, `(set! ...)`, `(while ...)`, `(display ...)`, `(vector-set! ...)`, `(begin)` | nothing (Python `None`) | nothing |
+| `(car '())`, `(get map :missing)`, `(:missing map)` | the empty list | `()` |
+| `(if ...)`, `(begin ...)`, `(let ...)`, a lambda call | the value of the last expression | that value |
+
+"Nothing" is not printed at the prompt, but it shows up as `None` if you put it in a list: `(list (display 1))` gives `(None)`. Lispy has no `nil`; the empty list `()` does that job, as in Scheme.
+
+### How other Lisps do it
+
+| | true / false written as | printed as | false in a test | "no value" |
+|---|---|---|---|---|
+| **Lispy** | `#t` / `#f` | `#t` / `#f` | `#f`, `0`, `()` | `None`, not printed |
+| Norvig's `lis.py` | (none) | `True` / `False` | `False`, `0`, `()` (Python rules) | `None` |
+| Norvig's `lispy.py` | `#t` / `#f` | `#t` / `#f` | `False`, `0`, `()` (Python rules) | `None` |
+| Scheme (R7RS, Racket, Guile) | `#t` / `#f` | `#t` / `#f` | **only** `#f` | unspecified |
+| Common Lisp | `t` / `nil` | `T` / `NIL` | **only** `nil`, which is also `()` | `nil` |
+| Clojure | `true` / `false` | `true` / `false` | `false` and `nil` | `nil` |
+
+So Lispy does what Norvig's second interpreter, [`lispy.py`](https://norvig.com/lispy2.html), does: Scheme's `#t` / `#f` for writing and printing, with Python's truth rules underneath (a copy is in [fluentpython/lispy](https://github.com/fluentpython/lispy) under `original/norvig/lispy.py`). The one difference from real Scheme to remember: there `0` and `()` are true, and only `#f` is false.
 
 ## Choosing: if
 
@@ -188,7 +316,7 @@ In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everythin
     lispy3> (length nums)
     5
     lispy3> (null? '())
-    True
+    #t
     lispy3> (append '(1 2) '(3))
     (1 2 3)
     lispy3> (list 1 "two" #\3 'four)
@@ -284,7 +412,7 @@ Recursion on numbers works the same way:
     lispy3> (filter (lambda [x] (= (fmod x 2) 0)) (range 1 11))
     (2 4 6 8 10)
     lispy3> (map (lambda [c] (= c #\space)) (seq "a b"))
-    (False True False)
+    (#f #t #f)
 
 `while` repeats its body while the test is true:
 
@@ -391,12 +519,64 @@ Every name in Python's `turtle` module is a Lispy function:
 
 `(help 'fd)` explains any turtle name. For drawing plants and snowflakes see the L-system section of the [README](../README.md#l-systems-with-turtle-graphics). If you close the window, type `(reinit-turtle)`.
 
+## Macros
+
+**TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `gensym`. `(help)` lists no macro forms for that reason. It does have `eval`, below.
+
+A macro is a function that runs on **code** before it is evaluated, and returns new code. That is how a Lisp adds forms like `unless`, `and`, `or` or `cond` in Lisp itself. Norvig's [`lispy.py`](https://norvig.com/lispy2.html) has `define-macro` with quasiquote, and defines `and` that way:
+
+    (define-macro and (lambda args
+       (if (null? args) #t
+           (if (= (length args) 1) (car args)
+               `(if ,(car args) (and ,@(cdr args)) #f)))))
+
+(This does **not** run in Lispy; it is the reference for the TODO item, in `original/norvig/lispy.py` of fluentpython/lispy.)
+
+What works today: `quote` gives you code as data, which you can take apart and build with list functions:
+
+    lispy3> (define code '(if (< x 1) "small" "big"))
+    lispy3> (car code)
+    if
+    lispy3> (car (cdr code))
+    (< x 1)
+
+`eval` runs code held as data. Build the code with `quote`, `list` and `cons`, then run it:
+
+    lispy3> (eval '(+ 1 2))
+    3
+    lispy3> (eval (list '* 6 7))
+    42
+    lispy3> (define code '(if (< 1 2) "small" "big"))
+    lispy3> (eval code)
+    "small"
+    lispy3> (eval (cons '+ '(1 2)))
+    3
+
+`eval` always runs in the global environment, as Scheme's `(eval x (interaction-environment))` does: inside a function, `(eval 'x)` sees the global `x`, not the function's own parameter `x`. Together with `quote` and the list functions, this is the "do it by hand" version of a macro: a function builds code, `eval` runs it.
+
+    lispy3> (define make-adder-code (lambda [n] (list 'lambda '[x] (list '+ 'x n))))
+    lispy3> (make-adder-code 5)
+    (lambda [x] (+ x 5))
+    lispy3> ((eval (make-adder-code 5)) 10)
+    15
+
+`read` turns text into code for `eval`: `(eval (read "(+ 1 2)"))` is `3`. See [Atoms, symbols and strings](#atoms-symbols-and-strings).
+
+A new control form can also be a function that takes its body as a lambda with no parameters, so the body only runs when called:
+
+    lispy3> (define unless
+    ...       (lambda [test body]
+    ...         (if test '() (body))))
+    lispy3> (unless (= 1 2) (lambda [] (begin (display "ran") 42)))
+    ran
+    42
+
 ## Gotchas
 
 - `+ - * /` take exactly two arguments.
 - `if` needs an else part, and a lambda body is one expression (use `begin`).
 - `""` counts as true in a test; `0` and `()` count as false.
-- `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `False`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
+- `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `#f`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
 - Recursion stops after about 200 nested calls; use `map`, `filter` or `while` for big jobs.
 - **TO BE IMPLEMENTED:** catching errors inside a program (`try` / `error`).
 
@@ -410,7 +590,7 @@ Lispy grew out of Peter Norvig's [`lis.py`](https://norvig.com/lispy.html), like
 | `(lambda (x) e1 e2)` | `(lambda [x] (begin e1 e2))` |
 | `(cond (a x) (b y) (else z))` | `(if a x (if b y z))` |
 | `(and a b)` / `(or a b)` | `(if a b a)` / `(if a a b)` |
-| `#t` / `#f` | `(= 1 1)` / `(= 1 0)` (they print as `True` / `False`) |
+| `#t` / `#f` | `#t` / `#f` (the same) |
 | `(+ a b c)` | `(+ (+ a b) c)` |
 | `(modulo a b)`, `(quotient a b)` | `(fmod a b)`, `(floor (/ a b))` |
 | `(equal? a b)` | `(= a b)` |

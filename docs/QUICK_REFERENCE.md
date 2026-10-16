@@ -8,8 +8,10 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 |-------|---------|
 | `(f a b)` | call `f` with `a` and `b` |
 | `42` `3.14` | numbers |
-| `"text"` | string |
+| `"text"` | string; escapes `\"` `\\` `\n` `\t`; may span lines |
+| `"""text"""` | raw string: no escapes, may hold `"` |
 | `#\a` `#\space` `#\newline` `#\tab` | characters |
+| `#t` `#f` | true, false |
 | `name` | variable |
 | `:key` | keyword, stands for itself |
 | `'(1 2 3)` | quoted list, items not evaluated |
@@ -48,7 +50,9 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(map f lst)` | `(f item)` for every item |
 | `(filter f lst)` | items where `(f item)` is true |
 | `(get map key)` | value for `key`, `()` if missing |
-| `(str x)` | `x` as text |
+| `(str x)` | `x` as text (a symbol-like name, see [Atoms, symbols and strings](LISPY_BY_EXAMPLE.md#atoms-symbols-and-strings)) |
+| `(string? x)` | true for a string |
+| `(string->symbol "car")` / `(symbol->string 'car)` | name from text / text from name |
 
 ## Numbers and tests
 
@@ -64,7 +68,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `sqrt floor ceil fmod pow log exp sin cos tan ...` | everything in Python's `math` |
 | `pi` `e` `inf` | constants from `math` |
 
-False in a test: `False`, `0`, `0.0`, `()`. Everything else is true, including `""`.
+True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything else is true, including `""`. Tests return `#t`/`#f`; `define`, `set!`, `while` and `display` return nothing; a missing value is `()`. How this compares with Scheme, Common Lisp and Clojure: [True and false](LISPY_BY_EXAMPLE.md#true-and-false).
 
 ## Vectors, time and output
 
@@ -77,6 +81,8 @@ False in a test: `False`, `0`, `0.0`, `()`. Everything else is true, including `
 | `(display a b ...)` | print values side by side, then a new line |
 | `(pretty-print x)` / `(pprint x)` | print indented |
 | `(help)` / `(help 'name)` | list built-ins / explain one |
+| `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
+| `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
 
 ## Turtle graphics
 
@@ -95,6 +101,6 @@ False in a test: `False`, `0`, `0.0`, `()`. Everything else is true, including `
 ## TO BE IMPLEMENTED
 
 Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md), the list in [TODO.md](../TODO.md)):
-`cond`, `and`, `or`, `#t`/`#f`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `string?`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`.
+`cond`, `and`, `or`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.

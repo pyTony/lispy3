@@ -63,6 +63,10 @@ class Env(dict):
             raise NameError(f"Undefined symbol: {var}")
         return self.outer.find(var)
 
+def string_literal(text: str) -> str:
+    """Write text as a Lispy string literal that reads back as the same text."""
+    return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
 def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
     """Format an AST or value into an indented string fitting within `width` columns."""
     pad = "  " * indent
@@ -81,7 +85,7 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
 
     # 2. String and Character Literals
     if type_name == 'String':
-        return f'"{exp.value}"'
+        return string_literal(exp.value)
     if type_name == 'Char':
         reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab'}
         return reverse_char_map.get(exp.value, f"#\\{exp.value}")
@@ -175,8 +179,8 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
         rest_s = "\n".join(f"{pad}  {pretty_print(e, indent + 1, width).lstrip()}" for e in exp[1:])
         return f"({head_s}\n{rest_s})"
 
-    # 8. Atoms (Symbols, Numbers)
-    return str(exp)
+    # 8. Atoms (Symbols, Numbers, #t and #f)
+    return lisp_str(exp)
 
 # --- Helper Functions for Workspace Save and Load ---
 def save_workspace(filename: str) -> str:
@@ -187,7 +191,9 @@ def save_workspace(filename: str) -> str:
     
     with open(real_filename, 'w', encoding='utf-8') as f:
         for key, value in global_env.items():
-            if key in std or key == 'nan':
+            # Skip built-ins, but keep a user's own function even if it reuses a built-in name
+            user_fn = isinstance(value, Procedure) and value.native_fn is None
+            if (key in std and not user_fn) or key == 'nan':
                 continue
                 
             # Jos kyseessä on jokin Pythonin oma funktio (esim. log), jätetään se tallentamatta
@@ -275,6 +281,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("let", "(let [a 1 b 2] body) - local names for one body"),
         ("while", "(while test body...) - loop while test is true, no recursion depth used"),
         ("quote", "(quote x) or 'x - x itself, not evaluated"),
+        ("#t", "#t and #f - true and false. False in a test: #f, 0 and (); everything else is true"),
         ("save", "(save \"name\") - write your definitions to name.lisp"),
         ("load", "(load \"name\") - run name.lisp"),
     ],
@@ -301,13 +308,14 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("/", "(/ a b) - divide, two arguments, gives a decimal"),
         ("=", "(= a b) - equal; works on numbers, symbols, strings and characters"),
         ("<", "(< a b), also > <= >= - compare two values"),
-        ("not", "(not x) - true if x is false, 0 or empty"),
+        ("not", "(not x) - #t if x is #f, 0 or empty, else #f"),
         ("abs", "(abs x) - absolute value"),
         ("min", "(min a b ...) - smallest"),
         ("max", "(max a b ...) - largest"),
         ("round", "(round x) - nearest whole number"),
         ("number?", "(number? x) - true for a number"),
         ("symbol?", "(symbol? x) - true for a symbol (and for the text from str)"),
+        ("string?", "(string? x) - true for a string"),
         ("str", "(str x) - x as text"),
         ("math", "every name in Python's math module: sqrt floor fmod log sin cos pi e ... try (help 'sqrt)"),
     ],
@@ -319,6 +327,10 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("display", "(display a b ...) - print the values with nothing between them"),
         ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
+        ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
+        ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("string->symbol", "(string->symbol \"car\") - the symbol car"),
+        ("symbol->string", "(symbol->string 'car) - the string \"car\""),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -330,7 +342,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
 }
 
 _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
-_HELP_INDEX.update({'plus': _HELP_INDEX['+'], 'pprint': _HELP_INDEX['pretty-print'],
+_HELP_INDEX.update({'#f': _HELP_INDEX['#t'], 'plus': _HELP_INDEX['+'], 'pprint': _HELP_INDEX['pretty-print'],
                     'reset': _HELP_INDEX['reinit-turtle'], '>': _HELP_INDEX['<'], '<=': _HELP_INDEX['<'],
                     '>=': _HELP_INDEX['<']})
 
@@ -349,7 +361,7 @@ def lisp_help(*args: Any) -> None:
             return
         name = what.name
     else:
-        name = what.value if isinstance(what, String) else str(what)
+        name = what.value if isinstance(what, String) else lisp_str(what)
     if name in _HELP_INDEX:
         print(_HELP_INDEX[name])
         return
@@ -416,6 +428,11 @@ def standard_env() -> Env:
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
         'help': lisp_help,
+        'eval': lambda exp: eval_exp(exp, global_env),
+        'read': lambda text: parse(text.value if isinstance(text, String) else str(text)),
+        'string->symbol': lambda text: Symbol(text.value if isinstance(text, String) else text),
+        'symbol->string': lambda sym: String(str(sym)),
+        'string?': lambda x: isinstance(x, String),
     }
     
     for key, value in primitives.items():
@@ -547,6 +564,9 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         # 16. (proc args...) -> Standard function application
         case [proc_exp, *args_exp]:
             proc = eval_exp(proc_exp, env)
+            if not callable(proc):
+                hint = " (a string is data; use (string->symbol ...) to make a name)" if isinstance(proc, String) else ""
+                raise TypeError(f"{lisp_str(proc)} is not a function{hint}")
             args = [eval_exp(arg, env) for arg in args_exp]
             return proc(*args)
             
@@ -557,18 +577,20 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
 def parse(program: str) -> Exp:
     """Read a Lisp expression from a string program."""
     return read_from_tokens(tokenize(program))
+# String literals: """raw text""" (may hold " and newlines, no escapes) or "text" with escapes
+STRING_PATTERN = r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"'
+CHAR_PATTERN = r'#\\[()\[\]{}]|#\\[^\s()\[\]{}]+'
+TOKEN_RE = re.compile(CHAR_PATTERN + '|' + STRING_PATTERN +
+                      r'|;[^\n]*|\[|\]|\(|\)|\{|\}|\'|[^\s()\[\]{}";\']+')
+STRING_ESCAPES = {'n': '\n', 't': '\t', '"': '"', '\\': '\\'}
+
 def tokenize(chars: str) -> list[str]:
-    """Convert a string into a list of tokens, stripping comments and splitting brackets."""
-    # 1. Strip comments (anything from ';' until end of the line)
-    chars = re.sub(r';.*', '', chars)
+    """Convert a string into a list of tokens, dropping ; comments.
 
-    # 2. Separate the quote mark. Brackets need no padding here: the regex below
-    #    already makes each one its own token, and padding them would also rewrite
-    #    the inside of string literals such as "F[+F]" and break the characters #\[ and #\].
-    chars = chars.replace("'", " ' ")
-
-    # 3. Advanced regex tokenizer to keep string literals intact and catch tokens
-    return re.findall(r'\[|\]|\(|\)|\{|\}|\'|"[^"]*"|#\\[()\[\]{}]|#\\[^\s()\[\]{}]+|[^\s()\[\]{}]+', chars)
+    Strings and characters are matched first, so a ; or ' inside "text",
+    or the characters #\\; and #\\', are kept as they are.
+    """
+    return [t for t in TOKEN_RE.findall(chars) if not t.startswith(';')]
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -623,9 +645,15 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         return atom(token)
 
 def atom(token: str) -> Atom:
-    r"""Numbers become numbers, "strings" become String, #\c become Char, others are symbols."""
-    if token.startswith('"') and token.endswith('"'):
-        return String(token[1:-1])
+    r"""Numbers become numbers, #t and #f booleans, "strings" String, #\c Char, others symbols."""
+    if token == '#t':
+        return True
+    if token == '#f':
+        return False
+    if len(token) >= 6 and token.startswith('"""') and token.endswith('"""'):
+        return String(token[3:-3])
+    if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
+        return String(re.sub(r'\\(.)', lambda m: STRING_ESCAPES.get(m.group(1), m.group(0)), token[1:-1]))
     if token.startswith('#\\'):
         char_map = {'#\\newline': '\n', '#\\space': ' ', '#\\tab': '\t'}
         if token in char_map:
@@ -649,11 +677,14 @@ RECURSION_HINT = ("recursion too deep (a few hundred calls is the limit). "
                   "Use while, map or filter for long lists and big counts.")
 
 def count_balance(text: str) -> int:
-    """Return the balance of opening vs closing brackets, ignoring strings and comments."""
-    # Strip comments first
-    cleaned = re.sub(r';.*', '', text)
-    # Strip string literals
-    cleaned = re.sub(r'"[^"]*"', '', cleaned)
+    """Return the balance of opening vs closing brackets, ignoring strings and comments.
+
+    An unfinished string counts as one open bracket, so the REPL keeps reading
+    the lines of a multi-line string.
+    """
+    cleaned = re.sub(CHAR_PATTERN + '|' + STRING_PATTERN + r'|;[^\n]*', '', text)
+    if '"' in cleaned:
+        return 1
     opens = cleaned.count('(') + cleaned.count('[') + cleaned.count('{')
     closes = cleaned.count(')') + cleaned.count(']') + cleaned.count('}')
     return max(0, opens - closes)
@@ -663,7 +694,9 @@ def lisp_str(exp: Any) -> str:
     """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""
     # KORJAUKSEN YDIN: Tarkistetaan tyypit nimen perusteella, jotta dataclassit ja oliot tunnistetaan satavarmasti!
     type_name = type(exp).__name__
-    
+
+    if isinstance(exp, bool):
+        return '#t' if exp else '#f'
     if type_name == 'Procedure':
         # Jos kyseessä on natiivifunktio (body on None tai native_fn on olemassa)
         if exp.native_fn is not None:
@@ -675,7 +708,7 @@ def lisp_str(exp: Any) -> str:
         return f"(lambda {lisp_str(tuple(exp.parms))} {lisp_str(exp.body)})"
 
     elif type_name == 'String':
-        return f'"{exp.value}"'
+        return string_literal(exp.value)
     elif type_name == 'Char':
         reverse_char_map = {'\n': '#\\newline', ' ': '#\\space', '\t': '#\\tab'}
         if exp.value in reverse_char_map:
