@@ -2,19 +2,9 @@
 
 Run:  python -m unittest discover tests
 """
-import os
-import sys
-import types
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import turtle  # noqa: F401
-except ImportError:                     # no tkinter: a stub is enough to import lispy3
-    stub = types.ModuleType("turtle")
-    stub.__all__ = []
-    sys.modules["turtle"] = stub
-import lispy3 as L
+from support import lispy3 as L        # imports lispy3 with the shared turtle stub
 
 
 class AutoClose(unittest.TestCase):
