@@ -40,7 +40,6 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 - [ ] More string escapes: `\r`, hex and Unicode (`\x41;`, `\u00e4`)
 - [ ] More character names: `#\return`, `#\nul`, `#\x41`
 - [ ] String formatting: `format`, or `str` taking several values
-- [ ] Editor: a `;` inside a string is still coloured as a comment
 
 ## Maps
 

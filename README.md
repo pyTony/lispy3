@@ -30,6 +30,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
   - [Key bindings](#key-bindings)
   - [Buffers and the Listener](#buffers-and-the-listener)
   - [Inspector](#inspector)
+  - [Syntax colouring](#syntax-colouring)
   - [Search and replace](#search-and-replace)
   - [How the editor drives the interpreter](#how-the-editor-drives-the-interpreter)
   - [Routing `display` output into the Listener](#routing-display-output-into-the-listener)
@@ -54,7 +55,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 
 **Editor (`lispy_machine.pyww`)**
 
-- **Multiple editor buffers** with Lisp syntax highlighting.
+- **Multiple editor buffers** with syntax colouring read from `syntax/*.json` (Lisp and Python included).
 - **Persistent Listener** with history, coloured prompts/results/errors.
 - **Inspector pane** showing the pretty-printed last value.
 - **Evaluate form at cursor** or the whole buffer without restarting the interpreter.
@@ -74,6 +75,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
+| `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
 
@@ -259,6 +261,21 @@ F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely w
 ### Inspector
 
 After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. Long lists of atoms are packed into rows instead of one item per line. A `(define name …)` returns nothing, so the Inspector then shows the new value of `name`; press `F7` on any symbol to look at a variable later. If evaluation raised, the Inspector shows the error.
+
+### Syntax colouring
+
+The editor colours a buffer using the rules in `syntax/<language>.json`; the file's extension picks the language (`.lisp` and new buffers use `syntax/lisp.json`, `.py` uses `syntax/python.json`). Each file holds:
+
+| Key | Meaning |
+|-----|---------|
+| `extensions` | File endings that use this language, e.g. `[".lisp", ".scm"]` |
+| `line_comment` | What `Ctrl+/` puts in front of a line (`;` or `#`) |
+| `colors` | Colour of each tag, e.g. `"string": "#ce9178"` |
+| `rules` | Ordered `{"tag", "pattern"}` regular expressions |
+| `word_pattern`, `words` | What a word looks like, and word lists per tag (e.g. `special`: `define`, `if`, ...) |
+| `env_words` | `true` for Lisp: words the interpreter knows are `builtin`, names you defined are `variable` |
+
+The buffer is read once from left to right, and at each point the first rule that matches wins, so a `;` inside a string stays part of the string and a `"` inside a comment stays part of the comment. Paren matching ignores brackets inside strings and comments. To add a language, copy a file, change `extensions`, `rules` and `words`, and restart the editor; a file that does not load is reported in the Listener.
 
 ### Search and replace
 
