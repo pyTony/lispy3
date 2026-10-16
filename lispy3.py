@@ -528,6 +528,18 @@ def _format_lisp(fmt: Any, *args: Any) -> String:
         res = raw_fmt.format(*unwrapped_args)
     return String(res)
 
+def _first(x: Any) -> Any:
+    """(first lst): the head of a list, or the first character of a string; () when empty."""
+    if isinstance(x, String):
+        return Char(x.value[0]) if x.value else []
+    return x[0] if isinstance(x, (list, tuple)) and x else []
+
+def _rest(x: Any) -> Any:
+    """(rest lst): all but the head of a list, or of a string; () when empty."""
+    if isinstance(x, String):
+        return String(x.value[1:]) if x.value else []
+    return list(x[1:]) if isinstance(x, (list, tuple)) else []
+
 def _append(*items: Any) -> Any:
     """(append a b ...) joins lists, or joins strings when every argument is a string."""
     if items and all(isinstance(x, (String, str)) for x in items):
@@ -601,14 +613,14 @@ def standard_env() -> Env:
 
         # Lists & Sequences
         'append': _append,
-        'car': lambda x: x[0] if isinstance(x, (list, tuple)) and x else [],
-        'cdr': lambda x: list(x[1:]) if isinstance(x, (list, tuple)) else [],
+        'car': _first,
+        'cdr': _rest,
         'cons': lambda x, y: [x] + (list(y) if isinstance(y, tuple) else (y if isinstance(y, list) else [y])),
         'length': lambda x: len(x.value) if isinstance(x, String) else len(x),
         'list': lambda *x: list(x),
-        'first': lambda x: x[0] if isinstance(x, (list, tuple)) and x else (x if x else []),
-        'rest': lambda x: list(x[1:]) if isinstance(x, (list, tuple)) else [],
-        'last': lambda x: x[-1] if isinstance(x, (list, tuple)) and x else [],
+        'first': _first,
+        'rest': _rest,
+        'last': lambda x: Char(x.value[-1]) if isinstance(x, String) and x.value else (x[-1] if isinstance(x, (list, tuple)) and x else []),
         'nth': lambda lst, idx: lst[idx] if isinstance(lst, (list, tuple)) else (Char(lst.value[idx]) if isinstance(lst, String) else []),
         'reverse': lambda x: list(reversed(x)) if isinstance(x, (list, tuple)) else (String(x.value[::-1]) if isinstance(x, String) else []),
         'range': lambda *args: list(range(*args)),

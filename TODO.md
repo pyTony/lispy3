@@ -52,4 +52,5 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 - [x] Regression tests from Norvig's lispy.html and his `lis_tests` (`tests/test_norvig.py`, run `python -m unittest`)
 - [x] `equal?`, `eq?`, `expt`, `apply`, `list?`, `procedure?`, `print` and many-list `map` are in; their Norvig tests are now normal tests (`NorvigStandardEnvTest`)
 - [x] Tests for the Gemini Argon additions and the features restored after it (`tests/test_gemini_features.py`)
-- [ ] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs). Ref: fluentpython/lispy `original/py3.10/lis_test.py`
+- [x] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs) (`tests/test_lispy_additions.py`)
+- [x] Every ticked item above has examples in `tests/test_todo.py`; ticking a box without adding them fails the tests
