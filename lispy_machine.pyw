@@ -14,7 +14,10 @@ Features
   * Open / Save / Save-As / Close buffers
   * Menu + status bar showing the current "package" (USER) and buffer
 
-Run:  python lispy_machine.pyw
+Run:  python lispy_machine.pyw [file.lisp ...]
+      Each file named on the command line opens in its own buffer instead of
+      the welcome example; a file that does not exist yet opens empty and is
+      created on the first Save.
 """
 import io
 import contextlib
@@ -725,8 +728,23 @@ class SearchBar(tk.Frame):
 # =============================================================================
 # Main application
 # =============================================================================
+def read_file_arg(arg: str):
+    """Return (buffer name, content, path) for a file named on the command line.
+
+    A file that does not exist yet gives an empty buffer that saves to that
+    path; any other read error is raised as OSError.
+    """
+    path = os.path.abspath(arg)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except FileNotFoundError:
+        content = ""
+    return os.path.basename(path), content, path
+
+
 class LispMachine(tk.Tk):
-    def __init__(self):
+    def __init__(self, files=()):
         super().__init__()
         self.title("Lispy3 Machine")
         self.geometry("1280x820")
@@ -746,14 +764,25 @@ class LispMachine(tk.Tk):
         self._build_status()
         self._bind_global()
 
-        # welcome buffer
-        self.new_buffer("untitled.lisp", WELCOME)
+        # files from the command line, or the welcome buffer
+        open_errors = []
+        for arg in files:
+            try:
+                name, content, path = read_file_arg(arg)
+            except (OSError, UnicodeDecodeError) as e:
+                open_errors.append(f"{arg}: {e}")
+                continue
+            self.new_buffer(name, content, path=path)
+        if not self.tabs:
+            self.new_buffer("untitled.lisp", WELCOME)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
         self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n\n", "info")
         for err in SYNTAX_ERRORS:
             self.listener_write(f";; Syntax colouring file not loaded: {err}\n", "error")
+        for err in open_errors:
+            self.listener_write(f";; Could not open {err}\n", "error")
         self.listener_input.focus_set()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -1469,7 +1498,7 @@ WELCOME = r''';; Welcome to Lispy3 Machine.
 
 # =============================================================================
 def main():
-    app = LispMachine()
+    app = LispMachine(sys.argv[1:])
     app.mainloop()
 
 
