@@ -73,6 +73,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lsystems.lisp` | The L-system drawing engine used by every example. |
 | `tree.lisp`, `plant.lisp`, `snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
+| `pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
@@ -208,6 +209,8 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
     python lispy_machine.pyw tree.lisp      # open a file instead of the welcome example
 
 Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
+
+The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon.
 
 `lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 

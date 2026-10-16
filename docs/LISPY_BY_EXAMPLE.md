@@ -466,6 +466,13 @@ Fibonacci, loop style, with local variables:
 
 Items are numbered from 0. `sieve_lispy3.lisp` uses these for the prime sieve.
 
+`pi_digits.lisp` uses a vector and `while` loops to print the first n decimals of pi with a spigot algorithm, which needs only small whole numbers:
+
+    $ python lispy3.py pi_digits.lisp
+    3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
+
+Change `(define n 100)` at the top of the file for another length, or `(load "pi_digits")` in the REPL and call `(pi-digits 20)`.
+
 ## Maps and keywords
 
     lispy3> (define book {:title "SICP" :year 1985})

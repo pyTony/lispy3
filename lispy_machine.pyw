@@ -752,6 +752,7 @@ class LispMachine(tk.Tk):
     def __init__(self, files=()):
         super().__init__()
         self.title("Lispy3 Machine")
+        self._set_icon()
         self.geometry("1280x820")
         self.configure(bg=COLORS["bg"])
         self.minsize(900, 600)
@@ -791,6 +792,24 @@ class LispMachine(tk.Tk):
         self.listener_input.focus_set()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ---------- window icon ----------
+    def _set_icon(self):
+        """Use icons/lispy_machine.ico (Windows) or .png for the window and taskbar.
+
+        Only the icon picture changes: the taskbar button still belongs to
+        Python, so its list of recently opened files keeps working. A missing
+        or unreadable icon file just leaves the default icon.
+        """
+        icons = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+        try:
+            if sys.platform == "win32":
+                self.iconbitmap(default=os.path.join(icons, "lispy_machine.ico"))
+            else:
+                self._icon_image = tk.PhotoImage(file=os.path.join(icons, "lispy_machine.png"))
+                self.iconphoto(True, self._icon_image)
+        except tk.TclError:
+            pass
 
     # ---------- ttk style ----------
     def _setup_style(self):
