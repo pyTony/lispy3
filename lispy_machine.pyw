@@ -3,7 +3,7 @@
 lispy_machine.pyw - a Lisp-Machine style editor for the lispy3 interpreter.
 
 Features
-  * Multiple editor buffers (tabs) with Lisp syntax highlighting
+  * Multiple editor buffers (tabs) with syntax colouring read from syntax/*.json
   * Persistent Listener (REPL) with history, coloured output
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : evaluate top-level form at cursor
@@ -28,6 +28,7 @@ from tkinter.scrolledtext import ScrolledText
 # --- import the interpreter (no side effects when imported) -------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
 import lispy3 as L
+import syntax_highlight as SH
 
 
 # =============================================================================
@@ -38,13 +39,6 @@ COLORS = {
     "fg":          "#d4d4d4",
     "cursor":      "#ffffff",
     "selection":   "#264f78",
-    "comment":     "#6a9955",
-    "string":      "#ce9178",
-    "keyword":     "#c586c0",
-    "number":      "#b5cea8",
-    "builtin":     "#4ec9b0",
-    "variable":    "#9cdcfe",   # NEW — light blue, distinct from every other hue above
-    "paren_match": "#ffd700",
     "paren_match": "#ffd700",
     "paren_bad":   "#f44747",
     "listener_bg": "#0c0c0c",
@@ -60,6 +54,19 @@ COLORS = {
     "entry_bg":    "#000000",
     "entry_fg":    "#ffffff",
 }
+
+# Syntax colours and rules come from syntax/*.json (see syntax_highlight.py).
+LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
+DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
+SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
+BUILTIN_NAMES = frozenset(L.standard_env())
+
+
+def user_defined_names():
+    """Globals the user made: new names, or their own function under a built-in name."""
+    return {k for k, v in L.global_env.items()
+            if k not in BUILTIN_NAMES
+            or (isinstance(v, L.Procedure) and v.native_fn is None)}
 
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
@@ -147,8 +154,12 @@ def find_top_level_form(text: str, pos: int):
     return None
 
 
-def find_matching_bracket(text: str, pos: int):
-    """Given `pos` points at a bracket char, return the offset of its mate."""
+def find_matching_bracket(text: str, pos: int, skip=None):
+    """Given `pos` points at a bracket char, return the offset of its mate.
+
+    `skip`, if given, is a sequence with a true value at every offset that
+    is inside a string or comment; brackets there are not counted.
+    """
     c = text[pos]
     if c not in "()[]{}":
         return None
@@ -159,7 +170,9 @@ def find_matching_bracket(text: str, pos: int):
     i = pos + (1 if forward else -1)
     step = 1 if forward else -1
     while 0 <= i < len(text):
-        if text[i] == c:
+        if skip is not None and skip[i]:
+            pass
+        elif text[i] == c:
             depth += 1
         elif text[i] == target:
             depth -= 1
@@ -195,6 +208,7 @@ class EditorTab(tk.Frame):
         self.app = app
         self.name = name
         self.path = path
+        self.language = DEFAULT_LANGUAGE
         self.dirty = False
         self._highlight_job = None
         self._suppress_modified = False
@@ -233,12 +247,7 @@ class EditorTab(tk.Frame):
     # ---------- tags ----------
     def _setup_tags(self):
         t = self.text
-        t.tag_configure("comment",     foreground=COLORS["comment"])
-        t.tag_configure("string",      foreground=COLORS["string"])
-        t.tag_configure("keyword",     foreground=COLORS["keyword"])
-        t.tag_configure("number",      foreground=COLORS["number"])
-        t.tag_configure("variable",    foreground=COLORS["variable"])   # NEW
-        t.tag_configure("builtin",     foreground=COLORS["builtin"])
+        self.set_language()
         t.tag_configure("paren_match", background=COLORS["paren_match"],
                                        foreground="#000000")
         t.tag_configure("paren_bad",   background=COLORS["paren_bad"],
@@ -273,6 +282,15 @@ class EditorTab(tk.Frame):
         t.bind("<Control-Shift-Return>", lambda e: (self.app.eval_buffer(), "break")[1])
 
     # ---------- highlighting ----------
+    def set_language(self):
+        """Pick the syntax rules from the file name and set the tag colours."""
+        self.language = SH.language_for(self.path or self.name, LANGUAGES, DEFAULT_LANGUAGE)
+        for tag in SYNTAX_TAGS:
+            self.text.tag_configure(tag, foreground=self.language.colors.get(tag, COLORS["fg"]))
+        for tag in SYNTAX_TAGS:              # let search / paren tags show on top
+            self.text.tag_lower(tag)
+        self._schedule_highlight()
+
     def _on_key(self, event=None):
         self._schedule_highlight()
         self._match_paren()
@@ -287,33 +305,18 @@ class EditorTab(tk.Frame):
     def _highlight(self):
         self._highlight_job = None
         t = self.text
-        for tag in ("comment", "string", "keyword", "number", "builtin"):
+        for tag in SYNTAX_TAGS:
             t.tag_remove(tag, "1.0", "end")
 
         content = t.get("1.0", "end-1c")
+        variables = user_defined_names() if self.language.env_words else ()
+        for tag, start, end in self._spans(content, variables):
+            self._tag(tag, content, start, end)
 
-        # strings (with escaped quotes)
-        for m in re.finditer(r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"', content):
-            self._tag("string", content, m.start(), m.end())
-
-        # comments (skip inside strings — do a quick pass after strings)
-        for m in re.finditer(r";[^\n]*", content):
-            self._tag("comment", content, m.start(), m.end())
-
-        # keywords  :foo
-        for m in re.finditer(r"(?<![\w\-]):[a-zA-Z_][\w\-]*", content):
-            self._tag("keyword", content, m.start(), m.end())
-
-        # numbers
-        for m in re.finditer(r"(?<![\w.\-])-?\d+(?:\.\d+)?(?![\w.])", content):
-            self._tag("number", content, m.start(), m.end())
-
-        # builtins (symbols defined in global_env)
-        builtin_re = re.compile(r"([\w\-+*/<>=!?]+)")
-        for m in builtin_re.finditer(content):
-            name = m.group(1)
-            if name in L.global_env and not name.startswith(":"):
-                self._tag("builtin", content, m.start(), m.end())
+    def _spans(self, content, variables=None):
+        if variables is None:
+            variables = user_defined_names() if self.language.env_words else ()
+        return self.language.spans(content, builtins=BUILTIN_NAMES, variables=variables)
 
     def _tag(self, tag, content, start, end):
         self.text.tag_add(tag,
@@ -347,7 +350,10 @@ class EditorTab(tk.Frame):
             lines = content.split("\n")
             offset = sum(len(l) + 1 for l in lines[: line - 1]) + col
 
-            mate = find_matching_bracket(content, offset)
+            skip = SH.code_mask(self._spans(content), len(content))
+            if skip[offset]:                 # a bracket inside a string or comment
+                continue
+            mate = find_matching_bracket(content, offset, skip)
             if mate is None:
                 t.tag_add("paren_bad", cand, f"{cand}+1c")
                 return
@@ -383,6 +389,9 @@ class EditorTab(tk.Frame):
         return "break"
 
     def _toggle_comment(self, event=None):
+        mark = self.language.line_comment
+        if not mark:
+            return "break"
         sel = self.text.tag_ranges("sel")
         if not sel:
             line = int(self.text.index("insert").split(".")[0])
@@ -393,15 +402,15 @@ class EditorTab(tk.Frame):
             lines = list(range(l1, l2 + 1))
         for ln in lines:
             line_text = self.text.get(f"{ln}.0", f"{ln}.end")
-            if line_text.lstrip().startswith(";"):
+            if line_text.lstrip().startswith(mark):
                 # uncomment
                 stripped = line_text.lstrip()
                 indent = len(line_text) - len(stripped)
-                new = line_text[:indent] + stripped[1:].lstrip()
+                new = line_text[:indent] + stripped[len(mark):].lstrip()
                 self.text.delete(f"{ln}.0", f"{ln}.end")
                 self.text.insert(f"{ln}.0", new)
             else:
-                self.text.insert(f"{ln}.0", "; ")
+                self.text.insert(f"{ln}.0", mark + " ")
         return "break"
 
     # ---------- symbol completion ----------
@@ -743,6 +752,8 @@ class LispMachine(tk.Tk):
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
         self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n\n", "info")
+        for err in SYNTAX_ERRORS:
+            self.listener_write(f";; Syntax colouring file not loaded: {err}\n", "error")
         self.listener_input.focus_set()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -1017,7 +1028,7 @@ class LispMachine(tk.Tk):
     def open_file(self):
         path = filedialog.askopenfilename(
             title="Open Lisp file",
-            filetypes=[("Lisp", "*.lisp"), ("All files", "*.*")])
+            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
         if not path:
             return
         try:
@@ -1051,13 +1062,14 @@ class LispMachine(tk.Tk):
         path = filedialog.asksaveasfilename(
             title="Save as",
             defaultextension=".lisp",
-            filetypes=[("Lisp", "*.lisp"), ("All files", "*.*")])
+            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
         if not path:
             return
         tab.path = path
         tab.name = os.path.basename(path)
         self.tab_order = [tab.name if n == tab.name else n for n in self.tab_order]
         self.notebook.tab(tab, text=tab.name)
+        tab.set_language()
         self.save_current()
         self._refresh_buffer_list()
 
@@ -1346,6 +1358,9 @@ class LispMachine(tk.Tk):
         self.inspector.delete("1.0", "end")
         self.inspector.insert("1.0", text)
         self.inspector.configure(state="disabled")
+        # Every evaluation ends here; recolour so newly defined names show up.
+        for tab in self.tabs.values():
+            tab._schedule_highlight()
 
     # =========================================================================
     # Misc
