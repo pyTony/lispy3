@@ -4,8 +4,17 @@ A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Pyt
 
 The roots of this project date back to a spark of inspiration from a 1981 Finnish computer magazine (*Prosessori*), leading to a Python 2 adaptation on the DaniWeb forums in 2011, and finally culminating in this modern, pattern-matching Python 3 masterpiece.
 
+## Documentation
+
+- [Quick Start](docs/QUICK_START.md): five minutes from nothing to your own functions.
+- [Lispy by Example](docs/LISPY_BY_EXAMPLE.md): strings, lists, head and tail recursion, loops, maps and more, one runnable example at a time.
+- [Quick Reference](docs/QUICK_REFERENCE.md): every built-in on one page.
+- Inside Lispy, `(help)` lists the built-ins and `(help 'name)` explains one. In the editor: **Help → Built-in functions**.
+- [TODO.md](TODO.md): features not implemented yet.
+
 ## Contents
 
+- [Documentation](#documentation)
 - [Key features](#key-features)
 - [Files in this project](#files-in-this-project)
 - [Quick start (REPL)](#quick-start-repl)
@@ -65,6 +74,8 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
+| `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
+| `TODO.md` | Features still to be implemented. |
 
 `lispy_machine.pyw` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
 
