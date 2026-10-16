@@ -47,4 +47,6 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
-- [ ] A test suite. fluentpython/lispy has pytest suites to borrow from (`original/py3.10/lis_test.py`, and Norvig's `lis_tests` in `original/norvig/lispytest.py`).
+- [x] Regression tests from Norvig's lispy.html and his `lis_tests` (`tests/test_norvig.py`, run `python -m unittest`)
+- [ ] When adding `equal?`, `eq?`, `expt`, `apply`, `list?`, `procedure?`, `print` or many-list `map`, remove its `@expectedFailure` in `KnownGapsTest`
+- [ ] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs). Ref: fluentpython/lispy `original/py3.10/lis_test.py`
