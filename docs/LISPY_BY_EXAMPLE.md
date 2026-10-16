@@ -190,31 +190,33 @@ The body is one expression; use `begin` for more:
 
 ## True and false
 
-Comparisons give `True` or `False`.
+True is written `#t` and false `#f`, as in Scheme. Comparisons give one of them.
 
     lispy3> (< 1 2)
-    True
+    #t
     lispy3> (= "abc" "abc")
-    True
+    #t
     lispy3> (not (= 1 2))
-    True
+    #t
+    lispy3> (if #f "yes" "no")
+    "no"
 
-In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
+In a test, `#f`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
 
     lispy3> (if '() "yes" "no")
     "no"
     lispy3> (if "" "yes" "no")
     "yes"
 
-`True` and `False` are printed results, not names you can type: `(if x True False)` gives *Undefined symbol: True*. Write `(= 1 1)` for true and `(= 1 0)` for false if you need them as values.
+`save` writes true and false as `#t` and `#f`, so they load back unchanged.
 
-**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b". Until then, `save` writes a true or false variable as `True` / `False`, which `load` cannot read back.
+**TO BE IMPLEMENTED:** `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b".
 
 ### What things return
 
 | Expression | Returns | Shown at the prompt |
 |------------|---------|---------------------|
-| a test: `(< 1 2)`, `(null? x)`, `(not x)` | `True` / `False` | `True` / `False` |
+| a test: `(< 1 2)`, `(null? x)`, `(not x)` | `#t` / `#f` | `#t` / `#f` |
 | `(define ...)`, `(set! ...)`, `(while ...)`, `(display ...)`, `(vector-set! ...)`, `(begin)` | nothing (Python `None`) | nothing |
 | `(car '())`, `(get map :missing)`, `(:missing map)` | the empty list | `()` |
 | `(if ...)`, `(begin ...)`, `(let ...)`, a lambda call | the value of the last expression | that value |
@@ -225,14 +227,14 @@ In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everythin
 
 | | true / false written as | printed as | false in a test | "no value" |
 |---|---|---|---|---|
-| **Lispy** | (none yet) | `True` / `False` | `False`, `0`, `()` | `None`, not printed |
+| **Lispy** | `#t` / `#f` | `#t` / `#f` | `#f`, `0`, `()` | `None`, not printed |
 | Norvig's `lis.py` | (none) | `True` / `False` | `False`, `0`, `()` (Python rules) | `None` |
 | Norvig's `lispy.py` | `#t` / `#f` | `#t` / `#f` | `False`, `0`, `()` (Python rules) | `None` |
 | Scheme (R7RS, Racket, Guile) | `#t` / `#f` | `#t` / `#f` | **only** `#f` | unspecified |
 | Common Lisp | `t` / `nil` | `T` / `NIL` | **only** `nil`, which is also `()` | `nil` |
 | Clojure | `true` / `false` | `true` / `false` | `false` and `nil` | `nil` |
 
-So Lispy follows its parent `lis.py`: Python's own `True`, `False` and truth rules. In real Scheme `0` and `()` are true, and only `#f` is false. Norvig's second interpreter, [`lispy.py`](https://norvig.com/lispy2.html), added `#t` / `#f` literals and printing but kept Python's truth rules; a copy is in [fluentpython/lispy](https://github.com/fluentpython/lispy) under `original/norvig/lispy.py`.
+So Lispy does what Norvig's second interpreter, [`lispy.py`](https://norvig.com/lispy2.html), does: Scheme's `#t` / `#f` for writing and printing, with Python's truth rules underneath (a copy is in [fluentpython/lispy](https://github.com/fluentpython/lispy) under `original/norvig/lispy.py`). The one difference from real Scheme to remember: there `0` and `()` are true, and only `#f` is false.
 
 ## Choosing: if
 
@@ -256,7 +258,7 @@ So Lispy follows its parent `lis.py`: Python's own `True`, `False` and truth rul
     lispy3> (length nums)
     5
     lispy3> (null? '())
-    True
+    #t
     lispy3> (append '(1 2) '(3))
     (1 2 3)
     lispy3> (list 1 "two" #\3 'four)
@@ -352,7 +354,7 @@ Recursion on numbers works the same way:
     lispy3> (filter (lambda [x] (= (fmod x 2) 0)) (range 1 11))
     (2 4 6 8 10)
     lispy3> (map (lambda [c] (= c #\space)) (seq "a b"))
-    (False True False)
+    (#f #t #f)
 
 `while` repeats its body while the test is true:
 
@@ -461,7 +463,7 @@ Every name in Python's `turtle` module is a Lispy function:
 
 ## Macros
 
-**TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `eval`, no `gensym`. `(help)` lists no macro forms for that reason.
+**TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `gensym`. `(help)` lists no macro forms for that reason. It does have `eval`, below.
 
 A macro is a function that runs on **code** before it is evaluated, and returns new code. That is how a Lisp adds forms like `unless`, `and`, `or` or `cond` in Lisp itself. Norvig's [`lispy.py`](https://norvig.com/lispy2.html) has `define-macro` with quasiquote, and defines `and` that way:
 
@@ -480,7 +482,29 @@ What works today: `quote` gives you code as data, which you can take apart and b
     lispy3> (car (cdr code))
     (< x 1)
 
-and a new control form can be a function that takes its body as a lambda with no parameters, so the body only runs when called:
+`eval` runs code held as data. Build the code with `quote`, `list` and `cons`, then run it:
+
+    lispy3> (eval '(+ 1 2))
+    3
+    lispy3> (eval (list '* 6 7))
+    42
+    lispy3> (define code '(if (< 1 2) "small" "big"))
+    lispy3> (eval code)
+    "small"
+    lispy3> (eval (cons '+ '(1 2)))
+    3
+
+`eval` always runs in the global environment, as Scheme's `(eval x (interaction-environment))` does: inside a function, `(eval 'x)` sees the global `x`, not the function's own parameter `x`. Together with `quote` and the list functions, this is the "do it by hand" version of a macro: a function builds code, `eval` runs it.
+
+    lispy3> (define make-adder-code (lambda [n] (list 'lambda '[x] (list '+ 'x n))))
+    lispy3> (make-adder-code 5)
+    (lambda [x] (+ x 5))
+    lispy3> ((eval (make-adder-code 5)) 10)
+    15
+
+**TO BE IMPLEMENTED:** `read`, to turn a string such as `"(+ 1 2)"` into code for `eval`.
+
+A new control form can also be a function that takes its body as a lambda with no parameters, so the body only runs when called:
 
     lispy3> (define unless
     ...       (lambda [test body]
@@ -494,7 +518,7 @@ and a new control form can be a function that takes its body as a lambda with no
 - `+ - * /` take exactly two arguments.
 - `if` needs an else part, and a lambda body is one expression (use `begin`).
 - `""` counts as true in a test; `0` and `()` count as false.
-- `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `False`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
+- `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `#f`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
 - Recursion stops after about 200 nested calls; use `map`, `filter` or `while` for big jobs.
 - **TO BE IMPLEMENTED:** catching errors inside a program (`try` / `error`).
 
@@ -508,7 +532,7 @@ Lispy grew out of Peter Norvig's [`lis.py`](https://norvig.com/lispy.html), like
 | `(lambda (x) e1 e2)` | `(lambda [x] (begin e1 e2))` |
 | `(cond (a x) (b y) (else z))` | `(if a x (if b y z))` |
 | `(and a b)` / `(or a b)` | `(if a b a)` / `(if a a b)` |
-| `#t` / `#f` | `(= 1 1)` / `(= 1 0)` (they print as `True` / `False`) |
+| `#t` / `#f` | `#t` / `#f` (the same) |
 | `(+ a b c)` | `(+ (+ a b) c)` |
 | `(modulo a b)`, `(quotient a b)` | `(fmod a b)`, `(floor (/ a b))` |
 | `(equal? a b)` | `(= a b)` |

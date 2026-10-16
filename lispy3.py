@@ -179,8 +179,8 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
         rest_s = "\n".join(f"{pad}  {pretty_print(e, indent + 1, width).lstrip()}" for e in exp[1:])
         return f"({head_s}\n{rest_s})"
 
-    # 8. Atoms (Symbols, Numbers)
-    return str(exp)
+    # 8. Atoms (Symbols, Numbers, #t and #f)
+    return lisp_str(exp)
 
 # --- Helper Functions for Workspace Save and Load ---
 def save_workspace(filename: str) -> str:
@@ -279,6 +279,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("let", "(let [a 1 b 2] body) - local names for one body"),
         ("while", "(while test body...) - loop while test is true, no recursion depth used"),
         ("quote", "(quote x) or 'x - x itself, not evaluated"),
+        ("#t", "#t and #f - true and false. False in a test: #f, 0 and (); everything else is true"),
         ("save", "(save \"name\") - write your definitions to name.lisp"),
         ("load", "(load \"name\") - run name.lisp"),
     ],
@@ -305,7 +306,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("/", "(/ a b) - divide, two arguments, gives a decimal"),
         ("=", "(= a b) - equal; works on numbers, symbols, strings and characters"),
         ("<", "(< a b), also > <= >= - compare two values"),
-        ("not", "(not x) - true if x is false, 0 or empty"),
+        ("not", "(not x) - #t if x is #f, 0 or empty, else #f"),
         ("abs", "(abs x) - absolute value"),
         ("min", "(min a b ...) - smallest"),
         ("max", "(max a b ...) - largest"),
@@ -323,6 +324,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("display", "(display a b ...) - print the values with nothing between them"),
         ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
+        ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -334,7 +336,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
 }
 
 _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
-_HELP_INDEX.update({'plus': _HELP_INDEX['+'], 'pprint': _HELP_INDEX['pretty-print'],
+_HELP_INDEX.update({'#f': _HELP_INDEX['#t'], 'plus': _HELP_INDEX['+'], 'pprint': _HELP_INDEX['pretty-print'],
                     'reset': _HELP_INDEX['reinit-turtle'], '>': _HELP_INDEX['<'], '<=': _HELP_INDEX['<'],
                     '>=': _HELP_INDEX['<']})
 
@@ -353,7 +355,7 @@ def lisp_help(*args: Any) -> None:
             return
         name = what.name
     else:
-        name = what.value if isinstance(what, String) else str(what)
+        name = what.value if isinstance(what, String) else lisp_str(what)
     if name in _HELP_INDEX:
         print(_HELP_INDEX[name])
         return
@@ -420,6 +422,7 @@ def standard_env() -> Env:
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
         'help': lisp_help,
+        'eval': lambda exp: eval_exp(exp, global_env),
     }
     
     for key, value in primitives.items():
@@ -629,7 +632,11 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         return atom(token)
 
 def atom(token: str) -> Atom:
-    r"""Numbers become numbers, "strings" become String, #\c become Char, others are symbols."""
+    r"""Numbers become numbers, #t and #f booleans, "strings" String, #\c Char, others symbols."""
+    if token == '#t':
+        return True
+    if token == '#f':
+        return False
     if len(token) >= 6 and token.startswith('"""') and token.endswith('"""'):
         return String(token[3:-3])
     if len(token) >= 2 and token.startswith('"') and token.endswith('"'):
@@ -674,7 +681,9 @@ def lisp_str(exp: Any) -> str:
     """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""
     # KORJAUKSEN YDIN: Tarkistetaan tyypit nimen perusteella, jotta dataclassit ja oliot tunnistetaan satavarmasti!
     type_name = type(exp).__name__
-    
+
+    if isinstance(exp, bool):
+        return '#t' if exp else '#f'
     if type_name == 'Procedure':
         # Jos kyseessä on natiivifunktio (body on None tai native_fn on olemassa)
         if exp.native_fn is not None:
