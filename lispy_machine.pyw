@@ -8,6 +8,7 @@ Features
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : evaluate top-level form at cursor
   * F6 / Ctrl+Shift+Enter : evaluate whole buffer
+  * F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
   * Paren matching, auto-indent, symbol completion (Ctrl+Space)
   * Open / Save / Save-As / Close buffers
@@ -42,6 +43,8 @@ COLORS = {
     "keyword":     "#c586c0",
     "number":      "#b5cea8",
     "builtin":     "#4ec9b0",
+    "variable":    "#9cdcfe",   # NEW — light blue, distinct from every other hue above
+    "paren_match": "#ffd700",
     "paren_match": "#ffd700",
     "paren_bad":   "#f44747",
     "listener_bg": "#0c0c0c",
@@ -226,6 +229,7 @@ class EditorTab(tk.Frame):
         t.tag_configure("string",      foreground=COLORS["string"])
         t.tag_configure("keyword",     foreground=COLORS["keyword"])
         t.tag_configure("number",      foreground=COLORS["number"])
+        t.tag_configure("variable",    foreground=COLORS["variable"])   # NEW
         t.tag_configure("builtin",     foreground=COLORS["builtin"])
         t.tag_configure("paren_match", background=COLORS["paren_match"],
                                        foreground="#000000")
@@ -235,6 +239,14 @@ class EditorTab(tk.Frame):
                                        foreground="#ffffff")
         t.tag_configure("search_current", background="#ffd700",
                                         foreground="#000000")
+
+        # Virtual events fired by menu / programmatic paste and cut
+        t.bind("<<Paste>>", self._schedule_highlight)
+        t.bind("<<Cut>>",   self._schedule_highlight)
+
+        # X11 middle-click paste and Windows right-click paste
+        t.bind("<ButtonRelease-2>", self._on_key)
+        t.bind("<ButtonRelease-3>", self._on_key)
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -770,6 +782,7 @@ class LispMachine(tk.Tk):
         eval_m = tk.Menu(bar, tearoff=0)
         eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
         eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
+        eval_m.add_command(label="Inspect symbol at cursor", accelerator="F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
         eval_m.add_separator()
@@ -811,35 +824,53 @@ class LispMachine(tk.Tk):
         outer.add(top, minsize=300)
 
         # ---- sidebar (buffers + inspector) ----
-        sidebar = tk.Frame(top, bg=COLORS["side_bg"], width=200)
-        sidebar.pack(side="left", fill="y")
-        sidebar.pack_propagate(False)
+        # Both dividers are draggable: sidebar | editor, and buffers / inspector.
+        hpane = tk.PanedWindow(top, orient="horizontal", bg=COLORS["bg"],
+                               sashwidth=5, sashrelief="flat", opaqueresize=True)
+        hpane.pack(fill="both", expand=True)
 
-        tk.Label(sidebar, text="BUFFERS", bg=COLORS["side_bg"], fg="#888",
+        sidebar = tk.PanedWindow(hpane, orient="vertical", bg=COLORS["bg"],
+                                 sashwidth=5, sashrelief="flat", opaqueresize=True)
+        hpane.add(sidebar, minsize=120, width=300, stretch="never")
+
+        buf_frame = tk.Frame(sidebar, bg=COLORS["side_bg"])
+        sidebar.add(buf_frame, minsize=50, height=150, stretch="never")
+        insp_outer = tk.Frame(sidebar, bg=COLORS["side_bg"])
+        sidebar.add(insp_outer, minsize=60, stretch="always")
+
+        tk.Label(buf_frame, text="BUFFERS", bg=COLORS["side_bg"], fg="#888",
                  font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x")
 
         self.buffer_list = tk.Listbox(
-            sidebar, bg=COLORS["side_bg"], fg=COLORS["side_fg"],
+            buf_frame, bg=COLORS["side_bg"], fg=COLORS["side_fg"],
             selectbackground=COLORS["side_sel"], selectforeground="#ffffff",
             borderwidth=0, highlightthickness=0, activestyle="none",
-            font=FONT_UI, height=8)
-        self.buffer_list.pack(fill="x", padx=4)
+            font=FONT_UI, height=4)
+        self.buffer_list.pack(fill="both", expand=True, padx=4)
         self.buffer_list.bind("<<ListboxSelect>>", self._on_buffer_select)
 
-        tk.Label(sidebar, text="INSPECTOR", bg=COLORS["side_bg"], fg="#888",
-                 font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x", pady=(12, 0))
+        tk.Label(insp_outer, text="INSPECTOR", bg=COLORS["side_bg"], fg="#888",
+                 font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x")
 
+        insp_frame = tk.Frame(insp_outer, bg=COLORS["side_bg"])
+        insp_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        insp_y = ttk.Scrollbar(insp_frame, orient="vertical")
+        insp_x = ttk.Scrollbar(insp_frame, orient="horizontal")
         self.inspector = tk.Text(
-            sidebar, bg=COLORS["bg"], fg=COLORS["fg"], font=FONT_MONO,
-            wrap="word", borderwidth=0, highlightthickness=0, height=10,
-            padx=6, pady=4)
-        self.inspector.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+            insp_frame, bg=COLORS["bg"], fg=COLORS["fg"], font=FONT_MONO,
+            wrap="none", borderwidth=0, highlightthickness=0, height=10,
+            padx=6, pady=4, yscrollcommand=insp_y.set, xscrollcommand=insp_x.set)
+        insp_y.configure(command=self.inspector.yview)
+        insp_x.configure(command=self.inspector.xview)
+        insp_x.pack(side="bottom", fill="x")
+        insp_y.pack(side="right", fill="y")
+        self.inspector.pack(side="left", fill="both", expand=True)
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
 
         # ---- right-hand area: search bar (hidden) + editor notebook ----
-        right_area = tk.Frame(top, bg=COLORS["bg"])
-        right_area.pack(side="left", fill="both", expand=True)
+        right_area = tk.Frame(hpane, bg=COLORS["bg"])
+        hpane.add(right_area, minsize=200, stretch="always")
 
         self.search_bar = SearchBar(right_area, self)   # not packed yet
 
@@ -889,6 +920,7 @@ class LispMachine(tk.Tk):
         pass  # placeholder
 
     def _bind_global(self):
+        self.bind_all("<F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
         self.bind_all("<Control-o>", lambda e: self.open_file())
         self.bind_all("<Control-s>", lambda e: self.save_current())
@@ -1074,7 +1106,7 @@ class LispMachine(tk.Tk):
         form = content[start:end]
         self.listener_write(f"USER> {form.strip()}\n", "prompt")
         val, err = self._run(form)
-        self._report_eval(val, err)
+        self._report_eval(val, err, code=form)
 
     def _parse_top_level_forms(self, content: str):
         """Split buffer text into a list of top-level forms using the interpreter's own parser."""
@@ -1123,8 +1155,13 @@ class LispMachine(tk.Tk):
                 return
 
             if val is None:
-                self.listener_write(";; ok\n", "info")
-                self.set_inspector("(none)")
+                name = self._defined_name(form)
+                if name:
+                    self.listener_write(f";; {name} defined\n", "info")
+                    self.inspect_symbol(name)
+                else:
+                    self.listener_write(";; ok\n", "info")
+                    self.set_inspector("(none)")
             else:
                 try:
                     val_str = L.lisp_str(val)
@@ -1132,17 +1169,82 @@ class LispMachine(tk.Tk):
                     val_str = repr(val)
                 self.listener_write(val_str + "\n", "result")
                 try:
-                    self.set_inspector(L.pretty_print(val, width=34))
+                    self.set_inspector(L.pretty_print(val, width=self._inspector_cols()))
                 except Exception:
                     self.set_inspector(val_str)
 
         self.listener_write(";; --- done ---\n", "info")
 
-    def _report_eval(self, val, err, show_value=True):
+    @staticmethod
+    def _defined_name(code):
+        """Name from a (define name ...) form (source text or parsed form), else None."""
+        try:
+            form = L.parse(code) if isinstance(code, str) else code
+        except Exception:                            # noqa: BLE001
+            return None
+        if isinstance(form, list) and len(form) >= 2 and form[0] == 'define' and isinstance(form[1], str):
+            return form[1]
+        return None
+
+    def _inspector_cols(self):
+        """Text columns that fit in the Inspector now (follows the draggable divider)."""
+        try:
+            import tkinter.font as tkfont
+            self.update_idletasks()
+            char_w = tkfont.Font(font=self.inspector.cget("font")).measure("0") or 8
+            return max(20, (self.inspector.winfo_width() - 16) // char_w)
+        except Exception:                            # noqa: BLE001
+            return 34
+
+    def inspect_symbol(self, name):
+        """Show the global variable `name` in the Inspector, pretty-printed."""
+        try:
+            val = L.global_env[name]
+        except KeyError:
+            self.set_inspector(f"{name}: undefined")
+            return False
+        try:
+            text = L.pretty_print(val, width=self._inspector_cols())
+        except Exception:                            # noqa: BLE001
+            text = repr(val)
+        if type(val).__name__ == 'Procedure' and text.startswith('(define'):
+            self.set_inspector(text)
+        else:
+            self.set_inspector(f"{name} =\n{text}")
+        return True
+
+    def inspect_at_cursor(self):
+        """F7: inspect the symbol under the editor cursor, or the name typed in the Listener."""
+        name = ""
+        if self.focus_get() is self.listener_input:
+            name = self.listener_input.get().strip()
+        else:
+            tab = self.current_tab()
+            if tab:
+                t = tab.text
+                line = t.get("insert linestart", "insert lineend")
+                col = int(t.index("insert").split(".")[1])
+                stop = " \t()[]{}'\""
+                a = col
+                while a > 0 and line[a - 1] not in stop:
+                    a -= 1
+                b = col
+                while b < len(line) and line[b] not in stop:
+                    b += 1
+                name = line[a:b]
+        if name:
+            self.inspect_symbol(name)
+
+    def _report_eval(self, val, err, show_value=True, code=None):
         if err is not None:
             msg = str(err) or type(err).__name__
             self.listener_write(f"Error: {msg}\n", "error")
             self.set_inspector(f"Error: {msg}")
+            return
+        name = self._defined_name(code) if code is not None else None
+        if name and val is None:
+            self.listener_write(f";; {name} defined\n", "info")
+            self.inspect_symbol(name)
             return
         try:
             val_str = L.lisp_str(val)
@@ -1151,7 +1253,7 @@ class LispMachine(tk.Tk):
         if show_value:
             self.listener_write(val_str + "\n", "result")
         try:
-            pretty = L.pretty_print(val, width=34)
+            pretty = L.pretty_print(val, width=self._inspector_cols())
         except Exception:
             pretty = val_str
         self.set_inspector(pretty)
@@ -1182,7 +1284,7 @@ class LispMachine(tk.Tk):
             self._on_close()
             return
         val, err = self._run(code)
-        self._report_eval(val, err)
+        self._report_eval(val, err, code=code)
 
     def _history_up(self, event=None):
         if not self.listener_history:
@@ -1256,6 +1358,7 @@ class LispMachine(tk.Tk):
             "for the lispy3 interpreter.\n\n"
             "F5  eval form at cursor\n"
             "F6  eval whole buffer\n"
+            "F7  inspect symbol at cursor\n"
             "F9  eval listener input\n"
             "Ctrl+Space  complete symbol\n"
             "Ctrl+/      toggle comment\n"

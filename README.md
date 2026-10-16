@@ -1,6 +1,6 @@
 # Lispy3: A Modern Clojure-Infused Lisp Interpreter in Python 3 — with a Lisp-Machine Editor
 
-A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Python 3, plus a companion Tkinter editor (`lispy_machine.pyw`) that turns it into an interactive Lisp-Machine style environment. This project is a deeply evolutionized version of Peter Norvig's classic `lis.py`, incorporating modern Python features and powerful Clojure-inspired constructs.
+A fully typed, robust, and elegant Lisp/Scheme interpreter written in modern Python 3, plus a companion Tkinter editor (`lispy_machine.pyww`) that turns it into an interactive Lisp-Machine style environment. This project is a deeply evolutionized version of Peter Norvig's classic `lis.py`, incorporating modern Python features and powerful Clojure-inspired constructs.
 
 The roots of this project date back to a spark of inspiration from a 1981 Finnish computer magazine (*Prosessori*), leading to a Python 2 adaptation on the DaniWeb forums in 2011, and finally culminating in this modern, pattern-matching Python 3 masterpiece.
 
@@ -43,7 +43,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - **Workspace State Management**: Built-in environment persistence via `(save "filename")` and `(load "filename")`, which serialize/deserialize user functions and variables as valid, human-readable Lisp source code.
 - **Turtle Graphics**: Every `turtle.*` name is available as a Lisp procedure; `push-pose` / `pop-pose` / `clear-poses` implement the `[` … `]` branching of L-systems.
 
-**Editor (`lispy_machine.pyw`)**
+**Editor (`lispy_machine.pyww`)**
 
 - **Multiple editor buffers** with Lisp syntax highlighting.
 - **Persistent Listener** with history, coloured prompts/results/errors.
@@ -64,9 +64,9 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `tree.lisp`, `plant.lisp`, `snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
-| `lispy_machine.py` | The Lisp-Machine style editor. |
+| `lispy_machine.pyw` | The Lisp-Machine style editor. |
 
-`lispy_machine.py` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
+`lispy_machine.pyw` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
 
 ---
 
@@ -186,13 +186,13 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
 # Lispy3 Machine — the editor
 
-`lispy_machine.pyw` is a Tkinter editor that turns the interpreter into a small Lisp-Machine style environment: several buffers, one persistent Listener, an Inspector, and one-key evaluation of whatever is at the cursor. It is a *client* of `lispy3.py` — the interpreter itself is untouched.
+`lispy_machine.pyww` is a Tkinter editor that turns the interpreter into a small Lisp-Machine style environment: several buffers, one persistent Listener, an Inspector, and one-key evaluation of whatever is at the cursor. It is a *client* of `lispy3.py` — the interpreter itself is untouched.
 
 ### Running the editor
 
-    python lispy_machine.pyw
+    python lispy_machine.pyww
 
-`lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
+`lispy_machine.pyww` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 
 ### The layout
 
@@ -214,7 +214,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 ```
 
 - **Buffers** — one tab per file. The `●` marker shows unsaved changes.
-- **Inspector** — the pretty-printed value of the last evaluation.
+- **Inspector** — the pretty-printed value of the last evaluation, or of a variable you just defined. It scrolls both ways, and the dividers between sidebar and editor and between Buffers and Inspector can be dragged; the pretty-printer re-wraps to the Inspector's width.
 - **Listener** — a persistent REPL at the bottom, exactly like a Genera Listener.
 - **Status bar** — the current "package" (`USER`, matching the interpreter's single `global_env`) and the current buffer name.
 
@@ -224,6 +224,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 |-----|--------|
 | `F5` / `Ctrl+Enter` | Evaluate the outermost form at the cursor |
 | `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
+| `F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
 | `F9` | Evaluate what you typed in the Listener |
 | `Ctrl+F` | Open Find |
 | `Ctrl+H` | Open Find & Replace |
@@ -246,7 +247,7 @@ F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely w
 
 ### Inspector
 
-After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. If evaluation raised, the Inspector shows the error.
+After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. Long lists of atoms are packed into rows instead of one item per line. A `(define name …)` returns nothing, so the Inspector then shows the new value of `name`; press `F7` on any symbol to look at a variable later. If evaluation raised, the Inspector shows the error.
 
 ### Search and replace
 
@@ -279,7 +280,7 @@ val = L.eval_exp(ast, L.global_env)
 | Editor action | Call into `lispy3` |
 |---|---|
 | F5 / F6 / F9 / Listener ⏎ | `L.parse` → `L.eval_exp(ast, L.global_env)` |
-| Inspector | `L.pretty_print(val, width=34)` |
+| Inspector | `L.pretty_print(val, width=<Inspector columns>)` |
 | Listener result line | `L.lisp_str(val)` |
 | Symbol completion | reads `L.global_env.keys()` |
 | `(save "x")` / `(load "x")` | the interpreter's `save_workspace` / `load_workspace` |
@@ -341,7 +342,7 @@ Example, all inside the Listener pane:
 
 ### A short tour
 
-1. `python lispy_machine.py`
+1. `python lispy_machine.pyw`
 2. In the Listener type `(load "lsystems")` ⏎
 3. In the editor, put the cursor inside `(lsystem-from "F" "F[+F]F[-F]F" 4 3 23.5 0 -250 90)` and press **F5**.
 4. Or open `tree.lisp`, put the cursor anywhere inside the final `(tree tree-generations tree-step)` and press **F5** — the turtle window opens and draws the tree.

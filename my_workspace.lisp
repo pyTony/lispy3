@@ -2,3 +2,17 @@
 (define user {:name "Tony" :status "Trusty"})
 (define square (lambda [x] (* x x)))
 (define fact (lambda [n] (if (< n 2) 1 (* (fact (- n 1)) n))))
+(define bitlength (lambda [n] (if (>= n 1) (+ 1 (bitlength (/ n 2))) 0)))
+(define to-binary
+  (lambda [n]
+    (begin
+      (define m (floor (abs n)))     ; work with the magnitude
+      (define s "")
+      (if (= m 0)
+          (set! s "0")
+          (while (> m 0)
+            (set! s (append (str (floor (fmod m 2))) s))
+            (set! m (floor (/ m 2)))))
+      (if (< n 0)
+          (append "-" s)
+          s))))

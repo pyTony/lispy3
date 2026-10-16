@@ -119,6 +119,27 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
 
         head = exp[0]
 
+        # Data lists: fill atoms into rows instead of one item per line
+        if all(not isinstance(e, (list, tuple, dict)) and type(e).__name__ != 'Procedure' for e in exp) \
+                and not (isinstance(head, str) and head in ('define', 'lambda', 'if', 'let', 'begin')):
+            room = max(width - len(pad) - 2, 10)
+            rows, cur = [], ""
+            for e in exp:
+                item = pretty_print(e, 0, width)
+                if cur and len(cur) + 1 + len(item) > room:
+                    rows.append(cur)
+                    cur = item
+                else:
+                    cur = f"{cur} {item}" if cur else item
+            rows.append(cur)
+            body = "\n".join(f"{pad}  {r}" for r in rows)
+            return f"(\n{body}\n{pad})"
+
+        # Data list whose first item is not a symbol: one item per line
+        if not isinstance(head, str):
+            items = "\n".join(f"{pad}  {pretty_print(x, indent + 1, width).lstrip()}" for x in exp)
+            return f"(\n{items}\n{pad})"
+
         # Explicit define handling: (define var val)
         if head == 'define' and len(exp) == 3:
             var_name = lisp_str(exp[1])
@@ -261,6 +282,11 @@ def standard_env() -> Env:
         '+': op.add, 'plus': op.add,
         '-': op.sub, '*': op.mul, '/': op.truediv,
         '>': op.gt, '<': op.lt, '>=': op.ge, '<=': op.le, '=': op.eq,
+        # Python builtins that don't live in `math`
+        'abs':   abs,
+        'min':   min,
+        'max':   max,
+        'round': round,
         'append': lambda x, y: String((x.value if isinstance(x, String) else x) + (y.value if isinstance(y, String) else y)) if isinstance(x, (str, String)) and isinstance(y, (str, String)) else op.add(x, y),
         'car': lambda x: x if x else [],
         'cdr': lambda x: x[1:],
