@@ -2,25 +2,34 @@
 
 Features the manual marks **TO BE IMPLEMENTED** (see [docs/LISPY_BY_EXAMPLE.md](docs/LISPY_BY_EXAMPLE.md) for today's workarounds). When one is done, add it to `HELP_TOPICS` in `lispy3.py` and to [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md), and remove its TO BE IMPLEMENTED notes.
 
+Many of these already exist, as small pattern-matching Python 3.10 code close to ours, in Luciano Ramalho's [fluentpython/lispy](https://github.com/fluentpython/lispy) (variations of Norvig's `lis.py`, the same ancestor as Lispy). Items marked *(ref: ...)* point to the file to read:
+
+- `original/py3.10/lis.py`: Norvig's `lis.py` with type hints and `match`/`case`
+- `mylis/mylis_2/lis.py`: adds `set!`, `cond`, `and`, `or` and proper tail calls
+- `mylis/mylis_3/environ.py`: variadic `+` and comparisons, `modulo`, `quotient`
+
 ## Language
 
-- [ ] `cond` for a chain of tests
-- [ ] `and` / `or` (short-circuit, so they must be special forms)
+- [ ] `cond` for a chain of tests *(ref: mylis_2 `cond_form`)*
+- [ ] `and` / `or`, short-circuit, so they must be special forms *(ref: mylis_2 `and_form`, `or_form`)*
 - [ ] `#t` / `#f` (or `true` / `false`) literals
-- [ ] `(define (f x) body)` shorthand
-- [ ] Several body expressions in `lambda` and `let` without `begin`
-- [ ] Tail-call optimisation, so tail recursion is not limited to about 200 calls
+- [ ] `(define (f x) body)` shorthand *(ref: py3.10 `lis.py`, `case ['define', [Symbol(name), *parms], *body]`)*
+- [ ] Several body expressions in `lambda` and `let` without `begin` *(ref: py3.10 `lis.py`, `case ['lambda', [*parms], *body]`)*
+- [ ] Proper tail calls, so tail recursion is not limited to about 200 calls *(ref: mylis_2 `evaluate`, the `while True` loop with `TCO_ENABLED`)*
 - [ ] `try` / `error` to raise and catch errors inside a program
 
 ## Numbers
 
-- [ ] `+ - * /` with any number of arguments, e.g. `(+ 1 2 3)`
-- [ ] `mod` / `remainder` on whole numbers (today only `fmod`, which gives a decimal)
+- [ ] `+ - * /` with any number of arguments, e.g. `(+ 1 2 3)` *(ref: mylis_3 `environ.py`)*
+- [ ] `<`, `=`, ... comparing more than two values, e.g. `(< 1 2 3)` *(ref: mylis_3 `variadic_comparison`)*
+- [ ] `modulo` and `quotient` on whole numbers (today only `fmod`, which gives a decimal) *(ref: mylis_3 `environ.py`)*
 
 ## Lists
 
 - [ ] `reverse`, `nth`, `last`, `range`
-- [ ] `reduce` / `fold`, `apply`, `sort`, `member`
+- [ ] `reduce` / `fold`, `apply`, `sort`, `member` *(ref: `apply` in py3.10 `lis.py`; `member` in `mylis/mylis_2/examples/member.scm`)*
+- [ ] `append` with any number of lists *(ref: py3.10 `lis.py`)*
+- [ ] `list?`, `procedure?`, `eq?`, `equal?` tests *(ref: py3.10 `lis.py`)*
 - [ ] `for-each` and a counting loop (`dotimes` or `for`)
 
 ## Strings
@@ -32,3 +41,7 @@ Features the manual marks **TO BE IMPLEMENTED** (see [docs/LISPY_BY_EXAMPLE.md](
 ## Maps
 
 - [ ] `assoc`, `dissoc`, `keys`, `vals`, `contains?`
+
+## Tests
+
+- [ ] A test suite. fluentpython/lispy has pytest suites to borrow from (`original/py3.10/lis_test.py`, and Norvig's `lis_tests` in `original/norvig/lispytest.py`).

@@ -23,6 +23,8 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
 - [Files and workspaces](#files-and-workspaces)
 - [Turtle graphics](#turtle-graphics)
 - [Gotchas](#gotchas)
+- [Coming from Scheme or lis.py](#coming-from-scheme-or-lispy)
+- [Further reading](#further-reading)
 
 ---
 
@@ -66,7 +68,7 @@ Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log
 
 `+ - * /` take exactly two numbers, so add three with `(+ (+ 1 2) 3)`. **TO BE IMPLEMENTED:** `(+ 1 2 3)` with any number of arguments.
 
-**TO BE IMPLEMENTED:** `mod` / `remainder` on whole numbers. Today use `(fmod a b)`, which gives a decimal such as `1.0`.
+**TO BE IMPLEMENTED:** `modulo` / `quotient` on whole numbers. Today use `(fmod a b)`, which gives a decimal such as `1.0`.
 
 ## Strings and characters
 
@@ -160,7 +162,9 @@ Comparisons give `True` or `False`.
 
 In a test, `False`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
 
-**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, nest `if`s: `(if a b False)` is "a and b", `(if a True b)` is "a or b".
+`True` and `False` are printed results, not names you can type: `(if x True False)` gives *Undefined symbol: True*. Write `(= 1 1)` for true and `(= 1 0)` for false if you need them as values.
+
+**TO BE IMPLEMENTED:** `#t` / `#f` (or `true` / `false`) literals, and `and` / `or`. Today, use `if`: `(if a b a)` is "a and b", `(if a a b)` is "a or b".
 
 ## Choosing: if
 
@@ -395,3 +399,46 @@ Every name in Python's `turtle` module is a Lispy function:
 - `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `False`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
 - Recursion stops after about 200 nested calls; use `map`, `filter` or `while` for big jobs.
 - **TO BE IMPLEMENTED:** catching errors inside a program (`try` / `error`).
+
+## Coming from Scheme or lis.py
+
+Lispy grew out of Peter Norvig's [`lis.py`](https://norvig.com/lispy.html), like the interpreters in Luciano Ramalho's [fluentpython/lispy](https://github.com/fluentpython/lispy). Scheme examples from there, from *SICP* or from *The Little Schemer* mostly run after a few changes:
+
+| Scheme / lis.py | Lispy today |
+|-----------------|-------------|
+| `(define (square x) (* x x))` | `(define square (lambda [x] (* x x)))` |
+| `(lambda (x) e1 e2)` | `(lambda [x] (begin e1 e2))` |
+| `(cond (a x) (b y) (else z))` | `(if a x (if b y z))` |
+| `(and a b)` / `(or a b)` | `(if a b a)` / `(if a a b)` |
+| `#t` / `#f` | `(= 1 1)` / `(= 1 0)` (they print as `True` / `False`) |
+| `(+ a b c)` | `(+ (+ a b) c)` |
+| `(modulo a b)`, `(quotient a b)` | `(fmod a b)`, `(floor (/ a b))` |
+| `(equal? a b)` | `(= a b)` |
+| `(apply f lst)` | **TO BE IMPLEMENTED** |
+| deep tail recursion | `while`, `map`, `filter` (no tail-call optimisation yet) |
+
+For example, `fact-iter.scm` from fluentpython/lispy (`mylis/mylis_2/examples`) becomes:
+
+    lispy3> (define factorial-iter
+    ...       (lambda [n product]
+    ...         (if (= n 1) product (factorial-iter (- n 1) (* n product)))))
+    lispy3> (factorial-iter 10 1)
+    3628800
+
+and `member.scm`, which needs `cond`, becomes nested `if`s:
+
+    lispy3> (define member
+    ...       (lambda [item lst]
+    ...         (if (null? lst) '()
+    ...           (if (= item (car lst)) lst
+    ...             (member item (cdr lst))))))
+    lispy3> (member 7 '(5 7 11))
+    (7 11)
+
+Lispy adds what lis.py does not have: strings and characters, `[vectors]`, `{maps}` with `:keywords`, `while`, `let`, `save`/`load`, turtle graphics and the editor.
+
+## Further reading
+
+- Norvig, [(How to Write a (Lisp) Interpreter (in Python))](https://norvig.com/lispy.html) and [the sequel](https://norvig.com/lispy2.html): where Lispy comes from.
+- [fluentpython/lispy](https://github.com/fluentpython/lispy): `lis.py` with type hints and pattern matching (`original/py3.10`), `cond`/`and`/`or` and tail calls (`mylis/mylis_2`), example programs, tests, and a reading list (SICP, The Little Schemer, How to Design Programs, ...). Most of Lispy's [TODO list](../TODO.md) points there for a reference implementation.
+- Abelson and Sussman, [Structure and Interpretation of Computer Programs](https://mitpress.mit.edu/sites/default/files/sicp/index.html): the classic for head and tail recursion.

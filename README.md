@@ -10,7 +10,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - [Lispy by Example](docs/LISPY_BY_EXAMPLE.md): strings, lists, head and tail recursion, loops, maps and more, one runnable example at a time.
 - [Quick Reference](docs/QUICK_REFERENCE.md): every built-in on one page.
 - Inside Lispy, `(help)` lists the built-ins and `(help 'name)` explains one. In the editor: **Help → Built-in functions**.
-- [TODO.md](TODO.md): features not implemented yet.
+- [TODO.md](TODO.md): features not implemented yet, with pointers to reference implementations in [fluentpython/lispy](https://github.com/fluentpython/lispy).
 
 ## Contents
 
