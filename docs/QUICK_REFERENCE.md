@@ -50,7 +50,9 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(map f lst)` | `(f item)` for every item |
 | `(filter f lst)` | items where `(f item)` is true |
 | `(get map key)` | value for `key`, `()` if missing |
-| `(str x)` | `x` as text |
+| `(str x)` | `x` as text (a symbol-like name, see [Atoms, symbols and strings](LISPY_BY_EXAMPLE.md#atoms-symbols-and-strings)) |
+| `(string? x)` | true for a string |
+| `(string->symbol "car")` / `(symbol->string 'car)` | name from text / text from name |
 
 ## Numbers and tests
 
@@ -80,6 +82,7 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 | `(pretty-print x)` / `(pprint x)` | print indented |
 | `(help)` / `(help 'name)` | list built-ins / explain one |
 | `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
+| `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
 
 ## Turtle graphics
 
@@ -98,6 +101,6 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 ## TO BE IMPLEMENTED
 
 Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md), the list in [TODO.md](../TODO.md)):
-`cond`, `and`, `or`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `string?`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote), `read`.
+`cond`, `and`, `or`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.

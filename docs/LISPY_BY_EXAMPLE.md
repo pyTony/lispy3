@@ -9,6 +9,7 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
 - [Getting help inside Lispy](#getting-help-inside-lispy)
 - [Numbers](#numbers)
 - [Strings and characters](#strings-and-characters)
+- [Atoms, symbols and strings](#atoms-symbols-and-strings)
 - [Variables](#variables)
 - [Functions](#functions)
 - [True and false](#true-and-false)
@@ -148,10 +149,67 @@ Turn a number into text with `str`:
     lispy3> (length (str 12345))
     5
 
-**TO BE IMPLEMENTED:** `substring`, `string-ref`, `upcase`/`downcase`, `split`, `string->number`, `list->string` and a `string?` test. Today, work on the character list from `seq`. Character number `k` of a string, using `nth` from [Head and tail recursion](#head-and-tail-recursion):
+**TO BE IMPLEMENTED:** `substring`, `string-ref`, `upcase`/`downcase`, `split`, `string->number` and `list->string`. Today, work on the character list from `seq`. Character number `k` of a string, using `nth` from [Head and tail recursion](#head-and-tail-recursion):
 
     lispy3> (nth (seq "lispy") 1)
     #\i
+
+## Atoms, symbols and strings
+
+Everything in Lispy is either a **list** (or vector or map) or an **atom**. An atom is any single value that is not a collection:
+
+| Atom | Looks like | Evaluates to | Test |
+|------|-----------|--------------|------|
+| number | `42` `3.14` | itself | `number?` |
+| string | `"car"` | itself: the text `car` | `string?` |
+| character | `#\c` | itself | |
+| true / false | `#t` `#f` | itself | |
+| keyword | `:name` | itself | `symbol?` |
+| **symbol** | `car` `x` `my-list` | **the value the name stands for** | `symbol?` |
+
+A **symbol** is a name. Evaluating it looks the name up; quoting it gives you the name itself:
+
+    lispy3> (define x 10)
+    lispy3> x
+    10
+    lispy3> 'x
+    x
+    lispy3> (symbol? 'x)
+    #t
+
+A **string** is text. It never looks anything up and always evaluates to itself, so `"x"` stays the text `x`:
+
+    lispy3> "x"
+    "x"
+    lispy3> (string? "x")
+    #t
+    lispy3> (symbol? "x")
+    #f
+
+In a call `(f a b)` Lispy evaluates `f` and calls the result, so the head must give a function. A symbol such as `car` does; a string does not, it is just text:
+
+    lispy3> ("car" '(1 2))
+    Error: "car" is not a function (a string is data; use (string->symbol ...) to make a name)
+
+To go between the two, convert explicitly, as Scheme does:
+
+    lispy3> (string->symbol "car")
+    car
+    lispy3> (symbol->string 'car)
+    "car"
+    lispy3> (eval (list (string->symbol "car") ''(1 2)))
+    1
+
+or turn a whole piece of text into code with `read`, and run it with `eval`:
+
+    lispy3> (read "(car '(1 2))")
+    (car (quote (1 2)))
+    lispy3> (eval (read "(car '(1 2))"))
+    1
+
+Why not just treat a string at the head of a list as a name? Because then a string would mean text in one place and a name in another, a typo like `("cra" x)` would read as a call to look up, and lists of text such as `("apples" "pears")` could no longer be kept as plain data. Keeping strings as data and converting on purpose is what Scheme, Common Lisp and Clojure all do.
+
+One leftover: `str` turns a value into a **symbol**-like name, not a string, so `(symbol? (str 12))` is `#t` and `(= (str 12) "12")` is `#f`. Use `(symbol->string (str 12))` when you need a real string. **TO BE IMPLEMENTED:** `str` returning a string.
 
 ## Variables
 
@@ -502,7 +560,7 @@ What works today: `quote` gives you code as data, which you can take apart and b
     lispy3> ((eval (make-adder-code 5)) 10)
     15
 
-**TO BE IMPLEMENTED:** `read`, to turn a string such as `"(+ 1 2)"` into code for `eval`.
+`read` turns text into code for `eval`: `(eval (read "(+ 1 2)"))` is `3`. See [Atoms, symbols and strings](#atoms-symbols-and-strings).
 
 A new control form can also be a function that takes its body as a lambda with no parameters, so the body only runs when called:
 

@@ -313,6 +313,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("round", "(round x) - nearest whole number"),
         ("number?", "(number? x) - true for a number"),
         ("symbol?", "(symbol? x) - true for a symbol (and for the text from str)"),
+        ("string?", "(string? x) - true for a string"),
         ("str", "(str x) - x as text"),
         ("math", "every name in Python's math module: sqrt floor fmod log sin cos pi e ... try (help 'sqrt)"),
     ],
@@ -325,6 +326,9 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
         ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
+        ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("string->symbol", "(string->symbol \"car\") - the symbol car"),
+        ("symbol->string", "(symbol->string 'car) - the string \"car\""),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -423,6 +427,10 @@ def standard_env() -> Env:
         'clear-poses': clear_poses,
         'help': lisp_help,
         'eval': lambda exp: eval_exp(exp, global_env),
+        'read': lambda text: parse(text.value if isinstance(text, String) else str(text)),
+        'string->symbol': lambda text: Symbol(text.value if isinstance(text, String) else text),
+        'symbol->string': lambda sym: String(str(sym)),
+        'string?': lambda x: isinstance(x, String),
     }
     
     for key, value in primitives.items():
@@ -554,6 +562,9 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         # 16. (proc args...) -> Standard function application
         case [proc_exp, *args_exp]:
             proc = eval_exp(proc_exp, env)
+            if not callable(proc):
+                hint = " (a string is data; use (string->symbol ...) to make a name)" if isinstance(proc, String) else ""
+                raise TypeError(f"{lisp_str(proc)} is not a function{hint}")
             args = [eval_exp(arg, env) for arg in args_exp]
             return proc(*args)
             
