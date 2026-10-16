@@ -797,6 +797,8 @@ class LispMachine(tk.Tk):
         bar.add_cascade(label="View", menu=view_m)
 
         help_m = tk.Menu(bar, tearoff=0)
+        help_m.add_command(label="Built-in functions", command=lambda: self._run_silent('(help)'))
+        help_m.add_separator()
         help_m.add_command(label="About", command=self._about)
         bar.add_cascade(label="Help", menu=help_m)
 
@@ -1371,6 +1373,7 @@ class LispMachine(tk.Tk):
             "F6  eval whole buffer\n"
             "F7  inspect symbol at cursor\n"
             "F9  eval listener input\n"
+            "(help) in the Listener lists the built-ins\n"
             "Ctrl+Space  complete symbol\n"
             "Ctrl+/      toggle comment\n"
         )

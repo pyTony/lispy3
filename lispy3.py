@@ -264,6 +264,103 @@ def clear_poses() -> None:
     """Forget all remembered poses."""
     _pose_stack.clear()
 
+# --- Built-in help: (help) lists everything, (help 'name) explains one name ---
+HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
+    "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
+        ("define", "(define name value) - give a name to a value or a lambda"),
+        ("set!", "(set! name value) - change an existing variable"),
+        ("lambda", "(lambda [a b] body) - a function; body is ONE expression, use begin for more"),
+        ("if", "(if test then else) - the else part is required"),
+        ("begin", "(begin e1 e2 ...) - run each, return the last value"),
+        ("let", "(let [a 1 b 2] body) - local names for one body"),
+        ("while", "(while test body...) - loop while test is true, no recursion depth used"),
+        ("quote", "(quote x) or 'x - x itself, not evaluated"),
+        ("save", "(save \"name\") - write your definitions to name.lisp"),
+        ("load", "(load \"name\") - run name.lisp"),
+    ],
+    "Lists and sequences": [
+        ("car", "(car lst) - first item; same as first. () for an empty list"),
+        ("first", "(first lst) - first item (the head)"),
+        ("cdr", "(cdr lst) - everything but the first item; same as rest"),
+        ("rest", "(rest lst) - everything but the first item (the tail)"),
+        ("cons", "(cons x lst) - a new list with x in front"),
+        ("list", "(list a b ...) - a list of the values"),
+        ("length", "(length x) - number of items in a list or characters in a string"),
+        ("null?", "(null? lst) - true for the empty list; same as empty?"),
+        ("empty?", "(empty? lst) - true for the empty list"),
+        ("append", "(append a b) - join two lists or two strings"),
+        ("seq", "(seq \"abc\") - a string as a list of characters (#\\a #\\b #\\c)"),
+        ("map", "(map f lst) - a list of (f item) for each item"),
+        ("filter", "(filter f lst) - the items for which (f item) is true"),
+        ("get", "(get map key) - look up a key in a {map}; also (:key map)"),
+    ],
+    "Numbers and comparison": [
+        ("+", "(+ a b) - add; numbers only, exactly two arguments (also plus)"),
+        ("-", "(- a b) - subtract, two arguments"),
+        ("*", "(* a b) - multiply, two arguments"),
+        ("/", "(/ a b) - divide, two arguments, gives a decimal"),
+        ("=", "(= a b) - equal; works on numbers, symbols, strings and characters"),
+        ("<", "(< a b), also > <= >= - compare two values"),
+        ("not", "(not x) - true if x is false, 0 or empty"),
+        ("abs", "(abs x) - absolute value"),
+        ("min", "(min a b ...) - smallest"),
+        ("max", "(max a b ...) - largest"),
+        ("round", "(round x) - nearest whole number"),
+        ("number?", "(number? x) - true for a number"),
+        ("symbol?", "(symbol? x) - true for a symbol (and for the text from str)"),
+        ("str", "(str x) - x as text"),
+        ("math", "every name in Python's math module: sqrt floor fmod log sin cos pi e ... try (help 'sqrt)"),
+    ],
+    "Vectors, time and output": [
+        ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
+        ("vector-ref", "(vector-ref v i) - item i of v"),
+        ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
+        ("clock", "(clock) - seconds as a decimal number, for timing"),
+        ("display", "(display a b ...) - print the values with nothing between them"),
+        ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
+        ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
+    ],
+    "Turtle graphics": [
+        ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
+        ("push-pose", "(push-pose) - remember position, heading and pen"),
+        ("pop-pose", "(pop-pose) - go back to the last remembered pose, without drawing"),
+        ("clear-poses", "(clear-poses) - forget all remembered poses"),
+        ("reinit-turtle", "(reinit-turtle) - reopen a closed turtle window; also reset"),
+    ],
+}
+
+_HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
+_HELP_INDEX.update({'plus': _HELP_INDEX['+'], 'pprint': _HELP_INDEX['pretty-print'],
+                    'reset': _HELP_INDEX['reinit-turtle'], '>': _HELP_INDEX['<'], '<=': _HELP_INDEX['<'],
+                    '>=': _HELP_INDEX['<']})
+
+def lisp_help(*args: Any) -> None:
+    """(help) lists the built-ins; (help 'name) or (help name) explains one of them."""
+    if not args:
+        for topic, entries in HELP_TOPICS.items():
+            print(f"{topic}:")
+            print("  " + " ".join(name for name, _ in entries))
+        print("More: docs/QUICK_START.md, docs/LISPY_BY_EXAMPLE.md, docs/QUICK_REFERENCE.md")
+        return
+    what = args[0]
+    if isinstance(what, Procedure):
+        if what.native_fn is None:
+            print(pretty_print(what, width=60))
+            return
+        name = what.name
+    else:
+        name = what.value if isinstance(what, String) else str(what)
+    if name in _HELP_INDEX:
+        print(_HELP_INDEX[name])
+        return
+    for module in (math, turtle):
+        obj = getattr(module, name, None)
+        doc = obj.__doc__ if callable(obj) else None
+        if doc:
+            print(f"({name} ...) - from Python's {module.__name__}: {doc.strip().splitlines()[0]}")
+            return
+    print(f"No help for {name}. Type (help) for the list of built-ins.")
+
 # --- Standard Environment Definitions ---
 def standard_env() -> Env:
     """Create a global environment where ALL operations are wrapped inside Procedure objects."""
@@ -288,19 +385,20 @@ def standard_env() -> Env:
         'max':   max,
         'round': round,
         'append': lambda x, y: String((x.value if isinstance(x, String) else x) + (y.value if isinstance(y, String) else y)) if isinstance(x, (str, String)) and isinstance(y, (str, String)) else op.add(x, y),
-        'car': lambda x: x if x else [],
+        'car': lambda x: x[0] if x else [],
         'cdr': lambda x: x[1:],
         'cons': lambda x, y: [x] + y,
-        'length': len,
+        'length': lambda x: len(x.value) if isinstance(x, String) else len(x),
         'list': lambda *x: list(x),
         'null?': lambda x: x == [],
+        'not': lambda x: not x,
         'number?': lambda x: isinstance(x, (int, float)),
         'symbol?': lambda x: isinstance(x, str),
         'seq': lambda x: [Char(c) for c in x.value] if isinstance(x, String) else ([Char(c) for c in x] if isinstance(x, str) else list(x)),
         'str': str,
         'map': lambda proc, items: list(map(proc, items)),
         'filter': lambda proc, items: list(filter(proc, items)),
-        'first': lambda x: x if x else [],
+        'first': lambda x: x[0] if x else [],
         'rest': lambda x: x[1:],
         'empty?': lambda x: x == [],
         'get': lambda collection, key: collection.get(key, []) if isinstance(collection, dict) else [],
@@ -313,10 +411,11 @@ def standard_env() -> Env:
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
         'clock': time.perf_counter,          # seconds as a float
-        'display': lambda *x: print(*x, sep=''),
+        'display': lambda *x: print(*(a if isinstance(a, (str, String, Char)) else lisp_str(a) for a in x), sep=''),
         'push-pose': push_pose,
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
+        'help': lisp_help,
     }
     
     for key, value in primitives.items():
@@ -546,6 +645,9 @@ COLOR_PROMPT = "\033[94m"   # Bright Blue for 'lis.py>'
 COLOR_RESULT = "\033[92m"   # Bright Green for successful output
 COLOR_ERROR = "\033[91m"    # Bright Red for errors
 COLOR_INFO = "\033[96m"     # Cyan for greeting/status text
+RECURSION_HINT = ("recursion too deep (a few hundred calls is the limit). "
+                  "Use while, map or filter for long lists and big counts.")
+
 def count_balance(text: str) -> int:
     """Return the balance of opening vs closing brackets, ignoring strings and comments."""
     # Strip comments first
@@ -590,7 +692,7 @@ def lisp_str(exp: Any) -> str:
 def repl(prompt: str = "lispy3> ") -> None:
     """An interactive Read-Eval-Print Loop showing open bracket count."""
     print(f"{COLOR_INFO}Modern Python 3 Lispy Interpreter Started.{COLOR_RESET}")
-    print(f"{COLOR_INFO}Type 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}\n")
+    print(f"{COLOR_INFO}Type (help) for the built-ins, 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}\n")
     
     env = global_env
     colored_prompt = f"{COLOR_PROMPT}{prompt}{COLOR_RESET}"
@@ -635,6 +737,9 @@ def repl(prompt: str = "lispy3> ") -> None:
                 IndexError, KeyError) as e:
             buffer = ""
             print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}")
+        except RecursionError:
+            buffer = ""
+            print(f"{COLOR_ERROR}Error: {RECURSION_HINT}{COLOR_RESET}")
         except (KeyboardInterrupt, EOFError):
             print(f"\n{COLOR_INFO}Goodbye!{COLOR_RESET}")
             break
@@ -649,6 +754,8 @@ def run_file(filename: str) -> bool:
     except (SyntaxError, NameError, TypeError, ZeroDivisionError,
             FileNotFoundError, IndexError, KeyError) as e:
         print(f"{COLOR_ERROR}Error: {e}{COLOR_RESET}", file=sys.stderr)
+    except RecursionError:
+        print(f"{COLOR_ERROR}Error: {RECURSION_HINT}{COLOR_RESET}", file=sys.stderr)
     return False
 
 def hold_turtle_window() -> None:
