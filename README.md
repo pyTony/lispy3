@@ -132,9 +132,10 @@ A program file is ordinary Lisp code that runs from top to bottom, like a Python
 | `(make-vector n fill)` | a vector of `n` items, all `fill` (0 if left out); items are numbered from 0 |
 | `(vector-ref v i)` | item `i` of vector `v` |
 | `(vector-set! v i x)` | put `x` into item `i` of `v` |
-| `(clock)` | seconds as a decimal number, for timing |
+| `(clock)` | seconds since Lispy started, as a decimal number, for timing |
 | `(clock->string t)` | the (clock) value `t` as local date and time, like `"2026-10-17 21:53:20"`; leave `t` out for now; `(clock->string t "%H:%M")` takes a format |
 | `(get-universal-time)` | seconds since 1900-01-01 GMT, as in Common Lisp |
+| `(universal-time->string [ut] [format])` | a universal time (default now) as local `"2026-10-17 22:03:00"`; format like `"%H:%M"` |
 | `(get-decoded-time)` | now as `(second minute hour date month year day-of-week daylight-p zone)` |
 | `(decode-universal-time ut [zone])` | `ut` as that list; day 0 is Monday, `zone` is hours west of Greenwich |
 | `(encode-universal-time s m h date month year [zone])` | back to a universal time |

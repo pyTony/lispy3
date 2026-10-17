@@ -196,9 +196,10 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
         ("vector-ref", "(vector-ref v i) - item i of v"),
         ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
-        ("clock", "(clock) - seconds as a decimal number, for timing"),
+        ("clock", "(clock) - seconds since Lispy started, as a decimal number, for timing"),
         ("clock->string", "(clock->string) - the date and time now, like \"2026-10-17 21:53:20\"; (clock->string t) for a (clock) value t; (clock->string t \"%H:%M\") with a format"),
         ("get-universal-time", "(get-universal-time) - whole seconds since 1900-01-01 GMT (Common Lisp's universal time)"),
+        ("universal-time->string", "(universal-time->string) - the date and time now, like \"2026-10-17 22:03:00\"; (universal-time->string ut) for a universal time; (universal-time->string ut \"%H:%M\") with a format"),
         ("get-decoded-time", "(get-decoded-time) - now as (second minute hour date month year day-of-week daylight-p zone)"),
         ("decode-universal-time", "(decode-universal-time ut) or (decode-universal-time ut zone) - ut as (second minute hour date month year day-of-week daylight-p zone); day 0 is Monday, zone is hours west of Greenwich"),
         ("encode-universal-time", "(encode-universal-time second minute hour date month year) or ... zone) - back to a universal time"),
@@ -538,13 +539,26 @@ def _get_internal_run_time() -> int:
     """(get-internal-run-time) - processor time used, in internal-time-units-per-second units."""
     return int(time.process_time() * INTERNAL_TIME_UNITS_PER_SECOND)
 
+_RUN_START = time.perf_counter()
+
+def _clock() -> float:
+    """(clock) - seconds since Lispy started, for timing."""
+    return time.perf_counter() - _RUN_START
+
 def _clock_to_string(t: Any = None, fmt: Any = None) -> String:
     """(clock->string), (clock->string t) or (clock->string t "%H:%M") - a (clock) reading as local date and time."""
     if isinstance(t, (String, str)):
         t, fmt = None, t
-    now = time.perf_counter() if t is None else t
-    # (clock) counts from an arbitrary start, so shift it onto the wall clock
-    stamp = time.time() - (time.perf_counter() - now)
+    now = _clock() if t is None else t
+    stamp = time.time() - (_clock() - now)
+    pattern = "%Y-%m-%d %H:%M:%S" if fmt is None else _unwrap_str(fmt)
+    return String(time.strftime(pattern, time.localtime(stamp)))
+
+def _universal_time_to_string(ut: Any = None, fmt: Any = None) -> String:
+    """(universal-time->string), (universal-time->string ut) or (universal-time->string ut "%H:%M") - local date and time."""
+    if isinstance(ut, (String, str)):
+        ut, fmt = None, ut
+    stamp = time.time() if ut is None else ut - _UNIVERSAL_EPOCH
     pattern = "%Y-%m-%d %H:%M:%S" if fmt is None else _unwrap_str(fmt)
     return String(time.strftime(pattern, time.localtime(stamp)))
 
@@ -799,8 +813,9 @@ def standard_env() -> Env:
         'make-vector': lambda n, fill=0: [fill] * int(n),
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
-        'clock': time.perf_counter,
+        'clock': _clock,
         'clock->string': _clock_to_string,
+        'universal-time->string': _universal_time_to_string,
         'get-universal-time': _get_universal_time,
         'get-decoded-time': lambda: _decode_universal_time(_get_universal_time()),
         'decode-universal-time': _decode_universal_time,

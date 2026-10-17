@@ -296,6 +296,16 @@ class RestoredFeaturesTest(LispyTestCase):
         self.assertGreaterEqual(self.ev("(- (get-internal-real-time) t0)"), 15)
         self.assertGreaterEqual(self.ev("(get-internal-run-time)"), 0)
 
+    def test_universal_time_to_string(self):
+        self.assertRegex(self.ev("(universal-time->string)").value, r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$")
+        self.assertEqual(self.ev('(universal-time->string "%Y")').value, time.strftime("%Y"))
+        ut = self.ev("(encode-universal-time 5 4 3 2 1 2030)")
+        self.assertEqual(self.ev("(universal-time->string %d)" % ut).value, "2030-01-02 03:04:05")
+        self.assertEqual(self.ev('(universal-time->string %d "%%d.%%m.%%Y")' % ut).value, "02.01.2030")
+
+    def test_clock_counts_from_start(self):
+        self.assertLess(self.ev("(clock)"), time.perf_counter())
+
     def test_display_takes_several_values_and_ends_the_line(self):
         self.assertEqual(self.output('(display "a" 1 "b")'), "a1b\n")
 
