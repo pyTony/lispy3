@@ -5,6 +5,7 @@ import itertools
 import math
 import operator as op
 import re
+import shutil
 import sys
 import time
 import turtle
@@ -260,9 +261,11 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
         if exp.native_fn is not None:
             return exp.name if exp.name else "<native-function>"
         parms = '[' + ' '.join(exp.parms) + ']' if isinstance(exp.parms, (list, tuple)) else str(exp.parms)
-        body_s = pretty_print(exp.body, indent + 1, width).lstrip()
         if getattr(exp, 'name', None):
+            # the body sits two levels in, under (define name / (lambda ...
+            body_s = pretty_print(exp.body, indent + 2, width).lstrip()
             return f"(define {exp.name}\n{pad}  (lambda {parms}\n{pad}    {body_s}))"
+        body_s = pretty_print(exp.body, indent + 1, width).lstrip()
         return f"(lambda {parms}\n{pad}  {body_s})"
 
     if type_name in ('String', 'Char'):
@@ -1439,6 +1442,13 @@ def setup_completion() -> bool:
         readline.parse_and_bind("tab: complete")
     return True
 
+def repl_str(val: Any, width: int | None = None) -> str:
+    """A REPL result: on one line when it fits the terminal, otherwise pretty-printed."""
+    if width is None:
+        width = shutil.get_terminal_size().columns - 1
+    flat = lisp_str(val)
+    return flat if len(flat) <= width else pretty_print(val, width=width)
+
 def repl(prompt: str = "lispy3> ") -> None:
     """An interactive Read-Eval-Print Loop showing open bracket count."""
     completion = setup_completion()
@@ -1485,7 +1495,7 @@ def repl(prompt: str = "lispy3> ") -> None:
             val = eval_exp(ast, env)
             
             if val is not None:
-                print(f"{COLOR_RESULT}{lisp_str(val)}{COLOR_RESET}")
+                print(f"{COLOR_RESULT}{repl_str(val)}{COLOR_RESET}")
         except turtle.Terminator:
             buffer = ""
             print(f"{COLOR_ERROR}Error: Turtle window was closed. Call (reinit-turtle) to reopen.{COLOR_RESET}")

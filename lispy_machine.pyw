@@ -1569,8 +1569,8 @@ class LispMachine(tk.Tk):
         except Exception:
             val_str = repr(val)
         if plain:
-            if val is not None:
-                self.listener_write(val_str + "\n", "code")
+            if val is not None:                  # long values are pretty-printed to the Listener width
+                self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
         elif show_value:
             self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
         try:
