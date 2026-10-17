@@ -66,11 +66,61 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
     lispy3> (max 3 9 2)
     9
 
-Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log`, `sin`, `cos`, `fmod`, `pi`, `e` and so on.
+Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log`, `sin`, `cos`, `fmod`, `gcd`, `lcm`, `isqrt`, `factorial`, `pi`, `e` and so on.
 
-`+ - * /` take exactly two numbers, so add three with `(+ (+ 1 2) 3)`. **TO BE IMPLEMENTED:** `(+ 1 2 3)` with any number of arguments.
+`+ - * /` and the comparisons take any number of values:
 
-**TO BE IMPLEMENTED:** `modulo` / `quotient` on whole numbers. Today use `(fmod a b)`, which gives a decimal such as `1.0`.
+    lispy3> (+ 1 2 3 4)
+    10
+    lispy3> (< 1 2 3)
+    #t
+
+### Whole numbers
+
+Whole numbers have no size limit, and these keep them whole:
+
+    lispy3> (div 17 5)
+    3
+    lispy3> (mod 17 5)
+    2
+    lispy3> (divmod 17 5)
+    (3 2)
+    lispy3> (expt 2 100)
+    1267650600228229401496703205376
+    lispy3> (divmod (expt 10 30) 7)
+    (142857142857142857142857142857 1)
+
+`div` and `mod` work like Python's `//` and `%`: `div` rounds down, and `mod` has the sign of the divisor. Scheme's `quotient` and `remainder` round toward zero instead, so they differ for negative numbers; `modulo` is the same as `mod`:
+
+    lispy3> (divmod -17 5)
+    (-4 3)
+    lispy3> (quotient -17 5)
+    -3
+    lispy3> (remainder -17 5)
+    -2
+
+Tests and conversions:
+
+    lispy3> (even? 10)
+    #t
+    lispy3> (odd? 7)
+    #t
+    lispy3> (zero? 0)
+    #t
+    lispy3> (integer? 3.0)
+    #t
+    lispy3> (exact 3.0)
+    3
+    lispy3> (inexact 3)
+    3.0
+    lispy3> (number->string 255 16)
+    "ff"
+    lispy3> (string->number "ff" 16)
+    255
+    lispy3> (gcd 12 18)
+    6
+
+`/` always gives a decimal, `(/ 6 3)` is `2.0`; use `div` when you want a whole number.
 
 ## Strings and characters
 
@@ -409,7 +459,7 @@ Recursion on numbers works the same way:
 
     lispy3> (map (lambda [x] (* x x)) (range 1 6))
     (1 4 9 16 25)
-    lispy3> (filter (lambda [x] (= (fmod x 2) 0)) (range 1 11))
+    lispy3> (filter even? (range 1 11))
     (2 4 6 8 10)
     lispy3> (map (lambda [c] (= c #\space)) (seq "a b"))
     (#f #t #f)
@@ -466,7 +516,7 @@ Fibonacci, loop style, with local variables:
 
 Items are numbered from 0. `sieve_lispy3.lisp` uses these for the prime sieve.
 
-`pi_digits.lisp` uses a vector and `while` loops to print the first n decimals of pi with a spigot algorithm, which needs only small whole numbers:
+`pi_digits.lisp` uses a vector, `while` loops and `divmod` to print the first n decimals of pi with a spigot algorithm, which needs only whole numbers:
 
     $ python lispy3.py pi_digits.lisp
     3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
@@ -599,7 +649,7 @@ Lispy grew out of Peter Norvig's [`lis.py`](https://norvig.com/lispy.html), like
 | `(and a b)` / `(or a b)` | `(if a b a)` / `(if a a b)` |
 | `#t` / `#f` | `#t` / `#f` (the same) |
 | `(+ a b c)` | `(+ (+ a b) c)` |
-| `(modulo a b)`, `(quotient a b)` | `(fmod a b)`, `(floor (/ a b))` |
+| `(modulo a b)`, `(quotient a b)`, `(remainder a b)` | the same; also `div`, `mod`, `divmod` |
 | `(equal? a b)` | `(= a b)` |
 | `(apply f lst)` | **TO BE IMPLEMENTED** |
 | deep tail recursion | `while`, `map`, `filter` (no tail-call optimisation yet) |
