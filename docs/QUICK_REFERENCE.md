@@ -84,6 +84,7 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 | `(vector-ref v i)` | item `i`, counting from 0 |
 | `(vector-set! v i x)` | store `x` at `i` |
 | `(clock)` | seconds, for timing |
+| `(clock->string)` / `(clock->string t)` | date and time now, or of a `(clock)` value `t`, like `"2026-10-17 21:53:20"`; add a format such as `"%H:%M"` |
 | `(display a b ...)` | print values side by side, then a new line |
 | `(pretty-print x)` / `(pprint x)` | print indented |
 | `(help)` / `(help 'name)` | list built-ins / explain one |

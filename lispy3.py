@@ -196,6 +196,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("vector-ref", "(vector-ref v i) - item i of v"),
         ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
         ("clock", "(clock) - seconds as a decimal number, for timing"),
+        ("clock->string", "(clock->string) - the date and time now, like \"2026-10-17 21:53:20\"; (clock->string t) for a (clock) value t; (clock->string t \"%H:%M\") with a format"),
         ("display", "(display a b ...) - print the values with nothing between them, then a new line"),
         ("print", "(print a b ...) - print the values with spaces between them"),
         ("newline", "(newline) - print an empty line"),
@@ -481,6 +482,16 @@ def _exact(x: Number) -> int:
 
 _DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 
+def _clock_to_string(t: Any = None, fmt: Any = None) -> String:
+    """(clock->string), (clock->string t) or (clock->string t "%H:%M") - a (clock) reading as local date and time."""
+    if isinstance(t, (String, str)):
+        t, fmt = None, t
+    now = time.perf_counter() if t is None else t
+    # (clock) counts from an arbitrary start, so shift it onto the wall clock
+    stamp = time.time() - (time.perf_counter() - now)
+    pattern = "%Y-%m-%d %H:%M:%S" if fmt is None else _unwrap_str(fmt)
+    return String(time.strftime(pattern, time.localtime(stamp)))
+
 def _number_to_string(n: Number, base: int = 10) -> String:
     """(number->string n) or (number->string n base) for a whole number in base 2 to 36."""
     if base == 10:
@@ -733,6 +744,7 @@ def standard_env() -> Env:
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
         'clock': time.perf_counter,
+        'clock->string': _clock_to_string,
         'newline': lambda: print(),
         'pretty-print': lambda exp: print(pretty_print(exp, width=40)),
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
