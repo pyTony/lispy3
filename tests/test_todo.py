@@ -84,6 +84,21 @@ TODO_EXAMPLES = {
         ("(modulo (expt 10 40) 7)", str(10 ** 40 % 7)),
         ("(quotient 7 0)", "!ZeroDivisionError"),
     ],
+    "More whole-number procedures": [
+        ("(div 17 5)", "3"), ("(div -17 5)", "-4"),          # rounds down, like Python's //
+        ("(mod -17 5)", "3"), ("(mod 17 -5)", "-3"),          # sign of the divisor, like Python's %
+        ("(divmod 17 5)", "(3 2)"), ("(divmod -17 5)", "(-4 3)"),
+        ("(divmod (expt 10 30) 7)", f"({10 ** 30 // 7} {10 ** 30 % 7})"),
+        ("(remainder -17 5)", "-2"), ("(remainder 17 -5)", "2"),  # sign of the dividend
+        ("(remainder 7.5 2)", "1.5"),
+        ("(even? 10)", "#t"), ("(odd? -3)", "#t"), ("(even? 2.5)", "!TypeError"),
+        ("(zero? 0.0)", "#t"), ("(positive? -1)", "#f"), ("(negative? -1)", "#t"),
+        ("(integer? 3)", "#t"), ("(integer? 3.0)", "#t"), ("(integer? 3.5)", "#f"), ("(integer? #t)", "#f"),
+        ("(exact 3.0)", "3"), ("(exact 3.5)", "!TypeError"), ("(inexact 3)", "3.0"),
+        ("(number->string 255 16)", '"ff"'), ("(number->string -10 2)", '"-1010"'),
+        ("(string->number (number->string 12345 36) 36)", "12345"),
+        ("(div 1 0)", "!ZeroDivisionError"),
+    ],
     # --- Lists
     "`reverse`, `nth`, `last`, `range`": [
         ("(reverse '(1 2 3))", "(3 2 1)"), ("(reverse '())", "()"),

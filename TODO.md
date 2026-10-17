@@ -25,6 +25,7 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 - [x] `+ - * /` with any number of arguments, e.g. `(+ 1 2 3)` *(ref: mylis_3 `environ.py`)*
 - [x] `<`, `=`, ... comparing more than two values, e.g. `(< 1 2 3)` *(ref: mylis_3 `variadic_comparison`)*
 - [x] `modulo` and `quotient` on whole numbers (today only `fmod`, which gives a decimal) *(ref: mylis_3 `environ.py`)*
+- [x] More whole-number procedures: `div`, `mod`, `divmod`, `remainder`, `even?`, `odd?`, `zero?`, `positive?`, `negative?`, `integer?`, `exact`, `inexact`, `number->string` with a base
 
 ## Lists
 
