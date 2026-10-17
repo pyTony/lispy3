@@ -27,7 +27,9 @@ import contextlib
 import json
 import os
 import re
+import subprocess
 import sys
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
@@ -102,6 +104,37 @@ def user_defined_names():
     return {k for k, v in L.global_env.items()
             if k not in BUILTIN_NAMES
             or (isinstance(v, L.Procedure) and v.native_fn is None)}
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _git(folder, *args):
+    """Run git in `folder` with no console window and no password prompt."""
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    return subprocess.run(["git", *args], cwd=folder, env=env, capture_output=True,
+                          text=True, timeout=120, creationflags=flags)
+
+def git_pull(folder: str = APP_DIR):
+    """Run `git pull --ff-only` in `folder`. Return (result, git's output).
+
+    result is "updated", "current" (nothing new) or "failed". --ff-only never
+    makes a merge commit, so git cannot stop to open an editor; local changes
+    that would be overwritten make git refuse, and its message names them.
+    """
+    try:
+        before = _git(folder, "rev-parse", "HEAD").stdout.strip()
+        done = _git(folder, "pull", "--ff-only")
+        after = _git(folder, "rev-parse", "HEAD").stdout.strip()
+    except FileNotFoundError:
+        return "failed", "git is not installed, or not on PATH."
+    except subprocess.TimeoutExpired:
+        return "failed", "git pull did not finish in 2 minutes."
+    except OSError as e:
+        return "failed", f"Could not run git: {e}"
+    output = (done.stdout + done.stderr).strip()
+    if done.returncode != 0:
+        return "failed", output
+    return ("updated" if before != after else "current"), output
 
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
@@ -914,6 +947,7 @@ class LispMachine(tk.Tk):
         help_m = tk.Menu(bar, tearoff=0)
         help_m.add_command(label="Built-in functions", command=lambda: self._run_silent('(help)'))
         help_m.add_separator()
+        help_m.add_command(label="Update", command=self._update)
         help_m.add_command(label="About", command=self._about)
         bar.add_cascade(label="Help", menu=help_m)
 
@@ -1788,6 +1822,36 @@ class LispMachine(tk.Tk):
         tab.text.tag_remove("search_all",     "1.0", "end")
         tab.text.tag_remove("search_current", "1.0", "end")
         tab.text.tag_remove("sel",            "1.0", "end")
+
+    def _update(self):
+        """Help > Update: git pull in the program's folder, without blocking the window."""
+        dirty = [t.name for t in self.tabs.values() if t.dirty]
+        if dirty and not messagebox.askyesno(
+            "Unsaved buffers",
+            "These buffers have unsaved changes:\n  " + "\n  ".join(dirty) +
+            "\n\nThe update needs a restart afterwards, so save them first."
+            "\nUpdate anyway?"
+        ):
+            return
+        self.listener_write(f";; Updating: git pull in {APP_DIR}\n", "info")
+
+        def work():
+            result, output = git_pull()
+            self.after(0, self._update_done, result, output)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_done(self, result: str, output: str):
+        if output:
+            self.listener_write(output + "\n", "error" if result == "failed" else "info")
+        if result == "failed":
+            messagebox.showerror("Update failed", output or "git pull failed.")
+        elif result == "current":
+            messagebox.showinfo("Update", "Lispy3 is already up to date.")
+        else:
+            messagebox.showinfo("Update", "Lispy3 was updated.\n\n"
+                                "Save your work and restart Lispy3 Machine "
+                                "to use the new version.")
 
     def _about(self):
         messagebox.showinfo(
