@@ -240,7 +240,7 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 ```
 
 - **Buffers** — one tab per file. The `●` marker shows unsaved changes.
-- **Inspector** — the pretty-printed value of the last evaluation, or of a variable you just defined. It scrolls both ways, and the dividers between sidebar and editor and between Buffers and Inspector can be dragged; the pretty-printer re-wraps to the Inspector's width.
+- **Inspector** — a list of everything you have defined (built-ins left out), each with a short preview of its value; click a name to see its value pretty-printed below the list. The lower part also shows the pretty-printed value of the last evaluation, or of a variable you just defined; the divider between list and value can be dragged. It scrolls both ways, and the dividers between sidebar and editor and between Buffers and Inspector can be dragged; the pretty-printer re-wraps to the Inspector's width.
 - **Listener** — a persistent REPL at the bottom, exactly like a Genera Listener.
 - **Status bar** — the current "package" (`USER`, matching the interpreter's single `global_env`) and the current buffer name.
 

@@ -197,6 +197,20 @@ def listener_to_code(log: str) -> str:
             out.append(";; " + line)
     return "\n".join(out) + "\n" if out else ""
 
+def preview(val, limit: int = 40) -> str:
+    """A value on one short line for the Inspector's list."""
+    try:
+        text = L.lisp_str(val)
+    except Exception:                                # noqa: BLE001
+        text = repr(val)
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit - 3] + "..."
+
+def inspector_items(env=None):
+    """The Inspector's list: [(name, preview), ...] of the user's definitions, sorted."""
+    env = L.global_env if env is None else env
+    return [(name, preview(env[name])) for name in sorted(user_defined_names()) if name in env]
+
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
 FONT_UI        = ("Segoe UI", 9)
@@ -925,6 +939,7 @@ class LispMachine(tk.Tk):
             self.listener_write(f";; Could not open {err}\n", "error")
         self._apply_repl_mode()
         self._focus_listener()
+        self.refresh_definitions()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -963,6 +978,10 @@ class LispMachine(tk.Tk):
                   foreground=[("selected", "#ffffff")])
         style.configure("TPanedwindow", background=COLORS["bg"])
         style.configure("Sash", sashthickness=4, gripcount=0)
+        style.configure("Inspector.Treeview", background=COLORS["bg"], fieldbackground=COLORS["bg"],
+                        foreground=COLORS["side_fg"], font=FONT_MONO, borderwidth=0, rowheight=20)
+        style.map("Inspector.Treeview", background=[("selected", COLORS["selection"])],
+                  foreground=[("selected", "#ffffff")])
 
     # ---------- menus ----------
     def _build_menu(self):
@@ -1107,8 +1126,25 @@ class LispMachine(tk.Tk):
         tk.Label(insp_outer, text="INSPECTOR", bg=COLORS["side_bg"], fg="#888",
                  font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x")
 
-        insp_frame = tk.Frame(insp_outer, bg=COLORS["side_bg"])
-        insp_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        # Your definitions above, the chosen one's value below
+        insp_pane = tk.PanedWindow(insp_outer, orient="vertical", bg=COLORS["side_bg"],
+                                   sashwidth=5, sashrelief="flat", opaqueresize=True)
+        insp_pane.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+        tree_frame = tk.Frame(insp_pane, bg=COLORS["side_bg"])
+        insp_pane.add(tree_frame, minsize=40, height=140, stretch="never")
+        self.def_tree = ttk.Treeview(tree_frame, columns=("value",), show="tree",
+                                     style="Inspector.Treeview", selectmode="browse")
+        self.def_tree.column("#0", width=110, stretch=False)
+        self.def_tree.column("value", width=160, stretch=True)
+        tree_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.def_tree.yview)
+        self.def_tree.configure(yscrollcommand=tree_y.set)
+        tree_y.pack(side="right", fill="y")
+        self.def_tree.pack(side="left", fill="both", expand=True)
+        self.def_tree.bind("<<TreeviewSelect>>", self._on_definition_select)
+        self._tree_job = None
+
+        insp_frame = tk.Frame(insp_pane, bg=COLORS["side_bg"])
+        insp_pane.add(insp_frame, minsize=40, stretch="always")
         insp_y = ttk.Scrollbar(insp_frame, orient="vertical")
         insp_x = ttk.Scrollbar(insp_frame, orient="horizontal")
         self.inspector = tk.Text(
@@ -1899,14 +1935,39 @@ class LispMachine(tk.Tk):
     # Inspector
     # =========================================================================
     def set_inspector(self, text: str):
+        self._show_inspected(text)
+        # Every evaluation ends here; recolour so newly defined names show up,
+        # and list them in the Inspector.
+        for tab in self.tabs.values():
+            tab._schedule_highlight()
+        if self._tree_job is None:
+            self._tree_job = self.after_idle(self.refresh_definitions)
+
+    def _show_inspected(self, text: str):
         self.inspector.configure(state="normal")
         self.inspector.delete("1.0", "end")
         self.inspector.insert("1.0", text)
         color_code(self.inspector, "1.0", text)
         self.inspector.configure(state="disabled")
-        # Every evaluation ends here; recolour so newly defined names show up.
-        for tab in self.tabs.values():
-            tab._schedule_highlight()
+
+    def refresh_definitions(self):
+        """Rebuild the Inspector's list of definitions."""
+        self._tree_job = None
+        tree = self.def_tree
+        tree.delete(*tree.get_children())
+        for name, value in inspector_items():
+            tree.insert("", "end", iid=name, text=name, values=(value,))
+
+    def _on_definition_select(self, event=None):
+        """Clicking a definition shows its value, pretty-printed, below the list."""
+        sel = self.def_tree.selection()
+        if not sel or sel[0] not in L.global_env:
+            return
+        name, val = sel[0], L.global_env[sel[0]]
+        text = L.pretty_print(val, width=self._inspector_cols())
+        if not (type(val).__name__ == 'Procedure' and text.startswith("(define")):
+            text = f"{name} =\n{text}"
+        self._show_inspected(text)
 
     # =========================================================================
     # Misc
