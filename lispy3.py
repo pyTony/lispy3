@@ -1332,13 +1332,64 @@ def lisp_str(exp: Any) -> str:
 RUNTIME_ERRORS = (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotFoundError,
                   LispyError, ValueError, IndexError, KeyError, AttributeError)
 
+# --- Tab completion ---
+# Characters that end a name when completing: brackets, quotes, spaces and comments.
+COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
+
+def completion_candidates(env: 'Env' = global_env) -> set[str]:
+    """Every name worth completing: special forms, global names and the :keywords used in global maps."""
+    names = set(SPECIAL_FORMS) | {'exit'}
+    names.update(k for k in env if not k.startswith('_'))
+    for value in list(env.values()):
+        if isinstance(value, dict):
+            names.update(k for k in value if isinstance(k, str) and k.startswith(':'))
+    return names
+
+def complete_names(prefix: str, env: 'Env' = global_env) -> list[str]:
+    """The sorted names that start with `prefix`, e.g. "str" gives ["str", "string->symbol", ...]."""
+    return sorted(n for n in completion_candidates(env) if n.startswith(prefix))
+
+def setup_completion() -> bool:
+    """Turn on Tab completion and line history in the REPL. Returns False when readline is missing.
+
+    readline comes with Python on Linux and macOS; on Windows install it with
+    `pip install pyreadline3`.
+    """
+    try:
+        import readline
+    except ImportError:
+        return False
+    matches: list[str] = []
+
+    def completer(text: str, state: int) -> str | None:
+        nonlocal matches
+        if state == 0:
+            matches = complete_names(text)
+        return matches[state] if state < len(matches) else None
+
+    readline.set_completer(completer)
+    readline.set_completer_delims(COMPLETION_DELIMS)
+    if 'libedit' in (getattr(readline, '__doc__', '') or ''):
+        readline.parse_and_bind("bind ^I rl_complete")   # macOS
+    else:
+        readline.parse_and_bind("tab: complete")
+    return True
+
 def repl(prompt: str = "lispy3> ") -> None:
     """An interactive Read-Eval-Print Loop showing open bracket count."""
+    completion = setup_completion()
     print(f"{COLOR_INFO}Modern Python 3 Lispy Interpreter Started.{COLOR_RESET}")
-    print(f"{COLOR_INFO}Type (help) for the built-ins, 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}\n")
+    print(f"{COLOR_INFO}Type (help) for the built-ins, 'exit' to quit. Unclosed paren depth is shown in prompt.{COLOR_RESET}")
+    if completion:
+        print(f"{COLOR_INFO}Tab completes a name or :keyword.{COLOR_RESET}\n")
+    else:
+        print(f"{COLOR_INFO}For Tab completion: pip install pyreadline3{COLOR_RESET}\n")
     
     env = global_env
-    colored_prompt = f"{COLOR_PROMPT}{prompt}{COLOR_RESET}"
+    # readline must be told the colour codes take no room, or long lines wrap wrongly
+    hide = ("\001", "\002") if completion and sys.platform != "win32" else ("", "")
+    color_prompt, color_reset = f"{hide[0]}{COLOR_PROMPT}{hide[1]}", f"{hide[0]}{COLOR_RESET}{hide[1]}"
+    colored_prompt = f"{color_prompt}{prompt}{color_reset}"
     
     buffer = ""
     
@@ -1347,7 +1398,7 @@ def repl(prompt: str = "lispy3> ") -> None:
             depth = count_balance(buffer) if buffer else 0
             
             if depth > 0:
-                current_prompt = f"{COLOR_PROMPT}... ({depth})> {COLOR_RESET}"
+                current_prompt = f"{color_prompt}... ({depth})> {color_reset}"
             else:
                 current_prompt = colored_prompt
 
