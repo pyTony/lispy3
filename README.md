@@ -118,6 +118,8 @@ Run the interpreter directly using Python 3:
 
 (`-i` may also come after the file name.)
 
+In the REPL, `Tab` completes the name you are typing: built-ins, special forms such as `define` and `lambda`, your own definitions, and the `:keywords` of maps you have defined. Press it twice to list every choice. `↑` / `↓` bring back earlier lines. This uses Python's `readline`, which Linux and macOS have; on Windows install it once with `pip install pyreadline3` (the REPL says so at start-up when it is missing).
+
 A program file is ordinary Lisp code that runs from top to bottom, like a Python script. A `;` starts a comment. `(load "other")` runs another file first; the `.lisp` ending is optional. If the program drew with turtle graphics, the window stays open until you close it (not when you use `-i`, where you get the prompt instead).
 
 ---
@@ -249,7 +251,7 @@ The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `ic
 | `Ctrl+F` | Open Find |
 | `Ctrl+H` | Open Find & Replace |
 | `F3` / `Shift+F3` | Next / previous match |
-| `Ctrl+Space` | Complete a symbol (builtins + every `define` in the buffer) |
+| `Ctrl+Space` | Complete a symbol (builtins, special forms, `:keywords` + every `define` in the buffer) |
 | `Ctrl+/` | Toggle comment on the selected lines |
 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` | New / Open / Save / Save As |
 | `Ctrl+W` | Close buffer |
@@ -260,6 +262,8 @@ The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `ic
 ### Buffers and the Listener
 
 The Listener is a real REPL backed by the interpreter's `global_env`. It supports `↑` / `↓` history, coloured prompts (`USER>`), coloured results, and coloured errors. Typing `exit` closes the editor.
+
+**Plain lispy3 REPL.** Tick **View → Plain lispy3 REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener behaves like `python lispy3.py` while still sharing the editor's `global_env`: the prompt is `lispy3>`, an unfinished form is not closed for you but continued on the next line under a `... (1)>` prompt, `Tab` completes like readline (the shared start, then the list of choices), `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`). The choice is remembered in `~/.lispy3_machine.json`; untick it to get the `USER>` Listener back.
 
 F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
 

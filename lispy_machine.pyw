@@ -10,17 +10,21 @@ Features
   * F6 / Ctrl+Shift+Enter : evaluate whole buffer
   * F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
+  * View > Plain lispy3 REPL: the Listener behaves like `python lispy3.py`
+    (lispy3> prompt, multi-line input, Tab completion)
   * Paren matching, auto-indent, symbol completion (Ctrl+Space)
   * Open / Save / Save-As / Close buffers
   * Menu + status bar showing the current "package" (USER) and buffer
 
-Run:  python lispy_machine.pyw [file.lisp ...]
+Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
+      --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
       Each file named on the command line opens in its own buffer instead of
       the welcome example; a file that does not exist yet opens empty and is
       created on the first Save.
 """
 import io
 import contextlib
+import json
 import os
 import re
 import sys
@@ -63,6 +67,35 @@ LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
 DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
 SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
 BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
+# The name being typed at the end of a line, for completion (":name" keywords included)
+SYMBOL_TAIL = re.compile(r"[\w\-+*/<>=!?:.]+$")
+
+# Remembers the View > Plain lispy3 REPL choice between runs
+SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".lispy3_machine.json")
+
+def load_settings(path: str = SETTINGS_PATH) -> dict:
+    """The saved editor settings, or {} when there are none or they cannot be read."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return settings if isinstance(settings, dict) else {}
+
+def save_settings(settings: dict, path: str = SETTINGS_PATH) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except OSError:
+        pass
+
+def parse_args(argv):
+    """Split the command line into (plain_repl, files). --repl may come anywhere."""
+    return "--repl" in argv, [a for a in argv if a != "--repl"]
+
+def common_prefix(names) -> str:
+    """The longest start shared by all `names`, as readline completes it."""
+    return os.path.commonprefix(list(names))
 
 def user_defined_names():
     """Globals the user made: new names, or their own function under a built-in name."""
@@ -427,11 +460,11 @@ class EditorTab(tk.Frame):
         insert = t.index("insert")
         line_idx = int(insert.split(".")[0])
         before = t.get(f"{line_idx}.0", insert)
-        m = re.search(r"[\w\-+*/<>=!?]+$", before)
+        m = SYMBOL_TAIL.search(before)
         prefix = m.group(0) if m else ""
 
-        # Gather candidates: builtins + user-defined names in this buffer
-        candidates = set(L.global_env.keys())
+        # Gather candidates: builtins, special forms, :keywords + user-defined names in this buffer
+        candidates = L.completion_candidates()
         content = t.get("1.0", "end-1c")
         for m2 in re.finditer(r"\(define\s+([\w\-+*/<>=!?]+)", content):
             candidates.add(m2.group(1))
@@ -749,7 +782,7 @@ def read_file_arg(arg: str):
 
 
 class LispMachine(tk.Tk):
-    def __init__(self, files=()):
+    def __init__(self, files=(), plain_repl=None):
         super().__init__()
         self.title("Lispy3 Machine")
         self._set_icon()
@@ -763,6 +796,11 @@ class LispMachine(tk.Tk):
         self.listener_history: list[str] = []
         self.listener_hist_idx = 0
         self._welcome_done = False
+        self.settings = load_settings()
+        if plain_repl is None:
+            plain_repl = bool(self.settings.get("plain_repl", False))
+        self.plain_repl = tk.BooleanVar(self, value=plain_repl)
+        self.repl_pending = ""      # lines of an unfinished form in the plain REPL
 
         self._setup_style()
         self._build_menu()
@@ -784,7 +822,9 @@ class LispMachine(tk.Tk):
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
-        self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n\n", "info")
+        self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n", "info")
+        self.listener_write(";; View > Plain lispy3 REPL switches the Listener to the lispy3 prompt.\n\n", "info")
+        self._update_prompt()
         for err in SYNTAX_ERRORS:
             self.listener_write(f";; Syntax colouring file not loaded: {err}\n", "error")
         for err in open_errors:
@@ -866,6 +906,8 @@ class LispMachine(tk.Tk):
         view_m.add_command(label="Show global env",     command=self._show_env)
         view_m.add_separator()
         view_m.add_command(label="Focus listener",      accelerator="Ctrl+E", command=lambda: self.listener_input.focus_set())
+        view_m.add_checkbutton(label="Plain lispy3 REPL", variable=self.plain_repl,
+                               command=self._toggle_plain_repl)
         bar.add_cascade(label="View", menu=view_m)
 
         help_m = tk.Menu(bar, tearoff=0)
@@ -877,14 +919,11 @@ class LispMachine(tk.Tk):
         self.config(menu=bar)
 
     def _listener_complete(self, event=None):
-        before = self.listener_input.get()
-        m = re.search(r"[\w\-+*/<>=!?]+$", before)
+        before = self.listener_input.get()[:self.listener_input.index("insert")]
+        m = SYMBOL_TAIL.search(before)
         prefix = m.group(0) if m else ""
         
-        candidates = set(L.global_env.keys())
-        matches = sorted(c for c in candidates
-                         if c.startswith(prefix) and c != prefix
-                         and not c.startswith("_"))
+        matches = [c for c in L.complete_names(prefix) if c != prefix]
         if not matches:
             return "break"
         if len(matches) == 1:
@@ -1022,8 +1061,9 @@ class LispMachine(tk.Tk):
 
         input_row = tk.Frame(listener_frame, bg=COLORS["listener_bg"])
         input_row.pack(fill="x", padx=6, pady=(0, 6))
-        tk.Label(input_row, text="USER>", bg=COLORS["listener_bg"],
-                 fg=COLORS["prompt"], font=FONT_MONO_BOLD).pack(side="left", padx=(2, 6))
+        self.prompt_label = tk.Label(input_row, text="USER>", bg=COLORS["listener_bg"],
+                                     fg=COLORS["prompt"], font=FONT_MONO_BOLD)
+        self.prompt_label.pack(side="left", padx=(2, 6))
         self.listener_input = tk.Entry(
             input_row, bg=COLORS["entry_bg"], fg=COLORS["entry_fg"],
             insertbackground="#fff", font=FONT_MONO, borderwidth=0,
@@ -1036,6 +1076,8 @@ class LispMachine(tk.Tk):
         self.listener_input.bind("<Up>",      self._history_up)
         self.listener_input.bind("<Down>",    self._history_down)
         self.listener_input.bind("<Control-l>", lambda e: (self.clear_listener(), "break")[1])
+        self.listener_input.bind("<Tab>",     self._listener_tab)
+        self.listener_input.bind("<Escape>",  self._cancel_pending)
 
     def _build_status(self):
         pass  # placeholder
@@ -1385,22 +1427,29 @@ class LispMachine(tk.Tk):
         if name:
             self.inspect_symbol(name)
 
-    def _report_eval(self, val, err, show_value=True, code=None):
+    def _report_eval(self, val, err, show_value=True, code=None, plain=False):
+        """Show a result. `plain` prints it as lispy3.py's REPL does: nothing for None, no notes."""
         if err is not None:
             msg = str(err) or type(err).__name__
+            if isinstance(err, RecursionError):
+                msg = L.RECURSION_HINT
             self.listener_write(f"Error: {msg}\n", "error")
             self.set_inspector(f"Error: {msg}")
             return
         name = self._defined_name(code) if code is not None else None
         if name and val is None:
-            self.listener_write(f";; {name} defined\n", "info")
+            if not plain:
+                self.listener_write(f";; {name} defined\n", "info")
             self.inspect_symbol(name)
             return
         try:
             val_str = L.lisp_str(val)
         except Exception:
             val_str = repr(val)
-        if show_value:
+        if plain:
+            if val is not None:
+                self.listener_write(val_str + "\n", "result")
+        elif show_value:
             self.listener_write(self._fmt_result(val, val_str) + "\n", "result")
         try:
             pretty = L.pretty_print(val, width=self._inspector_cols())
@@ -1424,6 +1473,9 @@ class LispMachine(tk.Tk):
     def _listener_submit(self):
         code = self.listener_input.get()
         self.listener_input.delete(0, "end")
+        if self.plain_repl.get():
+            self._plain_submit(code)
+            return
         if not code.strip():
             return
         pos = L.close_position(code)
@@ -1442,6 +1494,78 @@ class LispMachine(tk.Tk):
             return
         val, err = self._run(code)
         self._report_eval(val, err, code=code)
+
+    # ---------- plain lispy3 REPL mode ----------
+    def _prompt_text(self) -> str:
+        """The prompt in front of the input line: USER>, or lispy3> / ... (n)> like lispy3.py."""
+        if not self.plain_repl.get():
+            return "USER>"
+        if self.repl_pending:
+            return f"... ({L.count_balance(self.repl_pending)})>"
+        return "lispy3>"
+
+    def _update_prompt(self):
+        self.prompt_label.configure(text=self._prompt_text())
+
+    def _toggle_plain_repl(self):
+        self.repl_pending = ""
+        self._update_prompt()
+        on = self.plain_repl.get()
+        self.listener_write(";; Plain lispy3 REPL on: Enter on an open form continues it, Tab completes, "
+                            "Esc drops an unfinished form.\n" if on else
+                            ";; Listener mode on: USER> prompt, each line closed and evaluated.\n", "info")
+        self.settings["plain_repl"] = on
+        save_settings(self.settings)
+        self.listener_input.focus_set()
+
+    def _plain_submit(self, line: str):
+        """One line typed at the plain REPL: evaluate once the form is complete, as lispy3.repl does."""
+        if not self.repl_pending and not line.strip():
+            return
+        if not self.repl_pending and line.strip().lower() == "exit":
+            self._on_close()
+            return
+        self.listener_write(f"{self._prompt_text()} {line}\n", "prompt")
+        self.listener_history.append(line)
+        self.listener_hist_idx = len(self.listener_history)
+        code = f"{self.repl_pending}\n{line}" if self.repl_pending else line
+        if L.count_balance(code) > 0:
+            self.repl_pending = code
+            self._update_prompt()
+            return
+        self.repl_pending = ""
+        self._update_prompt()
+        val, err = self._run(code)
+        self._report_eval(val, err, code=code, plain=True)
+
+    def _cancel_pending(self, event=None):
+        if self.repl_pending:
+            self.repl_pending = ""
+            self._update_prompt()
+            self.listener_write(";; unfinished form dropped\n", "info")
+        return "break"
+
+    def _listener_tab(self, event=None):
+        """Tab in the plain REPL completes like readline: the shared start, then the choices."""
+        if not self.plain_repl.get():
+            return None                     # Tab moves the focus, as before
+        before = self.listener_input.get()[:self.listener_input.index("insert")]
+        m = SYMBOL_TAIL.search(before)
+        prefix = m.group(0) if m else ""
+        if not prefix:
+            return "break"
+        matches = L.complete_names(prefix)
+        if not matches:
+            self.bell()
+            return "break"
+        shared = common_prefix(matches)
+        if len(matches) == 1:
+            shared += " "
+        if len(shared) > len(prefix):
+            self.listener_input.insert("insert", shared[len(prefix):])
+        else:
+            self.listener_write("  ".join(matches) + "\n", "info")
+        return "break"
 
     def _history_up(self, event=None):
         if not self.listener_history:
@@ -1569,7 +1693,8 @@ WELCOME = r''';; Welcome to Lispy3 Machine.
 
 # =============================================================================
 def main():
-    app = LispMachine(sys.argv[1:])
+    plain_repl, files = parse_args(sys.argv[1:])
+    app = LispMachine(files, plain_repl=True if plain_repl else None)
     app.mainloop()
 
 
