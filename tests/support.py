@@ -7,6 +7,8 @@ Run every test from the repository folder with either of:
 
 Python's turtle module is replaced by tests/turtle_stub.py before lispy3 is
 imported, so no window opens and tkinter does not need to be installed.
+Every test module that needs lispy3 should import it from here
+(`from support import lispy3`), so all of them share the one stub.
 """
 import os
 import sys
