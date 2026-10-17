@@ -105,6 +105,22 @@ def user_defined_names():
             if k not in BUILTIN_NAMES
             or (isinstance(v, L.Procedure) and v.native_fn is None)}
 
+# Code shown in the Listener and Inspector is coloured like a .lisp buffer
+LISP_LANGUAGE = SH.language_for("listener.lisp", LANGUAGES, DEFAULT_LANGUAGE)
+
+def setup_code_tags(widget):
+    """Give a Text widget the Lisp syntax colours as tags."""
+    for tag in SYNTAX_TAGS:
+        widget.tag_configure(tag, foreground=LISP_LANGUAGE.colors.get(tag, COLORS["fg"]))
+
+def color_code(widget, start: str, text: str):
+    """Colour `text`, which starts at index `start` in `widget`, like the editor does."""
+    variables = user_defined_names() if LISP_LANGUAGE.env_words else ()
+    for tag in SYNTAX_TAGS:
+        widget.tag_remove(tag, start, f"{start}+{len(text)}c")
+    for tag, a, b in LISP_LANGUAGE.spans(text, builtins=BUILTIN_NAMES, variables=variables):
+        widget.tag_add(tag, f"{start}+{a}c", f"{start}+{b}c")
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _git(folder, *args):
@@ -1104,6 +1120,7 @@ class LispMachine(tk.Tk):
         insp_x.pack(side="bottom", fill="x")
         insp_y.pack(side="right", fill="y")
         self.inspector.pack(side="left", fill="both", expand=True)
+        setup_code_tags(self.inspector)
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
 
@@ -1143,6 +1160,7 @@ class LispMachine(tk.Tk):
         self.listener_text.tag_configure("result", foreground=COLORS["result"])
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
         self.listener_text.tag_configure("info",   foreground=COLORS["info"])
+        setup_code_tags(self.listener_text)
 
         # Plain REPL keys; in Listener mode the text is read-only and keeps its usual keys
         for seq, handler in (("<Return>", self._console_return),
@@ -1152,6 +1170,9 @@ class LispMachine(tk.Tk):
                              ("<Up>", lambda e: self._console_history(-1)),
                              ("<Down>", lambda e: self._console_history(1)),
                              ("<Home>", self._console_home),
+                             ("<Left>", self._console_left),
+                             ("<ButtonRelease-1>", self._console_click),
+                             ("<KeyRelease>", self._console_recolor),
                              ("<Key>", self._console_key),
                              ("<<Paste>>", self._console_paste),
                              ("<<Cut>>", self._console_cut),
@@ -1370,7 +1391,8 @@ class LispMachine(tk.Tk):
             content = self._write_closers(tab, content, closers)
         start, end = span
         form = content[start:end]
-        self.listener_write(f"USER> {form.strip()}\n", "prompt")
+        self.listener_write("USER> ", "prompt")
+        self.listener_write(f"{form.strip()}\n", "code")
         val, err = self._run(form)
         self._report_eval(val, err, code=form)
 
@@ -1421,7 +1443,8 @@ class LispMachine(tk.Tk):
                 form_str = repr(form)
             if len(form_str) > 120:
                 form_str = form_str[:117] + "..."
-            self.listener_write(f"USER> {form_str}\n", "prompt")
+            self.listener_write("USER> ", "prompt")
+            self.listener_write(f"{form_str}\n", "code")
 
             try:
                 with contextlib.redirect_stdout(writer):
@@ -1445,7 +1468,7 @@ class LispMachine(tk.Tk):
                     val_str = L.lisp_str(val)
                 except Exception:
                     val_str = repr(val)
-                self.listener_write(self._fmt_result(val, val_str) + "\n", "result")
+                self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
                 try:
                     self.set_inspector(L.pretty_print(val, width=self._inspector_cols()))
                 except Exception:
@@ -1547,9 +1570,9 @@ class LispMachine(tk.Tk):
             val_str = repr(val)
         if plain:
             if val is not None:
-                self.listener_write(val_str + "\n", "result")
+                self.listener_write(val_str + "\n", "code")
         elif show_value:
-            self.listener_write(self._fmt_result(val, val_str) + "\n", "result")
+            self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
         try:
             pretty = L.pretty_print(val, width=self._inspector_cols())
         except Exception:
@@ -1562,7 +1585,7 @@ class LispMachine(tk.Tk):
             self.listener_write(f"Error: {err}\n", "error")
         elif val is not None:
             try:
-                self.listener_write(self._fmt_result(val, L.lisp_str(val)) + "\n", "result")
+                self.listener_write(self._fmt_result(val, L.lisp_str(val)) + "\n", "code")
             except Exception:
                 pass
 
@@ -1581,12 +1604,13 @@ class LispMachine(tk.Tk):
         code, closers = L.auto_close(code)   # show the brackets the reader adds
         self.listener_history.append(code)
         self.listener_hist_idx = len(self.listener_history)
+        self.listener_write("USER> ", "prompt")
         if closers:
-            self.listener_write(f"USER> {code[:pos]}", "prompt")
+            self.listener_write(code[:pos], "code")
             self.listener_write(closers, "info")
-            self.listener_write(f"{code[pos + len(closers):]}\n", "prompt")
+            self.listener_write(f"{code[pos + len(closers):]}\n", "code")
         else:
-            self.listener_write(f"USER> {code}\n", "prompt")
+            self.listener_write(f"{code}\n", "code")
         # handle "exit" like the console REPL
         if code.strip().lower() == "exit":
             self._on_close()
@@ -1667,6 +1691,7 @@ class LispMachine(tk.Tk):
         t = self.listener_text
         if not self.console_ready:
             return "break"
+        self._console_recolor()
         line = self._console_input()
         t.insert("end", "\n")
         self.console_ready = False
@@ -1747,6 +1772,7 @@ class LispMachine(tk.Tk):
         self.listener_hist_idx = max(0, min(n, self.listener_hist_idx + step))
         self._set_console_input(self.listener_history[self.listener_hist_idx]
                                 if self.listener_hist_idx < n else "")
+        self._console_recolor()
         return "break"
 
     def _console_home(self, event=None):
@@ -1754,6 +1780,27 @@ class LispMachine(tk.Tk):
         if self.console_ready and t.compare("insert", ">=", "input"):
             t.mark_set("insert", "input")
             return "break"
+        return None
+
+    def _console_left(self, event=None):
+        """Left stops at the prompt instead of walking back into old output."""
+        t = self.listener_text
+        if self.console_ready and t.compare("insert", "<=", "input") and not (event.state & 0x1):
+            t.mark_set("insert", "input")
+            return "break"
+        return None
+
+    def _console_click(self, event=None):
+        """A click in old output (not a drag to select) puts the cursor back at the prompt."""
+        t = self.listener_text
+        if self.console_ready and not t.tag_ranges("sel") and t.compare("insert", "<", "input"):
+            t.mark_set("insert", "end-1c")
+        return None
+
+    def _console_recolor(self, event=None):
+        """Colour what is typed at the prompt as Lisp code."""
+        if self.console_ready:
+            color_code(self.listener_text, "input", self._console_input())
         return None
 
     def _console_key(self, event):
@@ -1816,8 +1863,12 @@ class LispMachine(tk.Tk):
         t = self.listener_text
         t.configure(state="normal")
         # With the plain REPL's prompt showing, output goes above the prompt line
-        where = "prompt_start" if self.console_ready else "end"
-        if tag:
+        where = "prompt_start" if self.console_ready else "end-1c"
+        if tag == "code":
+            start = t.index(where)
+            t.insert(where, text)
+            color_code(t, start, text)
+        elif tag:
             t.insert(where, text, tag)
         else:
             t.insert(where, text)
@@ -1851,6 +1902,7 @@ class LispMachine(tk.Tk):
         self.inspector.configure(state="normal")
         self.inspector.delete("1.0", "end")
         self.inspector.insert("1.0", text)
+        color_code(self.inspector, "1.0", text)
         self.inspector.configure(state="disabled")
         # Every evaluation ends here; recolour so newly defined names show up.
         for tab in self.tabs.values():
