@@ -27,7 +27,9 @@ import contextlib
 import json
 import os
 import re
+import subprocess
 import sys
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
@@ -102,6 +104,82 @@ def user_defined_names():
     return {k for k, v in L.global_env.items()
             if k not in BUILTIN_NAMES
             or (isinstance(v, L.Procedure) and v.native_fn is None)}
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _git(folder, *args):
+    """Run git in `folder` with no console window and no password prompt."""
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    return subprocess.run(["git", *args], cwd=folder, env=env, capture_output=True,
+                          text=True, timeout=120, creationflags=flags)
+
+def git_pull(folder: str = APP_DIR):
+    """Run `git pull --ff-only` in `folder`. Return (result, git's output).
+
+    result is "updated", "current" (nothing new) or "failed". --ff-only never
+    makes a merge commit, so git cannot stop to open an editor; local changes
+    that would be overwritten make git refuse, and its message names them.
+    """
+    try:
+        before = _git(folder, "rev-parse", "HEAD").stdout.strip()
+        done = _git(folder, "pull", "--ff-only")
+        after = _git(folder, "rev-parse", "HEAD").stdout.strip()
+    except FileNotFoundError:
+        return "failed", "git is not installed, or not on PATH."
+    except subprocess.TimeoutExpired:
+        return "failed", "git pull did not finish in 2 minutes."
+    except OSError as e:
+        return "failed", f"Could not run git: {e}"
+    output = (done.stdout + done.stderr).strip()
+    if done.returncode != 0:
+        return "failed", output
+    return ("updated" if before != after else "current"), output
+
+LISTENER_PROMPT = re.compile(r"(?:USER>|lispy3>|\.\.\. \(\d+\)>) ?")
+
+def listener_to_code(log: str) -> str:
+    """Turn a Listener transcript into a program that runs and can be saved.
+
+    The USER>, lispy3> and ... (n)> prompts are removed from what was typed,
+    a form that spans lines keeps its lines, and every other line (results,
+    printed output, errors) is commented out with ";; ". Lines that are
+    already comments and blank lines stay as they are. A form whose result
+    was an error, or that the Listener shortened with "...", is commented
+    out too, so the program runs to the end.
+    """
+    out = []
+    pending = 0                       # brackets still open in the form being read
+    form = None                       # (first, last + 1) index in `out` of the latest form
+    for line in log.splitlines():
+        if pending:
+            m = LISTENER_PROMPT.match(line)
+            out.append(line[m.end():] if m and m.group().startswith("...") else line)
+            form = (form[0], len(out))
+            pending = L.count_balance("\n".join(out[form[0]:]))
+            continue
+        m = LISTENER_PROMPT.match(line)
+        if m:
+            code = line[m.end():]
+            if not code.strip():
+                continue
+            balance = L.count_balance(code)
+            if balance and code.rstrip().endswith("..."):
+                out.append(";; " + code + "   ; shortened in the Listener")
+                form = None
+                continue
+            out.append(code)
+            form = (len(out) - 1, len(out))
+            pending = balance
+        elif not line.strip() or line.lstrip().startswith(";"):
+            out.append(line)
+        else:
+            if line.startswith("Error:") and form is not None:
+                first, last = form
+                out[first:last] = [";; " + code for code in out[first:last]]
+                form = None
+            out.append(";; " + line)
+    return "\n".join(out) + "\n" if out else ""
 
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
@@ -899,6 +977,7 @@ class LispMachine(tk.Tk):
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
         eval_m.add_separator()
+        eval_m.add_command(label="Listener to buffer",  command=self.listener_to_buffer)
         eval_m.add_command(label="Clear listener",      accelerator="Ctrl+L", command=self.clear_listener)
         bar.add_cascade(label="Eval", menu=eval_m)
 
@@ -914,6 +993,7 @@ class LispMachine(tk.Tk):
         help_m = tk.Menu(bar, tearoff=0)
         help_m.add_command(label="Built-in functions", command=lambda: self._run_silent('(help)'))
         help_m.add_separator()
+        help_m.add_command(label="Update", command=self._update)
         help_m.add_command(label="About", command=self._about)
         bar.add_cascade(label="Help", menu=help_m)
 
@@ -1048,6 +1128,9 @@ class LispMachine(tk.Tk):
         tk.Button(hdr, text="Clear", bg=COLORS["side_bg"], fg="#ddd",
                   font=FONT_UI, borderwidth=0, padx=8,
                   command=self.clear_listener).pack(side="right", padx=4, pady=2)
+        tk.Button(hdr, text="To buffer", bg=COLORS["side_bg"], fg="#ddd",
+                  font=FONT_UI, borderwidth=0, padx=8,
+                  command=self.listener_to_buffer).pack(side="right", padx=4, pady=2)
 
         self.listener_text = ScrolledText(
             listener_frame, bg=COLORS["listener_bg"], fg=COLORS["fg"],
@@ -1742,6 +1825,15 @@ class LispMachine(tk.Tk):
         if not self.plain_repl.get():
             t.configure(state="disabled")
 
+    def listener_to_buffer(self):
+        """Open the Listener log as runnable code in a new buffer: prompts removed, output commented out."""
+        t = self.listener_text
+        end = "prompt_start" if self.console_ready else "end-1c"   # leave out the live prompt line
+        code = listener_to_code(t.get("1.0", end))
+        tab = self.new_buffer("listener.lisp", code)
+        tab.dirty = True
+        self._refresh_buffer_list()
+
     def clear_listener(self):
         self.listener_text.configure(state="normal")
         self.listener_text.delete("1.0", "end")
@@ -1788,6 +1880,36 @@ class LispMachine(tk.Tk):
         tab.text.tag_remove("search_all",     "1.0", "end")
         tab.text.tag_remove("search_current", "1.0", "end")
         tab.text.tag_remove("sel",            "1.0", "end")
+
+    def _update(self):
+        """Help > Update: git pull in the program's folder, without blocking the window."""
+        dirty = [t.name for t in self.tabs.values() if t.dirty]
+        if dirty and not messagebox.askyesno(
+            "Unsaved buffers",
+            "These buffers have unsaved changes:\n  " + "\n  ".join(dirty) +
+            "\n\nThe update needs a restart afterwards, so save them first."
+            "\nUpdate anyway?"
+        ):
+            return
+        self.listener_write(f";; Updating: git pull in {APP_DIR}\n", "info")
+
+        def work():
+            result, output = git_pull()
+            self.after(0, self._update_done, result, output)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_done(self, result: str, output: str):
+        if output:
+            self.listener_write(output + "\n", "error" if result == "failed" else "info")
+        if result == "failed":
+            messagebox.showerror("Update failed", output or "git pull failed.")
+        elif result == "current":
+            messagebox.showinfo("Update", "Lispy3 is already up to date.")
+        else:
+            messagebox.showinfo("Update", "Lispy3 was updated.\n\n"
+                                "Save your work and restart Lispy3 Machine "
+                                "to use the new version.")
 
     def _about(self):
         messagebox.showinfo(
