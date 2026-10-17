@@ -134,6 +134,12 @@ A program file is ordinary Lisp code that runs from top to bottom, like a Python
 | `(vector-set! v i x)` | put `x` into item `i` of `v` |
 | `(clock)` | seconds as a decimal number, for timing |
 | `(clock->string t)` | the (clock) value `t` as local date and time, like `"2026-10-17 21:53:20"`; leave `t` out for now; `(clock->string t "%H:%M")` takes a format |
+| `(get-universal-time)` | seconds since 1900-01-01 GMT, as in Common Lisp |
+| `(get-decoded-time)` | now as `(second minute hour date month year day-of-week daylight-p zone)` |
+| `(decode-universal-time ut [zone])` | `ut` as that list; day 0 is Monday, `zone` is hours west of Greenwich |
+| `(encode-universal-time s m h date month year [zone])` | back to a universal time |
+| `(get-internal-real-time)` / `(get-internal-run-time)` | timer / processor time in `internal-time-units-per-second` (1000) units |
+| `(sleep seconds)` | wait |
 | `(display a b ...)` | print the values one after another, with nothing between them |
 
 Good to know: `+ - * /` take exactly two arguments, so write `(+ (+ a b) c)`; `(if test then else)` always needs the else part; a `lambda` body is one expression, so wrap several in `(begin ...)`.

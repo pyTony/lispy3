@@ -85,6 +85,12 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 | `(vector-set! v i x)` | store `x` at `i` |
 | `(clock)` | seconds, for timing |
 | `(clock->string)` / `(clock->string t)` | date and time now, or of a `(clock)` value `t`, like `"2026-10-17 21:53:20"`; add a format such as `"%H:%M"` |
+| `(get-universal-time)` | seconds since 1900-01-01 GMT, as in Common Lisp |
+| `(get-decoded-time)` | now as `(second minute hour date month year day-of-week daylight-p zone)` |
+| `(decode-universal-time ut [zone])` | `ut` as that list; day 0 is Monday, `zone` is hours west of Greenwich |
+| `(encode-universal-time s m h date month year [zone])` | back to a universal time |
+| `(get-internal-real-time)` / `(get-internal-run-time)` | timer / processor time in `internal-time-units-per-second` (1000) units |
+| `(sleep seconds)` | wait |
 | `(display a b ...)` | print values side by side, then a new line |
 | `(pretty-print x)` / `(pprint x)` | print indented |
 | `(help)` / `(help 'name)` | list built-ins / explain one |
