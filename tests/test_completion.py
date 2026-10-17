@@ -29,6 +29,32 @@ class CompleteNamesTest(LispyTestCase):
         self.assertEqual(lispy3.complete_names("no-such-name-"), [])
 
 
+class ReplStrTest(LispyTestCase):
+
+    def test_short_result_stays_on_one_line(self):
+        self.assertEqual(lispy3.repl_str(self.ev("[1 2 3]"), 40), lispy3.lisp_str(self.ev("[1 2 3]")))
+
+    def test_long_function_is_indented(self):
+        self.ev("(define f (lambda [x] (begin (define a 1) (define b 2) (while (< a x) (set! a (+ a 1))) a)))")
+        lines = lispy3.repl_str(self.ev("f"), 40).splitlines()
+        self.assertEqual(lines[:3], ["(define f", "  (lambda [x]", "    (begin"])
+        self.assertEqual(lines[3], "      (define a 1)")
+
+
+class InspectorListTest(LispyTestCase):
+
+    def test_definitions_with_previews(self):
+        self.ev('(define user {:name "Tony"})')
+        self.ev("(define n 42)")
+        self.assertEqual(machine.inspector_items(), [("n", "42"), ("user", '{:name "Tony"}')])
+
+    def test_built_ins_are_left_out(self):
+        self.assertEqual(machine.inspector_items(), [])
+
+    def test_long_values_are_shortened(self):
+        self.assertEqual(machine.preview(tuple(range(100)), 10), "[0 1 2 ...")
+
+
 class MachineOptionsTest(unittest.TestCase):
 
     def test_repl_flag_anywhere(self):
