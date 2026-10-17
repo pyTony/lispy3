@@ -1,5 +1,6 @@
 from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
+import calendar
 import functools
 import itertools
 import math
@@ -195,8 +196,16 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
         ("vector-ref", "(vector-ref v i) - item i of v"),
         ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
-        ("clock", "(clock) - seconds as a decimal number, for timing"),
+        ("clock", "(clock) - seconds since Lispy started, as a decimal number, for timing"),
         ("clock->string", "(clock->string) - the date and time now, like \"2026-10-17 21:53:20\"; (clock->string t) for a (clock) value t; (clock->string t \"%H:%M\") with a format"),
+        ("get-universal-time", "(get-universal-time) - whole seconds since 1900-01-01 GMT (Common Lisp's universal time)"),
+        ("universal-time->string", "(universal-time->string) - the date and time now, like \"2026-10-17 22:03:00\"; (universal-time->string ut) for a universal time; (universal-time->string ut \"%H:%M\") with a format"),
+        ("get-decoded-time", "(get-decoded-time) - now as (second minute hour date month year day-of-week daylight-p zone)"),
+        ("decode-universal-time", "(decode-universal-time ut) or (decode-universal-time ut zone) - ut as (second minute hour date month year day-of-week daylight-p zone); day 0 is Monday, zone is hours west of Greenwich"),
+        ("encode-universal-time", "(encode-universal-time second minute hour date month year) or ... zone) - back to a universal time"),
+        ("get-internal-real-time", "(get-internal-real-time) - a timer counting internal-time-units-per-second (1000) a second"),
+        ("get-internal-run-time", "(get-internal-run-time) - processor time used, in the same units"),
+        ("sleep", "(sleep seconds) - wait; seconds may be a decimal number"),
         ("display", "(display a b ...) - print the values with nothing between them, then a new line"),
         ("print", "(print a b ...) - print the values with spaces between them"),
         ("newline", "(newline) - print an empty line"),
@@ -482,13 +491,74 @@ def _exact(x: Number) -> int:
 
 _DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 
+# Common Lisp time functions (CLtL2 section 25.4.1). A universal time counts
+# seconds from 1900-01-01 00:00 GMT; a time zone is hours west of Greenwich.
+_UNIVERSAL_EPOCH = 2208988800  # seconds from 1900 to 1970
+INTERNAL_TIME_UNITS_PER_SECOND = 1000
+
+def _get_universal_time() -> int:
+    """(get-universal-time) - seconds since 1900-01-01 GMT, now."""
+    return int(time.time()) + _UNIVERSAL_EPOCH
+
+def _decode_universal_time(ut: Number, zone: Number = None) -> list:
+    """(decode-universal-time ut) or (decode-universal-time ut zone) - the list
+    (second minute hour date month year day-of-week daylight-p zone); Monday is day 0."""
+    stamp = ut - _UNIVERSAL_EPOCH
+    if zone is None:
+        t = time.localtime(stamp)
+        dst = t.tm_isdst > 0
+        zone = -t.tm_gmtoff / 3600 + (1 if dst else 0)
+        if zone == int(zone):
+            zone = int(zone)
+    else:
+        t, dst = time.gmtime(stamp - zone * 3600), False
+    return [t.tm_sec, t.tm_min, t.tm_hour, t.tm_mday, t.tm_mon, t.tm_year, t.tm_wday, dst, zone]
+
+def _encode_universal_time(second, minute, hour, date, month, year, zone=None) -> int:
+    """(encode-universal-time second minute hour date month year) with an optional zone."""
+    if 0 <= year < 100:
+        # Two-digit years mean the year within 50 years of now, as in Common Lisp
+        this_year = time.localtime().tm_year
+        year += this_year - this_year % 100
+        if year - this_year > 50:
+            year -= 100
+        elif this_year - year >= 50:
+            year += 100
+    parts = (year, month, date, hour, minute, second)
+    if zone is None:
+        stamp = time.mktime(parts + (0, 0, -1))
+    else:
+        stamp = calendar.timegm(parts) + zone * 3600
+    return int(stamp) + _UNIVERSAL_EPOCH
+
+def _get_internal_real_time() -> int:
+    """(get-internal-real-time) - a timer in internal-time-units-per-second units."""
+    return int(time.perf_counter() * INTERNAL_TIME_UNITS_PER_SECOND)
+
+def _get_internal_run_time() -> int:
+    """(get-internal-run-time) - processor time used, in internal-time-units-per-second units."""
+    return int(time.process_time() * INTERNAL_TIME_UNITS_PER_SECOND)
+
+_RUN_START = time.perf_counter()
+
+def _clock() -> float:
+    """(clock) - seconds since Lispy started, for timing."""
+    return time.perf_counter() - _RUN_START
+
 def _clock_to_string(t: Any = None, fmt: Any = None) -> String:
     """(clock->string), (clock->string t) or (clock->string t "%H:%M") - a (clock) reading as local date and time."""
     if isinstance(t, (String, str)):
         t, fmt = None, t
-    now = time.perf_counter() if t is None else t
-    # (clock) counts from an arbitrary start, so shift it onto the wall clock
-    stamp = time.time() - (time.perf_counter() - now)
+    now = _clock() if t is None else t
+    stamp = time.time() - (_clock() - now)
+    pattern = "%Y-%m-%d %H:%M:%S" if fmt is None else _unwrap_str(fmt)
+    return String(time.strftime(pattern, time.localtime(stamp)))
+
+def _universal_time_to_string(ut: Any = None, fmt: Any = None) -> String:
+    """(universal-time->string), (universal-time->string ut) or (universal-time->string ut "%H:%M") - local date and time."""
+    if isinstance(ut, (String, str)):
+        ut, fmt = None, ut
+    stamp = time.time() if ut is None else ut - _UNIVERSAL_EPOCH
     pattern = "%Y-%m-%d %H:%M:%S" if fmt is None else _unwrap_str(fmt)
     return String(time.strftime(pattern, time.localtime(stamp)))
 
@@ -743,8 +813,16 @@ def standard_env() -> Env:
         'make-vector': lambda n, fill=0: [fill] * int(n),
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
-        'clock': time.perf_counter,
+        'clock': _clock,
         'clock->string': _clock_to_string,
+        'universal-time->string': _universal_time_to_string,
+        'get-universal-time': _get_universal_time,
+        'get-decoded-time': lambda: _decode_universal_time(_get_universal_time()),
+        'decode-universal-time': _decode_universal_time,
+        'encode-universal-time': _encode_universal_time,
+        'get-internal-real-time': _get_internal_real_time,
+        'get-internal-run-time': _get_internal_run_time,
+        'sleep': time.sleep,
         'newline': lambda: print(),
         'pretty-print': lambda exp: print(pretty_print(exp, width=40)),
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
@@ -770,6 +848,7 @@ def standard_env() -> Env:
     env['false'] = False
     env['nil'] = []
     env['else'] = True
+    env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
 
     # 3. Add turtle graphics support dynamically
     def _call_turtle(k: str, *args: Any) -> Any:

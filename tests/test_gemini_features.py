@@ -276,6 +276,36 @@ class RestoredFeaturesTest(LispyTestCase):
         hour_ago = time.strftime("%H", time.localtime(time.time() - 3600))
         self.assertEqual(self.ev('(clock->string (- t0 3600) "%H")').value, hour_ago)
 
+    def test_common_lisp_time_functions(self):
+        # CLtL2 25.4.1: universal time counts seconds from 1900-01-01 GMT
+        self.assertEqual(self.ev("(encode-universal-time 0 0 0 1 1 1900 0)"), 0)
+        self.assertEqual(self.ev("(decode-universal-time 0 0)"), [0, 0, 0, 1, 1, 1900, 0, False, 0])
+        # zone is hours west of Greenwich, so New York (5) is behind GMT
+        self.assertEqual(self.ev("(encode-universal-time 0 0 7 17 10 2026 5)"),
+                         self.ev("(encode-universal-time 0 0 12 17 10 2026 0)"))
+        self.ev("(define now (get-universal-time))")
+        self.assertLessEqual(abs(self.ev("now") - (int(time.time()) + 2208988800)), 1)
+        parts = self.ev("(decode-universal-time now)")
+        self.assertEqual(self.ev("(encode-universal-time %s)" % " ".join(map(str, parts[:6]))), self.ev("now"))
+        decoded = self.ev("(get-decoded-time)")
+        self.assertEqual(len(decoded), 9)
+        self.assertEqual(decoded[5], time.localtime().tm_year)
+        self.assertEqual(self.ev("internal-time-units-per-second"), 1000)
+        self.ev("(define t0 (get-internal-real-time))")
+        self.ev("(sleep 0.02)")
+        self.assertGreaterEqual(self.ev("(- (get-internal-real-time) t0)"), 15)
+        self.assertGreaterEqual(self.ev("(get-internal-run-time)"), 0)
+
+    def test_universal_time_to_string(self):
+        self.assertRegex(self.ev("(universal-time->string)").value, r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$")
+        self.assertEqual(self.ev('(universal-time->string "%Y")').value, time.strftime("%Y"))
+        ut = self.ev("(encode-universal-time 5 4 3 2 1 2030)")
+        self.assertEqual(self.ev("(universal-time->string %d)" % ut).value, "2030-01-02 03:04:05")
+        self.assertEqual(self.ev('(universal-time->string %d "%%d.%%m.%%Y")' % ut).value, "02.01.2030")
+
+    def test_clock_counts_from_start(self):
+        self.assertLess(self.ev("(clock)"), time.perf_counter())
+
     def test_display_takes_several_values_and_ends_the_line(self):
         self.assertEqual(self.output('(display "a" 1 "b")'), "a1b\n")
 
