@@ -10,6 +10,7 @@ import contextlib
 import io
 import os
 import tempfile
+import time
 import unittest
 
 from support import LispyTestCase, lispy3
@@ -264,6 +265,16 @@ class RestoredFeaturesTest(LispyTestCase):
         self.assertEqual(self.show("v"), "(9 1 1)")
         self.ev("(define t0 (clock))")
         self.assertIs(self.ev("(>= (clock) t0)"), True)
+
+    def test_clock_to_string_shows_local_date_and_time(self):
+        text = self.ev("(clock->string)").value
+        self.assertRegex(text, r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$")
+        self.ev("(define t0 (clock))")
+        self.assertEqual(self.ev('(clock->string t0 "%Y")').value, time.strftime("%Y"))
+        self.assertEqual(self.ev('(clock->string "%Y")').value, time.strftime("%Y"))
+        # an hour earlier on (clock) is an hour earlier on the wall clock
+        hour_ago = time.strftime("%H", time.localtime(time.time() - 3600))
+        self.assertEqual(self.ev('(clock->string (- t0 3600) "%H")').value, hour_ago)
 
     def test_display_takes_several_values_and_ends_the_line(self):
         self.assertEqual(self.output('(display "a" 1 "b")'), "a1b\n")
