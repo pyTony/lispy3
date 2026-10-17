@@ -1052,6 +1052,7 @@ class LispMachine(tk.Tk):
         self.listener_text = ScrolledText(
             listener_frame, bg=COLORS["listener_bg"], fg=COLORS["fg"],
             font=FONT_MONO, wrap="word", height=8,
+            insertbackground=COLORS["cursor"], insertwidth=2,   # visible on the dark background
             borderwidth=0, highlightthickness=0, padx=8, pady=4)
         self.listener_text.pack(fill="both", expand=True)
         self.listener_text.configure(state="disabled")
