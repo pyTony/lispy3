@@ -144,17 +144,19 @@ def listener_to_code(log: str) -> str:
     The USER>, lispy3> and ... (n)> prompts are removed from what was typed,
     a form that spans lines keeps its lines, and every other line (results,
     printed output, errors) is commented out with ";; ". Lines that are
-    already comments and blank lines stay as they are. A form the Listener
-    shortened with "..." cannot run, so it is commented out too.
+    already comments and blank lines stay as they are. A form whose result
+    was an error, or that the Listener shortened with "...", is commented
+    out too, so the program runs to the end.
     """
     out = []
     pending = 0                       # brackets still open in the form being read
+    form = None                       # (first, last + 1) index in `out` of the latest form
     for line in log.splitlines():
         if pending:
             m = LISTENER_PROMPT.match(line)
-            code = line[m.end():] if m and m.group().startswith("...") else line
-            out.append(code)
-            pending = L.count_balance("\n".join(out[start:]))
+            out.append(line[m.end():] if m and m.group().startswith("...") else line)
+            form = (form[0], len(out))
+            pending = L.count_balance("\n".join(out[form[0]:]))
             continue
         m = LISTENER_PROMPT.match(line)
         if m:
@@ -164,13 +166,18 @@ def listener_to_code(log: str) -> str:
             balance = L.count_balance(code)
             if balance and code.rstrip().endswith("..."):
                 out.append(";; " + code + "   ; shortened in the Listener")
+                form = None
                 continue
-            start = len(out)
             out.append(code)
+            form = (len(out) - 1, len(out))
             pending = balance
         elif not line.strip() or line.lstrip().startswith(";"):
             out.append(line)
         else:
+            if line.startswith("Error:") and form is not None:
+                first, last = form
+                out[first:last] = [";; " + code for code in out[first:last]]
+                form = None
             out.append(";; " + line)
     return "\n".join(out) + "\n" if out else ""
 

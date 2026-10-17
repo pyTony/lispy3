@@ -25,7 +25,7 @@ class ListenerToCode(unittest.TestCase):
                          ";; x defined\n"
                          "(* x x)\n"
                          ";; => 25\n"
-                         "(car '())\n"
+                         ";; (car '())\n"
                          ";; Error: car of empty list\n")
 
     def test_plain_repl_continuation_prompts(self):
@@ -58,6 +58,30 @@ class ListenerToCode(unittest.TestCase):
         self.assertTrue(code.startswith(";; (define long"))
         self.assertIn(";; => nil", code)
 
+    def test_multi_line_form_with_an_error_is_commented_out(self):
+        log = ("lispy3> (display \"a\")\n"
+               "a\n"
+               "lispy3> (car\n"
+               "... (1)>   '())\n"
+               "Error: car of empty list\n"
+               "lispy3> (+ 1 2)\n"
+               "3\n")
+        self.assertEqual(to_code(log),
+                         "(display \"a\")\n"
+                         ";; a\n"
+                         ";; (car\n"
+                         ";;   '())\n"
+                         ";; Error: car of empty list\n"
+                         "(+ 1 2)\n"
+                         ";; 3\n")
+
+    def test_error_after_printed_output_comments_only_the_form(self):
+        log = "USER> (begin (display \"hi\") (car '()))\nhi\nError: car of empty list\n"
+        self.assertEqual(to_code(log),
+                         ";; (begin (display \"hi\") (car '()))\n"
+                         ";; hi\n"
+                         ";; Error: car of empty list\n")
+
     def test_empty_prompts_and_blank_lines(self):
         self.assertEqual(to_code(""), "")
         self.assertEqual(to_code("lispy3> \n\n;; note\n"), "\n;; note\n")
@@ -65,7 +89,7 @@ class ListenerToCode(unittest.TestCase):
     def test_saved_result_runs(self):
         log = ("USER> (define total 0)\n;; total defined\n"
                "USER> (set! total (+ total 7))\n=> 7\n"
-               "Error: something printed\n"
+               "USER> (undefined-thing)\nError: Undefined symbol: undefined-thing\n"
                "USER> total\n=> 7\n")
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "listener.lisp")
