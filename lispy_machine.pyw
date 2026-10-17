@@ -136,6 +136,44 @@ def git_pull(folder: str = APP_DIR):
         return "failed", output
     return ("updated" if before != after else "current"), output
 
+LISTENER_PROMPT = re.compile(r"(?:USER>|lispy3>|\.\.\. \(\d+\)>) ?")
+
+def listener_to_code(log: str) -> str:
+    """Turn a Listener transcript into a program that runs and can be saved.
+
+    The USER>, lispy3> and ... (n)> prompts are removed from what was typed,
+    a form that spans lines keeps its lines, and every other line (results,
+    printed output, errors) is commented out with ";; ". Lines that are
+    already comments and blank lines stay as they are. A form the Listener
+    shortened with "..." cannot run, so it is commented out too.
+    """
+    out = []
+    pending = 0                       # brackets still open in the form being read
+    for line in log.splitlines():
+        if pending:
+            m = LISTENER_PROMPT.match(line)
+            code = line[m.end():] if m and m.group().startswith("...") else line
+            out.append(code)
+            pending = L.count_balance("\n".join(out[start:]))
+            continue
+        m = LISTENER_PROMPT.match(line)
+        if m:
+            code = line[m.end():]
+            if not code.strip():
+                continue
+            balance = L.count_balance(code)
+            if balance and code.rstrip().endswith("..."):
+                out.append(";; " + code + "   ; shortened in the Listener")
+                continue
+            start = len(out)
+            out.append(code)
+            pending = balance
+        elif not line.strip() or line.lstrip().startswith(";"):
+            out.append(line)
+        else:
+            out.append(";; " + line)
+    return "\n".join(out) + "\n" if out else ""
+
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
 FONT_UI        = ("Segoe UI", 9)
@@ -932,6 +970,7 @@ class LispMachine(tk.Tk):
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
         eval_m.add_separator()
+        eval_m.add_command(label="Listener to buffer",  command=self.listener_to_buffer)
         eval_m.add_command(label="Clear listener",      accelerator="Ctrl+L", command=self.clear_listener)
         bar.add_cascade(label="Eval", menu=eval_m)
 
@@ -1082,6 +1121,9 @@ class LispMachine(tk.Tk):
         tk.Button(hdr, text="Clear", bg=COLORS["side_bg"], fg="#ddd",
                   font=FONT_UI, borderwidth=0, padx=8,
                   command=self.clear_listener).pack(side="right", padx=4, pady=2)
+        tk.Button(hdr, text="To buffer", bg=COLORS["side_bg"], fg="#ddd",
+                  font=FONT_UI, borderwidth=0, padx=8,
+                  command=self.listener_to_buffer).pack(side="right", padx=4, pady=2)
 
         self.listener_text = ScrolledText(
             listener_frame, bg=COLORS["listener_bg"], fg=COLORS["fg"],
@@ -1775,6 +1817,15 @@ class LispMachine(tk.Tk):
         t.see("end")
         if not self.plain_repl.get():
             t.configure(state="disabled")
+
+    def listener_to_buffer(self):
+        """Open the Listener log as runnable code in a new buffer: prompts removed, output commented out."""
+        t = self.listener_text
+        end = "prompt_start" if self.console_ready else "end-1c"   # leave out the live prompt line
+        code = listener_to_code(t.get("1.0", end))
+        tab = self.new_buffer("listener.lisp", code)
+        tab.dirty = True
+        self._refresh_buffer_list()
 
     def clear_listener(self):
         self.listener_text.configure(state="normal")
