@@ -801,6 +801,7 @@ class LispMachine(tk.Tk):
             plain_repl = bool(self.settings.get("plain_repl", False))
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
         self.repl_pending = ""      # lines of an unfinished form in the plain REPL
+        self.console_ready = False  # the plain REPL prompt is showing, waiting for input
 
         self._setup_style()
         self._build_menu()
@@ -824,12 +825,12 @@ class LispMachine(tk.Tk):
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
         self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n", "info")
         self.listener_write(";; View > Plain lispy3 REPL switches the Listener to the lispy3 prompt.\n\n", "info")
-        self._update_prompt()
         for err in SYNTAX_ERRORS:
             self.listener_write(f";; Syntax colouring file not loaded: {err}\n", "error")
         for err in open_errors:
             self.listener_write(f";; Could not open {err}\n", "error")
-        self.listener_input.focus_set()
+        self._apply_repl_mode()
+        self._focus_listener()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -905,7 +906,7 @@ class LispMachine(tk.Tk):
         view_m.add_command(label="Reload lsystems",     command=lambda: self._run_silent('(load "lsystems")'))
         view_m.add_command(label="Show global env",     command=self._show_env)
         view_m.add_separator()
-        view_m.add_command(label="Focus listener",      accelerator="Ctrl+E", command=lambda: self.listener_input.focus_set())
+        view_m.add_command(label="Focus listener",      accelerator="Ctrl+E", command=self._focus_listener)
         view_m.add_checkbutton(label="Plain lispy3 REPL", variable=self.plain_repl,
                                command=self._toggle_plain_repl)
         bar.add_cascade(label="View", menu=view_m)
@@ -1059,7 +1060,21 @@ class LispMachine(tk.Tk):
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
         self.listener_text.tag_configure("info",   foreground=COLORS["info"])
 
-        input_row = tk.Frame(listener_frame, bg=COLORS["listener_bg"])
+        # Plain REPL keys; in Listener mode the text is read-only and keeps its usual keys
+        for seq, handler in (("<Return>", self._console_return),
+                             ("<KP_Enter>", self._console_return),
+                             ("<Tab>", self._listener_tab),
+                             ("<Escape>", self._cancel_pending),
+                             ("<Up>", lambda e: self._console_history(-1)),
+                             ("<Down>", lambda e: self._console_history(1)),
+                             ("<Home>", self._console_home),
+                             ("<Key>", self._console_key),
+                             ("<<Paste>>", self._console_paste),
+                             ("<<Cut>>", self._console_cut),
+                             ("<Control-l>", lambda e: (self.clear_listener(), "break")[1])):
+            self.listener_text.bind(seq, lambda e, h=handler: h(e) if self.plain_repl.get() else None)
+
+        self.input_row = input_row = tk.Frame(listener_frame, bg=COLORS["listener_bg"])
         input_row.pack(fill="x", padx=6, pady=(0, 6))
         self.prompt_label = tk.Label(input_row, text="USER>", bg=COLORS["listener_bg"],
                                      fg=COLORS["prompt"], font=FONT_MONO_BOLD)
@@ -1076,8 +1091,6 @@ class LispMachine(tk.Tk):
         self.listener_input.bind("<Up>",      self._history_up)
         self.listener_input.bind("<Down>",    self._history_down)
         self.listener_input.bind("<Control-l>", lambda e: (self.clear_listener(), "break")[1])
-        self.listener_input.bind("<Tab>",     self._listener_tab)
-        self.listener_input.bind("<Escape>",  self._cancel_pending)
 
     def _build_status(self):
         pass  # placeholder
@@ -1090,7 +1103,7 @@ class LispMachine(tk.Tk):
         self.bind_all("<Control-Shift-S>", lambda e: self.save_current_as())
         self.bind_all("<Control-w>", lambda e: self.close_current())
         self.bind_all("<Control-q>", lambda e: self._on_close())
-        self.bind_all("<Control-e>", lambda e: self.listener_input.focus_set())
+        self.bind_all("<Control-e>", lambda e: self._focus_listener())
         self.bind_all("<Control-f>",  lambda e: (self.search_bar.show_bar(False), "break")[1])
         self.bind_all("<Control-h>",  lambda e: (self.search_bar.show_bar(True),  "break")[1])
         self.bind_all("<F3>",         lambda e: (self.search_bar._nav(1),  "break")[1])
@@ -1410,6 +1423,8 @@ class LispMachine(tk.Tk):
         name = ""
         if self.focus_get() is self.listener_input:
             name = self.listener_input.get().strip()
+        elif self.focus_get() is self.listener_text and self.console_ready:
+            name = self._console_input().strip()
         else:
             tab = self.current_tab()
             if tab:
@@ -1471,11 +1486,11 @@ class LispMachine(tk.Tk):
     # Listener
     # =========================================================================
     def _listener_submit(self):
+        if self.plain_repl.get():
+            self._console_return()
+            return
         code = self.listener_input.get()
         self.listener_input.delete(0, "end")
-        if self.plain_repl.get():
-            self._plain_submit(code)
-            return
         if not code.strip():
             return
         pos = L.close_position(code)
@@ -1496,60 +1511,133 @@ class LispMachine(tk.Tk):
         self._report_eval(val, err, code=code)
 
     # ---------- plain lispy3 REPL mode ----------
+    # The Listener text itself becomes the console: the prompt and what you type
+    # sit on the last line, after the "input" mark, and scroll with the output.
     def _prompt_text(self) -> str:
-        """The prompt in front of the input line: USER>, or lispy3> / ... (n)> like lispy3.py."""
-        if not self.plain_repl.get():
-            return "USER>"
+        """lispy3> or, inside an unfinished form, ... (n)> as lispy3.py shows."""
         if self.repl_pending:
             return f"... ({L.count_balance(self.repl_pending)})>"
         return "lispy3>"
 
-    def _update_prompt(self):
-        self.prompt_label.configure(text=self._prompt_text())
+    def _apply_repl_mode(self):
+        """Show the console prompt (plain REPL) or the USER> entry line (Listener)."""
+        t = self.listener_text
+        if self.plain_repl.get():
+            self.input_row.pack_forget()
+            t.configure(state="normal")
+            self._show_prompt()
+        else:
+            if self.console_ready:
+                t.configure(state="normal")
+                t.delete("prompt_start", "end-1c")
+                self.console_ready = False
+            t.configure(state="disabled")
+            self.input_row.pack(fill="x", padx=6, pady=(0, 6))
+
+    def _focus_listener(self):
+        if self.plain_repl.get():
+            self.listener_text.mark_set("insert", "end-1c")
+            self.listener_text.focus_set()
+        else:
+            self.listener_input.focus_set()
 
     def _toggle_plain_repl(self):
-        self.repl_pending = ""
-        self._update_prompt()
         on = self.plain_repl.get()
-        self.listener_write(";; Plain lispy3 REPL on: Enter on an open form continues it, Tab completes, "
-                            "Esc drops an unfinished form.\n" if on else
+        if not on:
+            self.repl_pending = ""
+        self._apply_repl_mode()
+        self.listener_write(";; Plain lispy3 REPL on: type at the lispy3> prompt; Enter on an open form "
+                            "continues it, Tab completes, Esc drops an unfinished form.\n" if on else
                             ";; Listener mode on: USER> prompt, each line closed and evaluated.\n", "info")
         self.settings["plain_repl"] = on
         save_settings(self.settings)
-        self.listener_input.focus_set()
+        self._focus_listener()
 
-    def _plain_submit(self, line: str):
-        """One line typed at the plain REPL: evaluate once the form is complete, as lispy3.repl does."""
+    def _show_prompt(self):
+        """Write the prompt on a new last line; what is typed after it is the input."""
+        t = self.listener_text
+        if t.index("end-1c") != "1.0" and t.get("end-2c") != "\n":
+            t.insert("end", "\n")
+        start = t.index("end-1c")
+        t.insert("end", self._prompt_text() + " ", "prompt")
+        t.mark_set("prompt_start", start)
+        t.mark_gravity("prompt_start", "right")   # output written at it goes before the prompt
+        t.mark_set("input", "end-1c")
+        t.mark_gravity("input", "left")
+        t.mark_set("insert", "end-1c")
+        t.see("end")
+        self.console_ready = True
+
+    def _console_input(self) -> str:
+        return self.listener_text.get("input", "end-1c")
+
+    def _set_console_input(self, text: str):
+        t = self.listener_text
+        t.delete("input", "end-1c")
+        t.insert("end", text)
+        t.mark_set("insert", "end-1c")
+        t.see("end")
+
+    def _console_return(self, event=None):
+        """Enter: the typed line(s) stay on screen and go to the REPL, then a new prompt."""
+        t = self.listener_text
+        if not self.console_ready:
+            return "break"
+        line = self._console_input()
+        t.insert("end", "\n")
+        self.console_ready = False
+        for one_line in line.split("\n"):   # pasted lines are read one by one, as in a terminal
+            if not self._plain_submit(one_line):
+                break
+        try:
+            if self.plain_repl.get():
+                self._show_prompt()
+        except tk.TclError:                  # `exit` closed the window
+            pass
+        return "break"
+
+    def _plain_submit(self, line: str) -> bool:
+        """One line typed at the plain REPL: evaluate once the form is complete, as lispy3.repl does.
+
+        Returns False after `exit`.
+        """
         if not self.repl_pending and not line.strip():
-            return
+            return True
         if not self.repl_pending and line.strip().lower() == "exit":
             self._on_close()
-            return
-        self.listener_write(f"{self._prompt_text()} {line}\n", "prompt")
+            return False
         self.listener_history.append(line)
         self.listener_hist_idx = len(self.listener_history)
         code = f"{self.repl_pending}\n{line}" if self.repl_pending else line
         if L.count_balance(code) > 0:
             self.repl_pending = code
-            self._update_prompt()
-            return
+            return True
         self.repl_pending = ""
-        self._update_prompt()
         val, err = self._run(code)
         self._report_eval(val, err, code=code, plain=True)
+        return True
 
     def _cancel_pending(self, event=None):
-        if self.repl_pending:
+        """Esc: drop what is typed and any unfinished form."""
+        if not self.console_ready:
+            return "break"
+        if self.repl_pending or self._console_input():
+            self.listener_text.insert("end", "\n")
+            self.console_ready = False
+            if self.repl_pending:
+                self.listener_write(";; unfinished form dropped\n", "info")
             self.repl_pending = ""
-            self._update_prompt()
-            self.listener_write(";; unfinished form dropped\n", "info")
+            self._show_prompt()
         return "break"
 
     def _listener_tab(self, event=None):
         """Tab in the plain REPL completes like readline: the shared start, then the choices."""
-        if not self.plain_repl.get():
-            return None                     # Tab moves the focus, as before
-        before = self.listener_input.get()[:self.listener_input.index("insert")]
+        if not self.console_ready:
+            return "break"
+        t = self.listener_text
+        if t.compare("insert", "<", "input"):
+            t.mark_set("insert", "end-1c")
+        before = t.get("input", "insert")
         m = SYMBOL_TAIL.search(before)
         prefix = m.group(0) if m else ""
         if not prefix:
@@ -1562,10 +1650,66 @@ class LispMachine(tk.Tk):
         if len(matches) == 1:
             shared += " "
         if len(shared) > len(prefix):
-            self.listener_input.insert("insert", shared[len(prefix):])
+            t.insert("insert", shared[len(prefix):])
         else:
             self.listener_write("  ".join(matches) + "\n", "info")
+        t.see("insert")
         return "break"
+
+    def _console_history(self, step: int):
+        if not self.console_ready or not self.listener_history:
+            return "break"
+        n = len(self.listener_history)
+        self.listener_hist_idx = max(0, min(n, self.listener_hist_idx + step))
+        self._set_console_input(self.listener_history[self.listener_hist_idx]
+                                if self.listener_hist_idx < n else "")
+        return "break"
+
+    def _console_home(self, event=None):
+        t = self.listener_text
+        if self.console_ready and t.compare("insert", ">=", "input"):
+            t.mark_set("insert", "input")
+            return "break"
+        return None
+
+    def _console_key(self, event):
+        """Keep the text before the prompt read-only; typing anywhere goes to the input."""
+        if not self.console_ready:
+            return "break" if event.char else None
+        t = self.listener_text
+        sel = t.tag_ranges("sel")
+        sel_locked = bool(sel) and t.compare("sel.first", "<", "input")
+        if event.keysym in ("BackSpace", "Delete"):
+            if sel_locked:
+                return "break"
+            if not sel and (t.compare("insert", "<", "input") or
+                            (event.keysym == "BackSpace" and t.compare("insert", "==", "input"))):
+                return "break"
+            return None
+        if event.state & 0x4:                # Ctrl+key: copy, select all ... are fine
+            return None
+        if event.char and event.char.isprintable():
+            if sel_locked:
+                t.tag_remove("sel", "1.0", "end")
+            if t.compare("insert", "<", "input"):
+                t.mark_set("insert", "end-1c")
+        return None
+
+    def _console_paste(self, event=None):
+        t = self.listener_text
+        if not self.console_ready:
+            return "break"
+        if t.tag_ranges("sel") and t.compare("sel.first", "<", "input"):
+            t.tag_remove("sel", "1.0", "end")
+        if t.compare("insert", "<", "input"):
+            t.mark_set("insert", "end-1c")
+        return None
+
+    def _console_cut(self, event=None):
+        t = self.listener_text
+        if not self.console_ready or (t.tag_ranges("sel") and t.compare("sel.first", "<", "input")):
+            return "break"
+        return None
 
     def _history_up(self, event=None):
         if not self.listener_history:
@@ -1585,18 +1729,27 @@ class LispMachine(tk.Tk):
         return "break"
 
     def listener_write(self, text: str, tag: str | None = None):
-        self.listener_text.configure(state="normal")
+        t = self.listener_text
+        t.configure(state="normal")
+        # With the plain REPL's prompt showing, output goes above the prompt line
+        where = "prompt_start" if self.console_ready else "end"
         if tag:
-            self.listener_text.insert("end", text, tag)
+            t.insert(where, text, tag)
         else:
-            self.listener_text.insert("end", text)
-        self.listener_text.see("end")
-        self.listener_text.configure(state="disabled")
+            t.insert(where, text)
+        t.see("end")
+        if not self.plain_repl.get():
+            t.configure(state="disabled")
 
     def clear_listener(self):
         self.listener_text.configure(state="normal")
         self.listener_text.delete("1.0", "end")
-        self.listener_text.configure(state="disabled")
+        self.console_ready = False
+        if self.plain_repl.get():
+            self.repl_pending = ""
+            self._show_prompt()
+        else:
+            self.listener_text.configure(state="disabled")
 
     # =========================================================================
     # Inspector
