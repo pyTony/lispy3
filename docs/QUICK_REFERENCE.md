@@ -58,14 +58,20 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 
 | Function | Result |
 |----------|--------|
-| `(+ a b)` `(- a b)` `(* a b)` `(/ a b)` | arithmetic, exactly two numbers (`plus` = `+`) |
-| `(= a b)` | equal: numbers, strings, symbols, characters |
-| `(< a b)` `(> a b)` `(<= a b)` `(>= a b)` | compare |
+| `(+ a b ...)` `(- a b ...)` `(* a b ...)` `(/ a b ...)` | arithmetic, any number of values (`plus` = `+`); `/` gives a decimal |
+| `(div a b)` `(mod a b)` `(divmod a b)` | whole-number division rounding down, what is left over, both as `(div mod)`; like Python's `//`, `%`, `divmod` |
+| `(quotient a b)` `(remainder a b)` `(modulo a b)` | Scheme's: round toward zero, left over with the sign of `a`; `modulo` = `mod` |
+| `(expt a b)` | power, exact for whole numbers |
+| `(even? n)` `(odd? n)` `(zero? x)` `(positive? x)` `(negative? x)` `(integer? x)` | number tests |
+| `(exact 3.0)` `(inexact 3)` | `3` and `3.0` |
+| `(number->string 255 16)` `(string->number "ff" 16)` | `"ff"` and `255`, any base from 2 to 36 |
+| `(= a b ...)` | equal: numbers, strings, symbols, characters |
+| `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
 | `(not x)` | true when `x` is false, `0` or `()` |
 | `(abs x)` `(round x)` | absolute value, nearest whole number |
 | `(min a b ...)` `(max a b ...)` | smallest, largest |
 | `(number? x)` `(symbol? x)` | type tests |
-| `sqrt floor ceil fmod pow log exp sin cos tan ...` | everything in Python's `math` |
+| `sqrt floor ceil fmod pow log exp sin cos tan gcd lcm isqrt factorial comb ...` | everything in Python's `math` |
 | `pi` `e` `inf` | constants from `math` |
 
 True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything else is true, including `""`. Tests return `#t`/`#f`; `define`, `set!`, `while` and `display` return nothing; a missing value is `()`. How this compares with Scheme, Common Lisp and Clojure: [True and false](LISPY_BY_EXAMPLE.md#true-and-false).
@@ -96,11 +102,11 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 ## Limits to remember
 
 - About 200 nested calls of recursion; use `map`, `filter` or `while` for more.
-- `+ - * /` take two arguments; `if` needs else; lambda has one body expression.
+- `if` needs else; lambda has one body expression.
 
 ## TO BE IMPLEMENTED
 
 Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md), the list in [TODO.md](../TODO.md)):
-`cond`, `and`, `or`, `(+ 1 2 3)` and `(< 1 2 3)` with many arguments, `modulo`, `quotient`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
+`cond`, `and`, `or`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.

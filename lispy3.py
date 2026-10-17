@@ -145,9 +145,18 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("-", "(- a b ...) - subtract; (- a) is minus a"),
         ("*", "(* a b ...) - multiply"),
         ("/", "(/ a b ...) - divide, gives a decimal"),
-        ("quotient", "(quotient a b) - whole-number division, rounding toward zero"),
-        ("modulo", "(modulo a b) - remainder, with the sign of b"),
+        ("div", "(div a b) - whole-number division rounding down, like Python's //"),
+        ("mod", "(mod a b) - what is left over after div, like Python's %; same as modulo"),
+        ("divmod", "(divmod a b) - both at once: (div mod), e.g. (divmod 17 5) gives (3 2)"),
+        ("quotient", "(quotient a b) - whole-number division rounding toward zero"),
+        ("remainder", "(remainder a b) - what is left over after quotient, with the sign of a"),
+        ("modulo", "(modulo a b) - remainder with the sign of b; same as mod"),
         ("expt", "(expt a b) - a to the power b, exact for whole numbers"),
+        ("gcd", "(gcd a b ...) - greatest common divisor; also lcm, isqrt, factorial, comb from math"),
+        ("even?", "(even? n), (odd? n) - true for an even or odd whole number"),
+        ("zero?", "(zero? x), (positive? x), (negative? x) - compare with 0"),
+        ("integer?", "(integer? x) - true for a whole number, also 3.0"),
+        ("exact", "(exact x) - a decimal as a whole number, 3.0 gives 3; (inexact x) the other way"),
         ("=", "(= a b ...) - equal; works on numbers, symbols, strings and characters"),
         ("<", "(< a b ...), also > <= >= - true when each value is in order with the next"),
         ("not", "(not x) - #t if x is #f, 0 or empty, else #f"),
@@ -168,7 +177,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("split", "(split s) or (split s sep) - a list of the parts"),
         ("list->string", "(list->string chars) - join characters into a string; string->list goes back"),
         ("string->number", "(string->number \"42\") - the number, or #f"),
-        ("number->string", "(number->string 42) - the string \"42\""),
+        ("number->string", "(number->string 42) - the string \"42\"; (number->string 255 16) gives \"ff\""),
         ("string?", "(string? x) - true for a string; also char?, symbol?"),
         ("string->symbol", "(string->symbol \"car\") - the symbol car"),
         ("symbol->string", "(symbol->string 'car) - the string \"car\""),
@@ -209,7 +218,9 @@ _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in 
 for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset': 'reinit-turtle',
                       '>': '<', '<=': '<', '>=': '<', 'fold': 'reduce', 'downcase': 'upcase',
                       'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
-                      'symbol?': 'string?', 'else': 'cond', 'catch': 'try'}.items():
+                      'symbol?': 'string?', 'else': 'cond', 'catch': 'try',
+                      'odd?': 'even?', 'positive?': 'zero?', 'negative?': 'zero?', 'inexact': 'exact',
+                      'exact->inexact': 'exact', 'inexact->exact': 'exact'}.items():
     _HELP_INDEX[_alias] = _HELP_INDEX[_name]
 
 def lisp_help(*args: Any) -> None:
@@ -443,6 +454,45 @@ def _quotient(a: Number, b: Number) -> int:
         return q if (a < 0) == (b < 0) else -q
     return int(math.trunc(a / b))
 
+def _remainder(a: Number, b: Number) -> Number:
+    """What is left over after quotient: a - b * (quotient a b), with the sign of a."""
+    if isinstance(a, int) and isinstance(b, int):
+        return a - b * _quotient(a, b)
+    return math.fmod(a, b)
+
+def _div(a: Number, b: Number) -> Number:
+    """Division rounding down, like Python's //; a whole number for whole numbers."""
+    return a // b
+
+def _whole(n: Any, name: str) -> int:
+    """n as a Python int, or an error naming the procedure that needed a whole number."""
+    if isinstance(n, int) and not isinstance(n, bool):
+        return n
+    if isinstance(n, float) and n.is_integer():
+        return int(n)
+    raise TypeError(f"{name} needs a whole number, got {lisp_str(n)}")
+
+def _exact(x: Number) -> int:
+    """A decimal with no fraction as a whole number: (exact 3.0) gives 3."""
+    return _whole(x, 'exact')
+
+_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+def _number_to_string(n: Number, base: int = 10) -> String:
+    """(number->string n) or (number->string n base) for a whole number in base 2 to 36."""
+    if base == 10:
+        return String(str(n))
+    if not 2 <= base <= 36:
+        raise ValueError("number->string: base must be from 2 to 36")
+    m = _whole(n, 'number->string')
+    digits, k = [], abs(m)
+    while True:
+        k, d = divmod(k, base)
+        digits.append(_DIGITS[d])
+        if k == 0:
+            break
+    return String(('-' if m < 0 else '') + ''.join(reversed(digits)))
+
 def _modulo(a: Number, b: Number) -> Number:
     res = a % b
     if isinstance(a, int) and isinstance(b, int):
@@ -581,7 +631,21 @@ def standard_env() -> Env:
         '*': lambda *args: functools.reduce(op.mul, args, 1),
         '/': _variadic_div,
         'quotient': _quotient,
+        'remainder': _remainder,
         'modulo': _modulo,
+        'div': _div,
+        'mod': _modulo,
+        'divmod': lambda a, b: [_div(a, b), _modulo(a, b)],
+        'even?': lambda n: _whole(n, 'even?') % 2 == 0,
+        'odd?': lambda n: _whole(n, 'odd?') % 2 == 1,
+        'zero?': lambda x: x == 0,
+        'positive?': lambda x: x > 0,
+        'negative?': lambda x: x < 0,
+        'integer?': lambda x: isinstance(x, int) and not isinstance(x, bool) or isinstance(x, float) and x.is_integer(),
+        'exact': _exact,
+        'inexact': float,
+        'exact->inexact': float,
+        'inexact->exact': _exact,
         'expt': pow,
         'abs': abs,
         'min': min,
@@ -644,7 +708,7 @@ def standard_env() -> Env:
         'list->string': lambda lst: String("".join(_unwrap_str(c) for c in lst)),
         'string->list': lambda s: [Char(c) for c in _unwrap_str(s)],
         'string->number': _string_to_number,
-        'number->string': lambda n: String(str(n)),
+        'number->string': _number_to_string,
         'format': _format_lisp,
 
         # Maps / Dictionaries
