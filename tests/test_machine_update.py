@@ -8,6 +8,7 @@ Run:  python -m unittest discover tests
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -72,6 +73,19 @@ class GitPull(unittest.TestCase):
         result, output = machine.git_pull(self.clone)
         self.assertEqual(result, "failed")
         self.assertIn("git", output)
+
+
+
+class RestartCommand(unittest.TestCase):
+    def test_same_python_runs_the_editor_with_the_open_files(self):
+        cmd = machine.restart_command(["/a/x.lisp", "/b/y.lisp"], False)
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertEqual(os.path.basename(cmd[1]), "lispy_machine.pyw")
+        self.assertTrue(os.path.isabs(cmd[1]))
+        self.assertEqual(cmd[2:], ["/a/x.lisp", "/b/y.lisp"])
+
+    def test_plain_repl_mode_is_kept(self):
+        self.assertEqual(machine.restart_command([], True)[2:], ["--repl"])
 
 
 if __name__ == "__main__":

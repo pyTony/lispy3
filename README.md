@@ -224,7 +224,7 @@ The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `ic
 
 The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens what you did in the Listener as a new buffer that runs as a program: the `USER>`, `lispy3>` and `... (n)>` prompts are removed, results, output and errors become `;;` comments, and a form that gave an error is commented out too. Save it with Ctrl+S, or run it with F6.
 
-**Help → Update** runs `git pull` in the program's folder, so a copy cloned with git updates without the command line. It warns about unsaved buffers first, and git refuses (and says which files) if your own edits to files in that folder would be overwritten. Restart the editor afterwards.
+**Help → Update** runs `git pull` in the program's folder, so a copy cloned with git updates without the command line. It warns about unsaved buffers first, and git refuses (and says which files) if your own edits to files in that folder would be overwritten. After a successful update it offers to restart the editor, reopening your saved buffers, so the new version is the one running.
 
 `lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 

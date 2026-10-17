@@ -211,6 +211,11 @@ def inspector_items(env=None):
     env = L.global_env if env is None else env
     return [(name, preview(env[name])) for name in sorted(user_defined_names()) if name in env]
 
+def restart_command(files, plain_repl: bool) -> list[str]:
+    """The command that starts Lispy3 Machine again with these files open."""
+    script = os.path.join(APP_DIR, "lispy_machine.pyw")
+    return [sys.executable, script] + (["--repl"] if plain_repl else []) + list(files)
+
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
 FONT_UI        = ("Segoe UI", 9)
@@ -910,6 +915,7 @@ class LispMachine(tk.Tk):
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
         self.repl_pending = ""      # lines of an unfinished form in the plain REPL
         self.console_ready = False  # the plain REPL prompt is showing, waiting for input
+        self.update_pending = False # Help > Update pulled a new version, not running yet
 
         self._setup_style()
         self._build_menu()
@@ -2000,7 +2006,7 @@ class LispMachine(tk.Tk):
         if dirty and not messagebox.askyesno(
             "Unsaved buffers",
             "These buffers have unsaved changes:\n  " + "\n  ".join(dirty) +
-            "\n\nThe update needs a restart afterwards, so save them first."
+            "\n\nUpdating ends with a restart, so save them first."
             "\nUpdate anyway?"
         ):
             return
@@ -2017,12 +2023,38 @@ class LispMachine(tk.Tk):
             self.listener_write(output + "\n", "error" if result == "failed" else "info")
         if result == "failed":
             messagebox.showerror("Update failed", output or "git pull failed.")
-        elif result == "current":
+            return
+        if result == "updated":
+            self.update_pending = True
+        if not self.update_pending:
             messagebox.showinfo("Update", "Lispy3 is already up to date.")
+        elif messagebox.askyesno("Update", "Lispy3 was updated. The new version is used "
+                                 "after a restart.\n\nRestart Lispy3 Machine now?"):
+            self.restart()
         else:
-            messagebox.showinfo("Update", "Lispy3 was updated.\n\n"
-                                "Save your work and restart Lispy3 Machine "
-                                "to use the new version.")
+            self.listener_write(";; Restart Lispy3 Machine to use the new version "
+                                "(Help > Update offers it again).\n", "info")
+
+    def restart(self):
+        """Start a fresh Lispy3 Machine with the saved buffers open, then close this one.
+
+        A new process is the only way the updated lispy3.py and editor code
+        are really used: modules already imported stay old in this one.
+        """
+        dirty = [t.name for t in self.tabs.values() if t.dirty]
+        if dirty and not messagebox.askyesno(
+            "Unsaved buffers",
+            "These buffers have unsaved changes:\n  " + "\n  ".join(dirty) +
+            "\n\nThey are lost on restart. Restart anyway?"
+        ):
+            return
+        files = [t.path for t in self.tabs.values() if t.path]
+        try:
+            subprocess.Popen(restart_command(files, self.plain_repl.get()), cwd=os.getcwd())
+        except OSError as e:
+            messagebox.showerror("Restart failed", f"Could not start Lispy3 Machine: {e}")
+            return
+        self.destroy()
 
     def _about(self):
         messagebox.showinfo(
