@@ -571,9 +571,9 @@ The names live only inside the one body expression; use `begin` inside `let` for
 ## Files and workspaces
 
     lispy3> (save "mine")
-    Workspace saved to mine.lisp
+    Workspace saved to .../lisp/mine.lisp
     lispy3> (load "mine")
-    Workspace loaded from mine.lisp. Defined: ...
+    Workspace loaded from .../lisp/mine.lisp. Defined: ...
     lispy3> (load "lsystems")
 
 `save` writes all your definitions as Lisp code; `load` runs any `.lisp` file. From the command line: `python lispy3.py prog.lisp`, or `python lispy3.py -i prog.lisp` to stay at the prompt afterwards.

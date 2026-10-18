@@ -110,13 +110,47 @@ class SaveAndLoadTest(LispyTestCase):
                 self.assertEqual(f.read(), "")
 
 
+class LispFolderTest(LispyTestCase):
+    """Bare names in (save "x") and (load "x") mean the lisp/ folder."""
+
+    def setUp(self):
+        super().setUp()
+        self.folder = tempfile.TemporaryDirectory()
+        self.old_cwd, self.old_lisp_dir = os.getcwd(), lispy3.LISP_DIR
+        os.chdir(self.folder.name)
+        lispy3.LISP_DIR = os.path.join(self.folder.name, "lisp")
+
+    def tearDown(self):
+        os.chdir(self.old_cwd)
+        lispy3.LISP_DIR = self.old_lisp_dir
+        self.folder.cleanup()
+
+    def test_save_bare_name_goes_to_lisp_folder(self):
+        self.ev("(define x 7)")
+        self.ev('(save "ws")')
+        self.assertTrue(os.path.exists(os.path.join("lisp", "ws.lisp")))
+        self.assertFalse(os.path.exists("ws.lisp"))
+        self.ev("(set! x 0)")
+        self.ev('(load "ws")')
+        self.assertEqual(self.ev("x"), 7)
+
+    def test_file_here_wins_over_lisp_folder(self):
+        os.mkdir("lisp")
+        with open(os.path.join("lisp", "p.lisp"), "w", encoding="utf-8") as f:
+            f.write("(define where 'lisp)")
+        with open("p.lisp", "w", encoding="utf-8") as f:
+            f.write("(define where 'here)")
+        self.ev('(load "p")')
+        self.assertEqual(self.ev("where"), "here")
+
+
 class ExampleProgramsTest(LispyTestCase):
     """Every .lisp file in the repository runs without an error."""
 
     def setUp(self):
         super().setUp()
         self.old_cwd = os.getcwd()
-        os.chdir(REPO_DIR)                     # the examples load "lsystems" by its plain name
+        os.chdir(REPO_DIR)                     # run from the top folder, as the README shows
 
     def tearDown(self):
         os.chdir(self.old_cwd)
@@ -129,7 +163,7 @@ class ExampleProgramsTest(LispyTestCase):
         return out.getvalue()
 
     def test_l_systems_draw(self):
-        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "demo.lisp"]:
+        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "startup.lisp"]:
             with self.subTest(name):
                 self.setUp()
                 self.run_example(name)
@@ -143,7 +177,7 @@ class ExampleProgramsTest(LispyTestCase):
         self.run_example("my_workspace.lisp")
 
     def test_every_example_is_covered(self):
-        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "demo.lisp", "sieve_lispy3.lisp",
+        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
                    "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
-        examples = {f for f in os.listdir(REPO_DIR) if f.endswith(".lisp")}
+        examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
         self.assertEqual(examples - covered, set(), "add a test for the new example program")

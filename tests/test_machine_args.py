@@ -77,22 +77,33 @@ class ReadFileArg(unittest.TestCase):
         self.assertTrue(os.path.isabs(path))
         self.assertEqual(os.path.basename(path), "rel.lisp")
 
+    def test_bare_name_not_here_opens_the_one_in_lisp_folder(self):
+        cwd = os.getcwd()
+        os.chdir(self.dir.name)
+        self.addCleanup(os.chdir, cwd)
+        name, content, path = machine.read_file_arg("tree.lisp")
+        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "tree.lisp"))
+        self.assertIn('(load "lsystems")', content)
+        _, _, path = machine.read_file_arg("brand_new.lisp")
+        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "brand_new.lisp"))
+        self.assertFalse(os.path.exists(path))
+
     def test_a_folder_is_an_error(self):
         with self.assertRaises(OSError):
             machine.read_file_arg(self.dir.name)
 
 
 class ReadDemo(unittest.TestCase):
-    def test_demo_file_is_next_to_the_editor(self):
-        self.assertEqual(machine.DEMO_FILE, os.path.join(REPO_DIR, "demo.lisp"))
-        name, content, path = machine.read_demo()
-        self.assertEqual((name, path), ("demo.lisp", machine.DEMO_FILE))
-        with open(machine.DEMO_FILE, encoding="utf-8") as f:
+    def test_startup_file_is_next_to_the_editor(self):
+        self.assertEqual(machine.STARTUP_FILE, os.path.join(REPO_DIR, "startup.lisp"))
+        name, content, path = machine.read_startup()
+        self.assertEqual((name, path), ("startup.lisp", machine.STARTUP_FILE))
+        with open(machine.STARTUP_FILE, encoding="utf-8") as f:
             self.assertEqual(content, f.read())
 
-    def test_missing_demo_gives_an_empty_untitled_buffer(self):
+    def test_missing_startup_file_gives_an_empty_untitled_buffer(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(machine.read_demo(os.path.join(d, "demo.lisp")),
+            self.assertEqual(machine.read_startup(os.path.join(d, "startup.lisp")),
                              ("untitled.lisp", "", None))
 
 

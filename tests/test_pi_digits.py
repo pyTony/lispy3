@@ -4,7 +4,7 @@ import io
 import os
 import unittest
 
-from support import LispyTestCase, REPO_DIR, lispy3
+from support import LispyTestCase, lispy3
 
 
 def python_pi(decimals: int) -> str:
@@ -30,7 +30,7 @@ class PiDigitsTest(LispyTestCase):
     def setUp(self):
         super().setUp()
         with contextlib.redirect_stdout(io.StringIO()) as out:
-            self.assertTrue(lispy3.run_file(os.path.join(REPO_DIR, 'pi_digits.lisp')))
+            self.assertTrue(lispy3.run_file(os.path.join(lispy3.LISP_DIR, 'pi_digits.lisp')))
         self.printed = out.getvalue().strip()
 
     def test_program_prints_100_decimals(self):

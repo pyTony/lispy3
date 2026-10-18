@@ -70,12 +70,14 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | File | Role |
 |------|------|
 | `lispy3.py` | The interpreter (REPL + `python lispy3.py file.lisp` script runner). |
-| `lsystems.lisp` | The L-system drawing engine used by every example. |
-| `tree.lisp`, `plant.lisp`, `snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
-| `sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
-| `pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
-| `my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
+| `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |
+| `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
+| `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
+| `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
+| `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
+| `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
+| `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
 | `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
@@ -106,7 +108,7 @@ Run the interpreter directly using Python 3:
     81
 
     lispy3> (save "my_workspace")
-    Workspace saved to my_workspace.lisp
+    Workspace saved to .../lisp/my_workspace.lisp
 
 ---
 
@@ -120,7 +122,7 @@ Run the interpreter directly using Python 3:
 
 In the REPL, `Tab` completes the name you are typing: built-ins, special forms such as `define` and `lambda`, your own definitions, and the `:keywords` of maps you have defined. Press it twice to list every choice. `↑` / `↓` bring back earlier lines. This uses Python's `readline`, which Linux and macOS have; on Windows install it once with `pip install pyreadline3` (the REPL says so at start-up when it is missing).
 
-A program file is ordinary Lisp code that runs from top to bottom, like a Python script. A `;` starts a comment. `(load "other")` runs another file first; the `.lisp` ending is optional. If the program drew with turtle graphics, the window stays open until you close it (not when you use `-i`, where you get the prompt instead).
+A program file is ordinary Lisp code that runs from top to bottom, like a Python script. A `;` starts a comment. `(load "other")` runs another file first; the `.lisp` ending is optional. A file name without a folder is looked for in the current folder first and then in `lisp/`, so `python lispy3.py tree.lisp` and `(load "lsystems")` work from anywhere. `(save "name")` writes `lisp/name.lisp` unless you give a path. If the program drew with turtle graphics, the window stays open until you close it (not when you use `-i`, where you get the prompt instead).
 
 ---
 
@@ -216,9 +218,9 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 ### Running the editor
 
     python lispy_machine.pyw
-    python lispy_machine.pyw tree.lisp      # open a file instead of demo.lisp
+    python lispy_machine.pyw tree.lisp      # open a file instead of startup.lisp
 
-Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
+Every file named on the command line opens in its own buffer. A bare file name that is not in the current folder means the file in `lisp/`. A name that does not exist yet opens an empty buffer that is created on the first **Save**. **File → Open** and **Save as** start in `lisp/` (or in the buffer's own folder). On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 
 The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. `python make_shortcut.py` puts a *Lispy Machine* launcher with this icon on your desktop. It works on Windows and Linux; on Linux it also adds Lispy Machine to the applications menu, and it starts the editor with the Python that ran the script, so use your venv's `python` if you have one.
 

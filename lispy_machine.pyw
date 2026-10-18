@@ -20,7 +20,7 @@ Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
       --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
       Each file named on the command line opens in its own buffer; a file that
       does not exist yet opens empty and is created on the first Save. With no
-      files, demo.lisp from the Lispy folder opens instead.
+      files, startup.lisp from the Lispy folder opens instead, if it exists.
 """
 import io
 import contextlib
@@ -935,10 +935,13 @@ class SearchBar(tk.Frame):
 def read_file_arg(arg: str):
     """Return (buffer name, content, path) for a file named on the command line.
 
-    A file that does not exist yet gives an empty buffer that saves to that
-    path; any other read error is raised as OSError.
+    A bare file name that is not in the current folder means the file in
+    lisp/. A file that does not exist yet gives an empty buffer that saves to
+    that path; any other read error is raised as OSError.
     """
     path = os.path.abspath(arg)
+    if not os.path.dirname(arg) and not os.path.exists(path):
+        path = os.path.join(L.LISP_DIR, arg)
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -947,12 +950,12 @@ def read_file_arg(arg: str):
     return os.path.basename(path), content, path
 
 
-DEMO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo.lisp")
+STARTUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "startup.lisp")
 
 
-def read_demo(path=DEMO_FILE):
+def read_startup(path=STARTUP_FILE):
     """Return (buffer name, content, path) for the buffer opened when no file
-    is named on the command line: demo.lisp, or an empty untitled buffer if
+    is named on the command line: startup.lisp, or an empty untitled buffer if
     it is missing or unreadable."""
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -1272,7 +1275,7 @@ class LispMachine(tk.Tk):
         self._build_status()
         self._bind_global()
 
-        # files from the command line, or demo.lisp
+        # files from the command line, or startup.lisp
         open_errors = []
         for arg in files:
             try:
@@ -1282,7 +1285,7 @@ class LispMachine(tk.Tk):
                 continue
             self.new_buffer(name, content, path=path)
         if not self.tabs:
-            name, content, path = read_demo()
+            name, content, path = read_startup()
             self.new_buffer(name, content, path=path)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
@@ -1724,9 +1727,17 @@ class LispMachine(tk.Tk):
         tab.destroy()
         self._refresh_buffer_list()
 
+    def _file_dialog_dir(self, tab=None):
+        """Where Open and Save as start: the buffer's own folder, else lisp/."""
+        if tab is not None and tab.path:
+            return os.path.dirname(tab.path)
+        os.makedirs(L.LISP_DIR, exist_ok=True)
+        return L.LISP_DIR
+
     def open_file(self):
         path = filedialog.askopenfilename(
             title="Open Lisp file",
+            initialdir=self._file_dialog_dir(),
             filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
         if not path:
             return
@@ -1760,6 +1771,7 @@ class LispMachine(tk.Tk):
             return
         path = filedialog.asksaveasfilename(
             title="Save as",
+            initialdir=self._file_dialog_dir(tab),
             defaultextension=".lisp",
             filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
         if not path:
