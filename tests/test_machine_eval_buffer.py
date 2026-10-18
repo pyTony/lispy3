@@ -59,6 +59,7 @@ class EvalBufferTest(unittest.TestCase):
         fresh_global_env()
 
     def test_defun_in_a_buffer(self):
+        """F6 runs a buffer with defun and reports the function as defined."""
         out = _FakeMachine("(defun factorial (n) (cond ((= n 0) 1) (t (* n (factorial (- n 1))))))\n"
                            "(factorial 5)\n").run()
         self.assertNotIn("Error", out)
@@ -66,6 +67,7 @@ class EvalBufferTest(unittest.TestCase):
         self.assertIn("120", out)
 
     def test_macro_defined_earlier_in_the_buffer(self):
+        """F6 expands a macro defined earlier in the same buffer."""
         out = _FakeMachine("(define-macro (unless c body) `(if ,c #f ,body))\n"
                            "(unless #f 42)\n").run()
         self.assertNotIn("Error", out)

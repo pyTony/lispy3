@@ -41,16 +41,19 @@ class GitPull(unittest.TestCase):
         git(tmp.name, "clone", "-q", self.origin, self.clone)
 
     def test_nothing_new_is_current(self):
+        """Help > Update reports current when there is nothing new."""
         result, _ = machine.git_pull(self.clone)
         self.assertEqual(result, "current")
 
     def test_new_commit_is_pulled(self):
+        """A new commit is pulled and reported as updated."""
         commit(self.origin, "b.lisp", "(* 2 3)\n")
         result, _ = machine.git_pull(self.clone)
         self.assertEqual(result, "updated")
         self.assertTrue(os.path.exists(os.path.join(self.clone, "b.lisp")))
 
     def test_local_change_in_the_way_fails_and_is_kept(self):
+        """A local edit that blocks the pull fails the update and is kept."""
         commit(self.origin, "a.lisp", "(+ 1 2 3)\n")
         with open(os.path.join(self.clone, "a.lisp"), "w", encoding="utf-8") as f:
             f.write(";; mine\n")
@@ -61,12 +64,14 @@ class GitPull(unittest.TestCase):
             self.assertEqual(f.read(), ";; mine\n")
 
     def test_folder_that_is_not_a_repository_fails(self):
+        """Updating a folder that is not a git checkout fails with a message."""
         with tempfile.TemporaryDirectory() as plain:
             result, output = machine.git_pull(plain)
         self.assertEqual(result, "failed")
         self.assertTrue(output)
 
     def test_missing_git_fails_with_a_message(self):
+        """Without git installed, the update fails with a message naming git."""
         saved = os.environ["PATH"]
         os.environ["PATH"] = ""
         self.addCleanup(os.environ.__setitem__, "PATH", saved)
@@ -78,6 +83,7 @@ class GitPull(unittest.TestCase):
 
 class RestartCommand(unittest.TestCase):
     def test_same_python_runs_the_editor_with_the_open_files(self):
+        """Restart runs the same Python on the editor with the open files."""
         cmd = machine.restart_command(["/a/x.lisp", "/b/y.lisp"], False)
         self.assertEqual(cmd[0], sys.executable)
         self.assertEqual(os.path.basename(cmd[1]), "lispy_machine.pyw")
@@ -85,6 +91,7 @@ class RestartCommand(unittest.TestCase):
         self.assertEqual(cmd[2:], ["/a/x.lisp", "/b/y.lisp"])
 
     def test_plain_repl_mode_is_kept(self):
+        """Restart keeps the plain REPL mode."""
         self.assertEqual(machine.restart_command([], True)[2:], ["--repl"])
 
 

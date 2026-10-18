@@ -22,6 +22,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   `(format nil ...)` and `(format t ...)` with `~d`, `progn`, `setq`, `defvar`,
   `defparameter`, `defconstant`, `defmacro`, and names such as `mapcar`,
   `null`, `evenp`, `zerop`, `rem` and `string-upcase` for the built-ins.
+- Each `dotimes` pass gets a fresh loop variable, as in Clojure, so closures
+  made in the loop keep their own value.
+- Scope tests in `tests/test_scope.py`, and every test has a one-line
+  description that `python -m unittest -v` shows.
 - Eval whole buffer (F6) in the Lispy Machine expands each form first, so
   `defun`, quasiquote and macros work there as they do in the REPL.
 

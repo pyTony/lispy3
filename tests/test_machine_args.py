@@ -56,6 +56,7 @@ machine = _load_machine()
 
 class Version(unittest.TestCase):
     def test_version_option_prints_and_does_not_open_the_editor(self):
+        """--version and -V print the version without opening the editor window."""
         for option in ("--version", "-V"):
             with mock.patch.object(sys, "argv", ["lispy_machine.pyw", option]), \
                     mock.patch.object(machine, "LispMachine") as app, \
@@ -69,6 +70,7 @@ class Version(unittest.TestCase):
 
 class NumpyInterpreter(unittest.TestCase):
     def test_numpy_version_is_used_exactly_when_numpy_is_installed(self):
+        """The Machine uses lispy3-numpy.py exactly when NumPy is installed."""
         try:
             import numpy  # noqa: F401
             has_numpy = True
@@ -85,6 +87,7 @@ class ReadFileArg(unittest.TestCase):
         self.addCleanup(self.dir.cleanup)
 
     def test_existing_file_gives_its_content(self):
+        """A file named on the command line opens with its content."""
         path = os.path.join(self.dir.name, "demo.lisp")
         with open(path, "w", encoding="utf-8") as f:
             f.write("(+ 1 2)\n")
@@ -92,11 +95,13 @@ class ReadFileArg(unittest.TestCase):
                          ("demo.lisp", "(+ 1 2)\n", path))
 
     def test_missing_file_gives_an_empty_buffer_with_that_path(self):
+        """A file that does not exist yet opens as an empty buffer and is not created."""
         path = os.path.join(self.dir.name, "new.lisp")
         self.assertEqual(machine.read_file_arg(path), ("new.lisp", "", path))
         self.assertFalse(os.path.exists(path))
 
     def test_relative_path_is_made_absolute(self):
+        """A relative path is turned into an absolute one."""
         cwd = os.getcwd()
         os.chdir(self.dir.name)
         self.addCleanup(os.chdir, cwd)
@@ -106,6 +111,7 @@ class ReadFileArg(unittest.TestCase):
         self.assertEqual(os.path.basename(path), "rel.lisp")
 
     def test_bare_name_not_here_opens_the_one_in_lisp_folder(self):
+        """A bare name not found here opens the file of that name in lisp/."""
         cwd = os.getcwd()
         os.chdir(self.dir.name)
         self.addCleanup(os.chdir, cwd)
@@ -117,12 +123,14 @@ class ReadFileArg(unittest.TestCase):
         self.assertFalse(os.path.exists(path))
 
     def test_a_folder_is_an_error(self):
+        """Naming a folder instead of a file is an error."""
         with self.assertRaises(OSError):
             machine.read_file_arg(self.dir.name)
 
 
 class ReadDemo(unittest.TestCase):
     def test_startup_file_is_next_to_the_editor(self):
+        """startup.lisp next to the editor opens as the first buffer."""
         self.assertEqual(machine.STARTUP_FILE, os.path.join(REPO_DIR, "startup.lisp"))
         name, content, path = machine.read_startup()
         self.assertEqual((name, path), ("startup.lisp", machine.STARTUP_FILE))
@@ -130,6 +138,7 @@ class ReadDemo(unittest.TestCase):
             self.assertEqual(content, f.read())
 
     def test_missing_startup_file_gives_an_empty_untitled_buffer(self):
+        """Without startup.lisp the editor opens an empty untitled.lisp."""
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(machine.read_startup(os.path.join(d, "startup.lisp")),
                              ("untitled.lisp", "", None))
