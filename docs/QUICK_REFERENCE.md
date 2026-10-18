@@ -66,7 +66,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(quotient a b)` `(remainder a b)` `(modulo a b)` | Scheme's: round toward zero, left over with the sign of `a`; `modulo` = `mod` |
 | `(expt a b)` | power, exact for whole numbers |
 | `(even? n)` `(odd? n)` `(zero? x)` `(positive? x)` `(negative? x)` `(integer? x)` | number tests |
-| `(exact 3.0)` `(inexact 3)` | `3` and `3.0` |
+| `(exact 3.0)` `(inexact 3)` | `3` and `3.0`; `(exact 0.1)` is `1/10` |
 | `(number->string 255 16)` `(string->number "ff" 16)` | `"ff"` and `255`, any base from 2 to 36 |
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
 | `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
