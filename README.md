@@ -75,9 +75,9 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
-| `lisp/demo.lisp` | The tour that opens when the editor starts without a file. |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
+| `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
 | `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
@@ -218,7 +218,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 ### Running the editor
 
     python lispy_machine.pyw
-    python lispy_machine.pyw tree.lisp      # open a file instead of lisp/demo.lisp
+    python lispy_machine.pyw tree.lisp      # open a file instead of startup.lisp
 
 Every file named on the command line opens in its own buffer. A bare file name that is not in the current folder means the file in `lisp/`. A name that does not exist yet opens an empty buffer that is created on the first **Save**. **File → Open** and **Save as** start in `lisp/` (or in the buffer's own folder). On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 

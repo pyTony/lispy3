@@ -20,7 +20,7 @@ Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
       --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
       Each file named on the command line opens in its own buffer; a file that
       does not exist yet opens empty and is created on the first Save. With no
-      files, lisp/demo.lisp from the Lispy folder opens instead.
+      files, startup.lisp from the Lispy folder opens instead, if it exists.
 """
 import io
 import contextlib
@@ -909,12 +909,12 @@ def read_file_arg(arg: str):
     return os.path.basename(path), content, path
 
 
-DEMO_FILE = os.path.join(L.LISP_DIR, "demo.lisp")
+STARTUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "startup.lisp")
 
 
-def read_demo(path=DEMO_FILE):
+def read_startup(path=STARTUP_FILE):
     """Return (buffer name, content, path) for the buffer opened when no file
-    is named on the command line: demo.lisp, or an empty untitled buffer if
+    is named on the command line: startup.lisp, or an empty untitled buffer if
     it is missing or unreadable."""
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -1234,7 +1234,7 @@ class LispMachine(tk.Tk):
         self._build_status()
         self._bind_global()
 
-        # files from the command line, or demo.lisp
+        # files from the command line, or startup.lisp
         open_errors = []
         for arg in files:
             try:
@@ -1244,7 +1244,7 @@ class LispMachine(tk.Tk):
                 continue
             self.new_buffer(name, content, path=path)
         if not self.tabs:
-            name, content, path = read_demo()
+            name, content, path = read_startup()
             self.new_buffer(name, content, path=path)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")

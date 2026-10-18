@@ -163,7 +163,7 @@ class ExampleProgramsTest(LispyTestCase):
         return out.getvalue()
 
     def test_l_systems_draw(self):
-        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "demo.lisp"]:
+        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "startup.lisp"]:
             with self.subTest(name):
                 self.setUp()
                 self.run_example(name)
@@ -177,7 +177,7 @@ class ExampleProgramsTest(LispyTestCase):
         self.run_example("my_workspace.lisp")
 
     def test_every_example_is_covered(self):
-        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "demo.lisp", "sieve_lispy3.lisp",
+        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
                    "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
         examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
         self.assertEqual(examples - covered, set(), "add a test for the new example program")
