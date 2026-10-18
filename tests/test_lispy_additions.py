@@ -144,6 +144,40 @@ class LispFolderTest(LispyTestCase):
         self.assertEqual(self.ev("where"), "here")
 
 
+class CommandLineTest(LispyTestCase):
+    """Options of `python lispy3.py` are not mistaken for program files."""
+
+    def run_main(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            status = lispy3.main(list(argv))
+        return status, out.getvalue(), err.getvalue()
+
+    def test_version(self):
+        for option in ("--version", "-V"):
+            status, out, _ = self.run_main(option)
+            self.assertEqual(status, 0)
+            self.assertEqual(out.strip(), lispy3.version_text())
+            self.assertIn(lispy3.__version__, out)
+
+    def test_help(self):
+        for option in ("--help", "-h"):
+            status, out, _ = self.run_main(option)
+            self.assertEqual(status, 0)
+            self.assertIn("usage:", out)
+
+    def test_unknown_option(self):
+        status, out, err = self.run_main("--verbose")
+        self.assertEqual(status, 2)
+        self.assertIn("unknown option --verbose", err)
+        self.assertEqual(out, "")
+
+    def test_missing_program_fails(self):
+        status, _, err = self.run_main("no_such_program.lisp")
+        self.assertEqual(status, 1)
+        self.assertIn("no_such_program.lisp", err)
+
+
 class ExampleProgramsTest(LispyTestCase):
     """Every .lisp file in the repository runs without an error."""
 

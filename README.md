@@ -117,6 +117,8 @@ Run the interpreter directly using Python 3:
     python lispy3.py                  start the REPL
     python lispy3.py prog.lisp        run prog.lisp from top to bottom, then exit
     python lispy3.py -i prog.lisp     run prog.lisp, then stay in the REPL
+    python lispy3.py --version        show the Lispy and Python versions
+    python lispy3.py --help           show these options
 
 (`-i` may also come after the file name.)
 
