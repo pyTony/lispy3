@@ -52,6 +52,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(map f lst)` | `(f item)` for every item |
 | `(filter f lst)` | items where `(f item)` is true |
 | `(get map key)` | value for `key`, `()` if missing |
+| `(string-append "a" "b" ...)` | strings joined into one, `""` for none |
 | `(str x)` | `x` as text (a symbol-like name, see [Atoms, symbols and strings](LISPY_BY_EXAMPLE.md#atoms-symbols-and-strings)) |
 | `(string? x)` | true for a string |
 | `(string->symbol "car")` / `(symbol->string 'car)` | name from text / text from name |

@@ -211,5 +211,19 @@ class ArgumentCountTest(LispyTestCase):
         self.assertEqual(self.ev("(max 1 5 2)"), 5)
 
 
+class StringAppendTest(LispyTestCase):
+
+    def test_joins_strings(self):
+        self.assertEqual(self.show('(string-append "a" "b" "c")'), '"abc"')
+        self.assertEqual(self.show('(string-append "solo")'), '"solo"')
+
+    def test_no_strings_gives_the_empty_string(self):
+        self.assertEqual(self.show("(string-append)"), '""')
+
+    def test_only_strings(self):
+        with self.assertRaisesRegex(TypeError, "string-append needs strings, got 1"):
+            self.ev('(string-append "a" 1)')
+
+
 if __name__ == "__main__":
     unittest.main()
