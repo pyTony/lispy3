@@ -6,25 +6,26 @@
   (lambda [iterations]
     (begin
       (define i 1)
-      (define j 1)
+      (define j 0)
       (define prime 0)
       (define stop (+ sieve-size 1))
       (while (<= i iterations)
         ;; 1. Vectorized reset: replaces first 8192-iteration while loop
-        (vector-fill! flags 1 1 stop)
-        (set! j 1)
+        (vector-fill! flags 1 0 stop)
+        (set! j 0)
         ;; 2. Vectorized strike-out: one slice assignment per prime instead of an inner loop.
-        ;; j runs all the way, like the original: item 0 (the number 3) is never sieved, so
-        ;; odd multiples of 3 are only struck out by their larger prime factors.
-        (while (<= j sieve-size)
+        ;; Item j is the odd number 2j+3. Unlike the original, item 0 (the number 3) is
+        ;; sieved too, so primes up to sqrt(16387) are enough: j <= 62 (prime 127).
+        (while (<= j 62)
           (if (= (vector-ref flags j) 1)
               (begin
                 (set! prime (+ (+ j j) 3))
                 (vector-slice-set! flags (+ j prime) stop prime 0))
               0)
           (set! j (+ j 1)))
-        ;; 3. Fast C-level sum of remaining 1s in range [1..sieve-size]
-        (set! cnt (- (sum flags) (vector-ref flags 0)))
+        ;; 3. Fast C-level sum of the 1s left: the odd primes 3..16387. The original
+        ;; counts 5..16387 plus 9 (it never sieves by 3), which is the same 1899.
+        (set! cnt (sum flags))
         (set! i (+ i 1))))))
 
 (display "Starting 10 iterations of the Vectorized NumPy Sieve...")
