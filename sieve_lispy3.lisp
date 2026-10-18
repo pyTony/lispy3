@@ -32,5 +32,5 @@
 (display "Starting 10 iterations of the Sieve...")
 (define t0 (clock))
 (run-sieve 10)
-(define elapsed (/ (floor (* (- (clock) t0) 100)) 100))
+(define elapsed (/ (floor (* (- (clock) t0) 100)) 100.0))
 (display "Done. Primes found: " cnt " TIME " elapsed)

@@ -54,12 +54,12 @@ class ControlTest(LispyTestCase):
     def test_and_or_short_circuit(self):
         self.assertEqual(self.ev("(and 1 2 3)"), 3)
         self.assertIs(self.ev("(and 1 #f (car))"), False)   # (car) is never run
-        self.assertEqual(self.ev("(or #f 0 7)"), 7)
+        self.assertEqual(self.ev("(or #f '() 7)"), 7)
         self.assertIs(self.ev("(or #f #f)"), False)
         self.assertEqual(self.ev("(or 5 (car))"), 5)
 
-    def test_and_treats_zero_and_empty_list_as_false(self):
-        self.assertEqual(self.ev("(and 1 0 3)"), 0)
+    def test_and_treats_empty_list_as_false_but_zero_as_true(self):
+        self.assertEqual(self.ev("(and 1 0 3)"), 3)
         self.assertEqual(self.ev("(and 1 '() 3)"), [])
 
     def test_if_without_else(self):
@@ -122,7 +122,7 @@ class MacroTest(LispyTestCase):
     def test_quasiquote(self):
         self.ev("(define xs '(2 3))")
         self.assertEqual(self.show("`(1 ,(+ 1 1) ,@xs 4)"), "(1 2 2 3 4)")
-        self.assertEqual(self.show("`[a ,(+ 1 2)]"), "(a 3)")
+        self.assertEqual(self.show("`[a ,(+ 1 2)]"), "[a 3]")
 
     def test_define_macro(self):
         self.ev("(define-macro (unless c body) `(if ,c #f ,body))")
@@ -262,7 +262,7 @@ class RestoredFeaturesTest(LispyTestCase):
         self.ev("(define v (make-vector 3 1))")
         self.ev("(vector-set! v 0 9)")
         self.assertEqual(self.ev("(vector-ref v 0)"), 9)
-        self.assertEqual(self.show("v"), "(9 1 1)")
+        self.assertEqual(self.show("v"), "[9 1 1]")
         self.ev("(define t0 (clock))")
         self.assertIs(self.ev("(>= (clock) t0)"), True)
 
