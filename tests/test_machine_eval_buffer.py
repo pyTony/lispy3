@@ -7,6 +7,7 @@ Run:  python -m unittest discover tests
 """
 import unittest
 
+import turtle_stub
 from support import fresh_global_env
 from test_machine_args import machine
 
@@ -25,6 +26,7 @@ class _FakeMachine:
     """Just enough of LispMachine for eval_buffer."""
     _parse_top_level_forms = machine.LispMachine._parse_top_level_forms
     _defined_name = staticmethod(machine.LispMachine._defined_name)
+    _eval_with_turtle = machine.LispMachine._eval_with_turtle
 
     def __init__(self, content):
         self.tab = _Tab(content)
@@ -72,6 +74,23 @@ class EvalBufferTest(unittest.TestCase):
                            "(unless #f 42)\n").run()
         self.assertNotIn("Error", out)
         self.assertIn("42", out)
+
+    def test_runs_again_after_the_turtle_window_was_closed(self):
+        """Closing the window leaves turtle's running flag off; F6 turns it back on."""
+        turtle_stub.TurtleScreen._RUNNING = False
+        out = _FakeMachine("(fd 10)\n").run()
+        self.assertNotIn("Error", out)
+        self.assertTrue(turtle_stub.TurtleScreen._RUNNING)
+
+    def test_a_closed_window_is_named_in_the_error(self):
+        """A turtle Terminator, which has no message, is reported in words."""
+        import lispy3
+
+        def closed(*args):
+            raise turtle_stub.Terminator()
+        lispy3.global_env['closed'] = closed
+        out = _FakeMachine("(closed)\n").run()
+        self.assertIn("Error: Turtle window was closed", out)
 
 
 if __name__ == "__main__":

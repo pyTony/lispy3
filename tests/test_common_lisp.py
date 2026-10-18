@@ -135,6 +135,26 @@ class DefunNumpyTest(unittest.TestCase):
                                     text=True, timeout=60)
         self.assertIn("3628800", result.stdout, result.stderr)
 
+    def test_dot_stays_turtle_dot_in_numpy_version(self):
+        """(dot 2 "black") draws with turtle; NumPy's dot product is a-dot."""
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("NumPy is not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "dots.lisp")
+            with open(script, "w") as f:
+                f.write('(dot 2 "black")\n(display (a-dot (array 1 2) (array 3 4)))\n')
+            code = ("import sys; sys.path[:0] = [%r, %r]; import turtle_stub; "
+                    "sys.modules['turtle'] = turtle_stub; import runpy; "
+                    "sys.argv = ['lispy3-numpy.py', %r]; "
+                    "runpy.run_path(%r, run_name='__main__')"
+                    % (TESTS_DIR, REPO_DIR, script, os.path.join(REPO_DIR, "lispy3-numpy.py")))
+            result = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                                    text=True, timeout=60)
+        self.assertIn("11", result.stdout, result.stderr)
+        self.assertNotIn("Error", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
