@@ -172,7 +172,7 @@ if HAS_NUMPY:
         ("list->array", "(list->array lst) - an array of the items; array->list goes back"),
         ("array->list", "(array->list a) - a list of the items"),
         ("a+", "(a+ a b) - item by item +; also a- a* a/"),
-        ("dot", "(dot a b) - dot product; matmul multiplies matrices"),
+        ("a-dot", "(a-dot a b) - dot product; matmul multiplies matrices"),
         ("mean", "(mean a) - average; std gives the standard deviation"),
         ("reshape", "(reshape a rows cols) - the same items in a new shape; (shape a) gives the shape"),
     ]
