@@ -32,11 +32,13 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font as tkfont
 from tkinter.scrolledtext import ScrolledText
 
 # --- import the interpreter (no side effects when imported) -------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
 import lispy3 as L
+import guide
 import syntax_highlight as SH
 
 
@@ -122,6 +124,16 @@ def color_code(widget, start: str, text: str):
         widget.tag_add(tag, f"{start}+{a}c", f"{start}+{b}c")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Help > About
+ABOUT_CREDITS = (
+    "Written by Tony Veijalainen (pyTony), github.com/pyTony/lispy3\n"
+    "Grown from Peter Norvig's lis.py and lispy.py, norvig.com/lispy.html\n"
+    "Roots: a Lisp in the Finnish magazine Prosessori (1981), and a\n"
+    "Python 2 version on the DaniWeb forums (2011)\n"
+    "Reference: Luciano Ramalho's fluentpython/lispy\n"
+    "With code from AI assistants: Google Jules and Gemini, Anthropic Claude"
+)
 
 def _git(folder, *args):
     """Run git in `folder` with no console window and no password prompt."""
@@ -908,6 +920,281 @@ def read_demo(path=DEMO_FILE):
         return "untitled.lisp", "", None
 
 
+# =============================================================================
+# Help window: the Lispy guide (docs/*.md and the built-ins), searchable
+# =============================================================================
+class GuideWindow(tk.Toplevel):
+    """The Lispy guide in its own window: pages, their contents, a search box."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self.title("Lispy Guide")
+        self.geometry("1000x720")
+        self.configure(bg=COLORS["bg"])
+        self.page = None
+        self.rendered = None
+        self.history: list[tuple[str, str]] = []   # (page, index) to go Back to
+        self.matches: list[int] = []
+        self.match_idx = -1
+        self._page_cache: dict[str, guide.Rendered] = {}
+        self._build()
+        self.bind("<Escape>", lambda e: self._escape())
+        self.bind("<Control-f>", lambda e: (self.search.focus_set(), self.search.select_range(0, "end"), "break")[2])
+        self.bind("<F3>", lambda e: (self._nav(1), "break")[1])
+        self.bind("<Shift-F3>", lambda e: (self._nav(-1), "break")[1])
+        self.bind("<Alt-Left>", lambda e: (self.back(), "break")[1])
+
+    # ---------- layout ----------
+    def _build(self):
+        top = tk.Frame(self, bg=COLORS["side_bg"])
+        top.pack(side="top", fill="x")
+        self.back_btn = tk.Button(top, text="◀ Back", command=self.back, state="disabled",
+                                  bg=COLORS["side_bg"], fg=COLORS["side_fg"], relief="flat",
+                                  activebackground=COLORS["side_sel"], font=FONT_UI)
+        self.back_btn.pack(side="left", padx=6, pady=4)
+        tk.Label(top, text="Search:", bg=COLORS["side_bg"], fg=COLORS["side_fg"],
+                 font=FONT_UI).pack(side="left", padx=(12, 4))
+        self.search_var = tk.StringVar(self)
+        self.search = tk.Entry(top, textvariable=self.search_var, width=30, font=FONT_MONO,
+                               bg=COLORS["entry_bg"], fg=COLORS["entry_fg"],
+                               insertbackground=COLORS["cursor"], relief="flat")
+        self.search.pack(side="left", pady=4)
+        self.search_var.trace_add("write", lambda *a: self._refresh_search())
+        self.search.bind("<Return>", lambda e: (self._nav(1), "break")[1])
+        self.search.bind("<Shift-Return>", lambda e: (self._nav(-1), "break")[1])
+        self.search.bind("<Down>", lambda e: (self._nav(1), "break")[1])
+        self.search.bind("<Up>", lambda e: (self._nav(-1), "break")[1])
+        self.search_info = tk.Label(top, text="", bg=COLORS["side_bg"], fg="#888",
+                                    font=FONT_UI, anchor="w")
+        self.search_info.pack(side="left", padx=8, fill="x", expand=True)
+
+        pane = tk.PanedWindow(self, orient="horizontal", bg=COLORS["bg"],
+                              sashwidth=5, sashrelief="flat", opaqueresize=True)
+        pane.pack(fill="both", expand=True)
+        side = tk.Frame(pane, bg=COLORS["side_bg"])
+        pane.add(side, minsize=140, width=250, stretch="never")
+
+        tk.Label(side, text="PAGES", bg=COLORS["side_bg"], fg="#888",
+                 font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x")
+        self.page_list = tk.Listbox(side, height=len(guide.PAGES), bg=COLORS["side_bg"],
+                                    fg=COLORS["side_fg"], selectbackground=COLORS["side_sel"],
+                                    selectforeground="#ffffff", font=FONT_UI, relief="flat",
+                                    highlightthickness=0, activestyle="none", exportselection=False)
+        for title, _ in guide.PAGES:
+            self.page_list.insert("end", "  " + title)
+        self.page_list.pack(fill="x")
+        self.page_list.bind("<<ListboxSelect>>", self._on_page_select)
+
+        tk.Label(side, text="CONTENTS", bg=COLORS["side_bg"], fg="#888",
+                 font=FONT_UI_BOLD, anchor="w", padx=8, pady=4).pack(fill="x", pady=(8, 0))
+        self.toc = tk.Listbox(side, bg=COLORS["side_bg"], fg=COLORS["side_fg"],
+                              selectbackground=COLORS["side_sel"], selectforeground="#ffffff",
+                              font=FONT_UI, relief="flat", highlightthickness=0,
+                              activestyle="none", exportselection=False)
+        self.toc.pack(fill="both", expand=True)
+        self.toc.bind("<<ListboxSelect>>", self._on_toc_select)
+
+        self.text = ScrolledText(pane, wrap="word", bg=COLORS["bg"], fg=COLORS["fg"],
+                                 font=("Segoe UI", 11), relief="flat", padx=18, pady=12,
+                                 insertbackground=COLORS["cursor"], selectbackground=COLORS["selection"],
+                                 spacing1=1, spacing3=2, cursor="arrow")
+        pane.add(self.text, minsize=300, stretch="always")
+        self._setup_tags()
+        # Read-only, but text can still be selected and copied
+        self.text.bind("<Key>", lambda e: None if (e.state & 0x4 and e.keysym.lower() in ("c", "a"))
+                       or e.keysym in ("Up", "Down", "Prior", "Next", "Home", "End") else "break")
+
+    def _setup_tags(self):
+        t = self.text
+        t.tag_configure("h1", font=("Segoe UI", 20, "bold"), foreground="#ffffff", spacing1=6, spacing3=10)
+        t.tag_configure("h2", font=("Segoe UI", 15, "bold"), foreground=COLORS["prompt"], spacing1=14, spacing3=6)
+        t.tag_configure("h3", font=("Segoe UI", 12, "bold"), foreground=COLORS["info"], spacing1=10, spacing3=4)
+        t.tag_configure("bold", font=("Segoe UI", 11, "bold"), foreground="#ffffff")
+        t.tag_configure("code", font=FONT_MONO, foreground="#ce9178")
+        t.tag_configure("codeblock", font=FONT_MONO, background="#2a2a2a", foreground=COLORS["fg"],
+                        lmargin1=16, lmargin2=16, wrap="none")
+        t.tag_configure("table", font=FONT_MONO)
+        t.tag_configure("tablehead", font=FONT_MONO_BOLD, foreground="#ffffff")
+        t.tag_configure("rule", font=("Segoe UI", 2), background="#444")
+        t.tag_configure("item0", lmargin1=8, lmargin2=24)
+        t.tag_configure("item1", lmargin1=28, lmargin2=44)
+        t.tag_configure("item2", lmargin1=48, lmargin2=64)
+        t.tag_configure("link", foreground="#3794ff", underline=True)
+        t.tag_bind("link", "<Enter>", lambda e: t.configure(cursor="hand2"))
+        t.tag_bind("link", "<Leave>", lambda e: t.configure(cursor="arrow"))
+        t.tag_configure("found", background="#613214")
+        t.tag_configure("found_current", background="#a8650e", foreground="#ffffff")
+        t.tag_raise("found")
+        t.tag_raise("found_current")
+        setup_code_tags(t)
+        self._char_width = tkfont.Font(font=FONT_MONO).measure("0")
+
+    # ---------- showing pages ----------
+    def show(self, page: str = guide.PAGES[0][0], anchor: str | None = None, remember: bool = True):
+        """Show `page` (a title from guide.PAGES), at the heading `anchor` if given."""
+        if remember and self.page is not None:
+            self.history.append((self.page, self.text.index("@0,0")))
+            self.back_btn.configure(state="normal")
+        if page != self.page:
+            self._load(page)
+        if anchor and anchor in self.rendered.anchors:
+            self._goto_offset(self.rendered.anchors[anchor])
+        elif not anchor:
+            self.text.yview_moveto(0)
+        self.deiconify()
+        self.lift()
+
+    def _load(self, page: str):
+        if page not in self._page_cache:
+            self._page_cache[page] = guide.render(guide.load_page(page, L.HELP_TOPICS))
+        self.page, self.rendered = page, self._page_cache[page]
+        t = self.text
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        links = 0
+        for text, tags, link in self.rendered.runs:
+            tags = list(tags)
+            for tag in tags:
+                if tag.startswith("hang") and tag not in t.tag_names():
+                    t.tag_configure(tag, lmargin2=int(tag[4:]) * self._char_width)
+            if link is not None:
+                links += 1
+                name = f"link{links}"
+                tags.append(name)
+                t.tag_bind(name, "<Button-1>", lambda e, target=link: self.follow(target))
+            start = t.index("end-1c")
+            t.insert("end", text, tuple(tags))
+            if "codeblock" in tags:
+                color_code(t, start, text)
+        self.title(f"Lispy Guide: {page}")
+        titles = [title for title, _ in guide.PAGES]
+        self.page_list.selection_clear(0, "end")
+        self.page_list.selection_set(titles.index(page))
+        self.toc.delete(0, "end")
+        for level, title, _, _ in self.rendered.headings:
+            self.toc.insert("end", "    " * max(level - 1, 0) + title)
+        self._refresh_search(follow=False)
+
+    def _goto_offset(self, offset: int):
+        index = f"1.0+{offset}c"
+        self.text.yview(index)
+        self.text.mark_set("insert", index)
+
+    def follow(self, target: str):
+        """Open a link: another guide page, a heading, or a web page."""
+        if target.startswith(("http://", "https://")):
+            import webbrowser
+            webbrowser.open(target)
+            return
+        path, _, anchor = target.partition("#")
+        page = guide.page_for_file(path) if path else self.page
+        if page is None:
+            full = os.path.normpath(os.path.join(guide.DOCS_DIR, path))
+            if os.path.exists(full):
+                import webbrowser
+                webbrowser.open("file://" + full)
+            return
+        self.show(page, anchor or None)
+
+    def back(self):
+        if not self.history:
+            return
+        page, index = self.history.pop()
+        if page != self.page:
+            self._load(page)
+        self.text.yview(index)
+        if not self.history:
+            self.back_btn.configure(state="disabled")
+
+    def _on_page_select(self, event=None):
+        sel = self.page_list.curselection()
+        if sel and guide.PAGES[sel[0]][0] != self.page:
+            self.show(guide.PAGES[sel[0]][0])
+
+    def _on_toc_select(self, event=None):
+        sel = self.toc.curselection()
+        if sel:
+            self._goto_offset(self.rendered.headings[sel[0]][3])
+
+    def show_name(self, name: str) -> bool:
+        """Show the Built-ins page at the line for `name`; False if it is not there."""
+        self.show(guide.BUILTINS_PAGE)
+        line = guide.find_name(self.rendered.text, name)
+        if line is None:
+            return False
+        self._goto_offset(line)
+        self.text.tag_remove("found_current", "1.0", "end")
+        self.text.tag_add("found_current", f"1.0+{line}c", f"1.0+{line + len(name)}c")
+        return True
+
+    # ---------- search ----------
+    def _refresh_search(self, follow: bool = True):
+        t = self.text
+        t.tag_remove("found", "1.0", "end")
+        t.tag_remove("found_current", "1.0", "end")
+        needle = self.search_var.get()
+        self.matches = guide.find_all(self.rendered.text, needle) if self.rendered else []
+        for pos in self.matches:
+            t.tag_add("found", f"1.0+{pos}c", f"1.0+{pos + len(needle)}c")
+        self.match_idx = -1
+        if self.matches and follow:
+            self._nav(1)
+        else:
+            self._show_search_info()
+
+    def _nav(self, direction: int):
+        if not self.matches:
+            others = self._matches_elsewhere()
+            if others and direction > 0:
+                self.show(others[0][0])          # jump to the next page that has it
+                if self.matches:
+                    self._nav(1)
+            return
+        self.match_idx = (self.match_idx + direction) % len(self.matches)
+        pos, n = self.matches[self.match_idx], len(self.search_var.get())
+        t = self.text
+        t.tag_remove("found_current", "1.0", "end")
+        t.tag_add("found_current", f"1.0+{pos}c", f"1.0+{pos + n}c")
+        t.see(f"1.0+{pos}c")
+        self._show_search_info()
+
+    def _matches_elsewhere(self):
+        """(page, count) for the other pages that contain the search text."""
+        needle = self.search_var.get()
+        if not needle:
+            return []
+        found = []
+        titles = [title for title, _ in guide.PAGES]
+        start = titles.index(self.page) if self.page in titles else 0
+        for title in titles[start + 1:] + titles[:start]:
+            if title not in self._page_cache:
+                self._page_cache[title] = guide.render(guide.load_page(title, L.HELP_TOPICS))
+            count = len(guide.find_all(self._page_cache[title].text, needle))
+            if count:
+                found.append((title, count))
+        return found
+
+    def _show_search_info(self):
+        if not self.search_var.get():
+            self.search_info.configure(text="")
+            return
+        here = (f"{self.match_idx + 1} of {len(self.matches)}" if self.matches and self.match_idx >= 0
+                else f"{len(self.matches)} here" if self.matches else "not on this page")
+        others = self._matches_elsewhere()
+        if others:
+            here += "   also in: " + ", ".join(f"{p} ({n})" for p, n in others)
+            if not self.matches:
+                here += "   (Enter goes there)"
+        self.search_info.configure(text=here)
+
+    def _escape(self):
+        if self.search_var.get():
+            self.search_var.set("")
+        else:
+            self.withdraw()
+
+
 WM_CLASS = "LispyMachine"
 
 
@@ -935,6 +1222,8 @@ class LispMachine(tk.Tk):
         self.repl_pending = ""      # lines of an unfinished form in the plain REPL
         self.console_ready = False  # the plain REPL prompt is showing, waiting for input
         self.update_pending = False # Help > Update pulled a new version, not running yet
+        self.guide_window = None    # the Help window, made the first time it is opened
+        L.global_env['help'] = self.lisp_help
 
         self._setup_style()
         self._build_menu()
@@ -1052,7 +1341,8 @@ class LispMachine(tk.Tk):
         bar.add_cascade(label="View", menu=view_m)
 
         help_m = tk.Menu(bar, tearoff=0)
-        help_m.add_command(label="Built-in functions", command=lambda: self._run_silent('(help)'))
+        help_m.add_command(label="Lispy guide", accelerator="F1", command=self.open_guide)
+        help_m.add_command(label="Built-in functions", command=lambda: self.open_guide(guide.BUILTINS_PAGE))
         help_m.add_separator()
         help_m.add_command(label="Update", command=self._update)
         help_m.add_command(label="About", command=self._about)
@@ -1061,7 +1351,25 @@ class LispMachine(tk.Tk):
         self.config(menu=bar)
 
     def _listener_complete(self, event=None):
-        before = self.listener_input.get()[:self.listener_input.index("insert")]
+        """Ctrl+Space: complete the name being typed, with a list when several fit."""
+        console = self.plain_repl.get()
+        if console:                                  # the plain REPL types into the Listener text
+            t = self.listener_text
+            if not self.console_ready:
+                return "break"
+            if t.compare("insert", "<", "input"):
+                t.mark_set("insert", "end-1c")
+            widget, before = t, t.get("input", "insert")
+        else:
+            widget = self.listener_input
+            before = widget.get()[:widget.index("insert")]
+
+        def put(text):
+            widget.insert("insert", text)
+            if console:
+                self._console_recolor()
+            widget.focus_force()          # back from the popup to where you type
+
         m = SYMBOL_TAIL.search(before)
         prefix = m.group(0) if m else ""
         
@@ -1069,15 +1377,22 @@ class LispMachine(tk.Tk):
         if not matches:
             return "break"
         if len(matches) == 1:
-            self.listener_input.insert("insert", matches[0][len(prefix):])
+            put(matches[0][len(prefix):])
             return "break"
             
         # Popup listbox for listener
         popup = tk.Toplevel(self)
         popup.wm_overrideredirect(True)
         popup.configure(bg="#333")
-        x = self.listener_input.winfo_rootx() + 20
-        y = self.listener_input.winfo_rooty() - 120
+        box = widget.bbox("insert") if console else None
+        if box:                                      # just under the cursor in the Listener text
+            x = widget.winfo_rootx() + box[0]
+            y = widget.winfo_rooty() + box[1] + box[3]
+            if y + 200 > self.winfo_screenheight():   # no room below: open above the line
+                y = widget.winfo_rooty() + box[1] - 20 * min(10, len(matches)) - 4
+        else:
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() - 120
         popup.wm_geometry(f"+{x}+{y}")
 
         lb = tk.Listbox(popup, bg="#1e1e1e", fg="#d4d4d4",
@@ -1090,13 +1405,15 @@ class LispMachine(tk.Tk):
 
         def choose(evt=None):
             sel = lb.curselection()
-            if sel:
-                self.listener_input.insert("insert", matches[sel[0]][len(prefix):])
             popup.destroy()
+            if sel:
+                put(matches[sel[0]][len(prefix):])
+            else:
+                widget.focus_force()
 
         lb.bind("<Return>", choose)
         lb.bind("<Double-Button-1>", choose)
-        lb.bind("<Escape>", lambda e: popup.destroy())
+        lb.bind("<Escape>", lambda e: (popup.destroy(), widget.focus_force()))
         popup.bind("<FocusOut>", lambda e: popup.destroy())
         lb.focus_set()
         lb.selection_set(0)
@@ -1228,6 +1545,7 @@ class LispMachine(tk.Tk):
         for seq, handler in (("<Return>", self._console_return),
                              ("<KP_Enter>", self._console_return),
                              ("<Tab>", self._listener_tab),
+                             ("<Control-space>", self._listener_complete),
                              ("<Escape>", self._cancel_pending),
                              ("<Up>", lambda e: self._console_history(-1)),
                              ("<Down>", lambda e: self._console_history(1)),
@@ -1263,6 +1581,7 @@ class LispMachine(tk.Tk):
         pass  # placeholder
 
     def _bind_global(self):
+        self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
         self.bind_all("<F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
         self.bind_all("<Control-o>", lambda e: self.open_file())
@@ -2076,16 +2395,50 @@ class LispMachine(tk.Tk):
             return
         self.destroy()
 
+    # ---------- Help window ----------
+    def open_guide(self, page: str | None = None):
+        """Help > Lispy guide (F1): open the guide window, or bring it to the front."""
+        if self.guide_window is None or not self.guide_window.winfo_exists():
+            self.guide_window = GuideWindow(self)
+            self.guide_window.protocol("WM_DELETE_WINDOW", self.guide_window.withdraw)
+            self.guide_window.show(page or guide.PAGES[0][0], remember=False)
+        elif page:
+            self.guide_window.show(page)
+        else:
+            self.guide_window.deiconify()
+            self.guide_window.lift()
+        self.guide_window.focus_set()
+        return self.guide_window
+
+    def lisp_help(self, *args):
+        """(help) in the editor opens the guide at the built-ins instead of printing them.
+
+        (help 'name) still prints its one line in the Listener, and an open
+        guide window also turns to that name.
+        """
+        if not args:
+            self.open_guide(guide.BUILTINS_PAGE)
+            print(";; The Lispy guide is open (F1). (help 'name) explains one name here.")
+            return None
+        L.lisp_help(*args)
+        what = args[0]
+        name = what.value if isinstance(what, L.String) else L.lisp_str(what)
+        win = self.guide_window
+        if win is not None and win.winfo_exists() and win.winfo_viewable():
+            win.show_name(name)
+        return None
+
     def _about(self):
         messagebox.showinfo(
             "About Lispy3 Machine",
             "Lispy3 Machine — a Lisp Machine style editor\n"
             "for the lispy3 interpreter.\n\n"
+            + ABOUT_CREDITS + "\n\n"
+            "F1  Lispy guide\n"
             "F5  eval form at cursor\n"
             "F6  eval whole buffer\n"
             "F7  inspect symbol at cursor\n"
             "F9  eval listener input\n"
-            "(help) in the Listener lists the built-ins\n"
             "Ctrl+Space  complete symbol\n"
             "Ctrl+/      toggle comment\n"
         )

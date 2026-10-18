@@ -43,7 +43,7 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
     lispy3> (help 'sqrt)
     (sqrt ...) - from Python's math: Return the square root of x.
 
-`(help name)` also works without the quote for functions. For special forms such as `if` and `while`, quote the name: `(help 'while)`. Asking about your own function shows its definition. In the editor, **Help → Built-in functions** prints the same list in the Listener.
+`(help name)` also works without the quote for functions. For special forms such as `if` and `while`, quote the name: `(help 'while)`. Asking about your own function shows its definition. In the editor, `(help)` opens the Lispy guide in its own window instead, at the page of built-ins; **Help → Lispy guide** (F1) opens it too, and its search box finds a word in every page of this manual.
 
 ## Numbers
 
