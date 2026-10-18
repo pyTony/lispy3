@@ -1,3 +1,4 @@
+REM dialect: bbc
 REM Structured BBC BASIC: loops, IF, CASE, PROC and FN
 total% = 0
 FOR i% = 1 TO 10 STEP 3

@@ -1,3 +1,4 @@
+REM dialect: bbc
 REM Operators, functions, strings and PRINT layout
 PRINT 7 DIV 2, 7 MOD 2, -7 DIV 2, -7 MOD 2
 PRINT 2^10, 10/4, 1/3

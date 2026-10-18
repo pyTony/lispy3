@@ -40,7 +40,7 @@ What the comparison shows:
 `lisp/mini-basic.lisp` (lispy3 only for now) with `(bbc-load "compare/basic/structure.bas")`.
 `(pretty-print (bbc-expand (slurp "compare/basic/fact.bas")))` shows the macro
 forms a program becomes. Their `.out` files were checked against
-`python -m mini_basic -d bbc`. `structure.bas` matches exactly. Three things
+`python -m mini_basic` (each file starts with `REM dialect: bbc`, so mini_basic picks its bbc dialect on its own). `structure.bas` matches exactly, and its output was also checked on real BBC BASIC. Three things
 differ in mini_basic and follow BBC BASIC here:
 
 - `DEF FNfact(n) IF n<2 THEN =1 ELSE =n*FNfact(n-1)`: mini_basic reports a DEF FN header error.
