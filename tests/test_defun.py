@@ -1,4 +1,4 @@
-"""Tests for the Common Lisp spelling (defun f (x) body...) and the t constant.
+"""Tests for Common Lisp names: (defun f (x) body...), t and float.
 
 Run from the repository folder:
 
@@ -38,6 +38,12 @@ class DefunTest(LispyTestCase):
 
     def test_t_is_true(self):
         self.assertIs(self.ev("t"), True)
+
+    def test_float(self):
+        self.assertEqual(self.ev("(/ 1 3)"), lispy3.Fraction(1, 3))
+        self.assertEqual(self.ev("(float (/ 1 3))"), 1 / 3)
+        self.assertIsInstance(self.ev("(float 2)"), float)
+        self.assertIn("float", lispy3._HELP_INDEX)
 
     def test_defun_has_help(self):
         self.assertIn("defun", lispy3._HELP_INDEX)
