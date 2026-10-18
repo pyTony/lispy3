@@ -148,6 +148,7 @@ def gensym(prefix: Any = "G__") -> Symbol:
 HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
+        ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
         ("if", "(if test then else) - the else part may be left out"),
@@ -286,7 +287,7 @@ _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in 
 for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset': 'reinit-turtle',
                       '>': '<', '<=': '<', '>=': '<', 'fold': 'reduce', 'downcase': 'upcase',
                       'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
-                      'symbol?': 'string?', 'else': 'cond', 'catch': 'try',
+                      'symbol?': 'string?', 'else': 'cond', 't': 'cond', 'catch': 'try',
                       'odd?': 'even?', 'positive?': 'zero?', 'negative?': 'zero?', 'inexact': 'exact',
                       'exact->inexact': 'exact', 'inexact->exact': 'exact'}.items():
     _HELP_INDEX[_alias] = _HELP_INDEX[_name]
@@ -998,6 +999,7 @@ def standard_env() -> Env:
     env['false'] = False
     env['nil'] = []
     env['else'] = True
+    env['t'] = True  # Common Lisp's true, for (cond ... (t default))
     env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
 
     # 3. Add turtle graphics support dynamically
@@ -1080,6 +1082,12 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
             raise TypeError("macro must evaluate to a procedure")
         macro_table[name] = proc
         return None
+
+    if head == 'defun':
+        # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)
+        if len(x) < 4 or not isinstance(x[2], (list, tuple)):
+            raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
+        return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
 
     if head == 'define':
         # Support shorthand: (define (f x y) body1 body2...)

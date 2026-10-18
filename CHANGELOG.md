@@ -14,6 +14,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   finds the same 1899 primes as `sieve_lispy3.lisp`.
 - Fixes for Windows path escapes, universal times before 1970, and Help >
   Update outside a git checkout.
+- `(defun f (x) body...)`, the Common Lisp spelling of `(define (f x) body...)`,
+  and `t` as true, so `(cond ... (t default))` works.
 
 ## Lispy Machine 1.0 (lispy3 interpreter 3.0)
 
