@@ -181,6 +181,22 @@ class FractionTest(LispyTestCase):
         self.assertEqual(self.ev("(floor 7/2)"), 3)
         self.assertEqual(self.ev("(round 7/2)"), 4)
 
+    def test_remainders_of_fractions_are_simplified(self):
+        """mod, remainder and divmod on fractions stay exact and give 0, not 0/1."""
+        self.assertIs(type(self.ev("(mod 3/2 1/2)")), int)
+        self.assertIs(self.ev("(integer? (mod 3/2 1/2))"), True)
+        self.assertEqual(self.show("(divmod 3 1/2)"), "(6 0)")
+        self.assertEqual(self.show("(remainder 3/2 1/2)"), "0")
+        self.assertEqual(self.show("(remainder -7/2 1)"), "-1/2")
+        self.assertEqual(self.show("(quotient -7/2 1)"), "-3")
+        self.assertEqual(self.show("(remainder 7.5 2)"), "1.5")
+
+    def test_exact_reads_a_decimal_as_printed(self):
+        """(exact 0.1) is 1/10, the simplest fraction for the decimal as it prints."""
+        self.assertEqual(self.show("(exact 0.1)"), "1/10")
+        self.assertEqual(self.show("(exact -0.75)"), "-3/4")
+        self.assertEqual(self.show("(inexact->exact 3.0)"), "3")
+
     def test_division_by_zero(self):
         """(/ 1 0) is an error."""
         with self.assertRaises(ZeroDivisionError):

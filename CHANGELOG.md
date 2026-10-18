@@ -9,6 +9,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   around the pointer.
 - Eval whole buffer (F6) in the Lispy Machine draws again after the turtle
   window was closed, instead of stopping with an empty `Error:`.
+- Lispy Machine: right-click opens Cut / Copy / Paste / Select all in the editor,
+  Listener, Inspector and Guide. Before, right-click did nothing.
+- Fraction results are simplified everywhere: `(mod 3/2 1/2)` is `0`, not `0/1`,
+  `remainder` and `quotient` stay exact on fractions, and `(exact 0.1)` is `1/10`.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.
