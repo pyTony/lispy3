@@ -4,6 +4,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Lispy Machine: right-click opens Cut / Copy / Paste / Select all in the editor,
+  Listener, Inspector and Guide. Before, right-click did nothing.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.
