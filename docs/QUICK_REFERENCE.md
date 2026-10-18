@@ -28,6 +28,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(define name value)` | name a value or a function |
 | `(define-memo (f a b) body...)` | like `define`, but remembers each result, as Python's `@cache` |
 | `(set! name value)` | change an existing variable |
+| `(time exp)` | run `exp`, print how long it took in seconds, give its value |
 | `(lambda [a b] body)` | a function; one body expression |
 | `(if test then else)` | choose; else is required |
 | `(begin e1 e2 ...)` | run in order, return the last |

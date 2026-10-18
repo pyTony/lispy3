@@ -150,6 +150,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
+        ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
@@ -1184,6 +1185,17 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
             raise TypeError("macro must evaluate to a procedure")
         macro_table[name] = proc
         return None
+
+    if head == 'time':
+        # (time exp): run exp, print how long it took, give its value
+        if len(x) != 2:
+            raise SyntaxError("time needs one expression: (time (f 30))")
+        t0, value = gensym('t0'), gensym('value')
+        return expand(['let', [[t0, ['get-internal-real-time']]],
+                       ['let', [[value, x[1]]],
+                        ['display', String('Elapsed time: '),
+                         ['/', ['-', ['get-internal-real-time'], t0], 1000.0], String(' s')],
+                        value]], toplevel)
 
     if head == 'defun':
         # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)

@@ -49,24 +49,28 @@ differ in mini_basic and follow BBC BASIC here:
 
 ## Speed against mini_basic
 
-[`bench/`](bench) holds two programs for a first timing of lispy3's reader
-against `python -m mini_basic`. Wall-clock seconds on one machine, startup
-(about 0.1 s for both) included:
+[`bench/`](bench) holds two programs for a first timing against
+`python -m mini_basic`. Wall-clock seconds on one machine; mini_basic's time
+includes its start-up of about 0.1 s:
 
-| Program | mini_basic | lispy3 mini-basic |
-|---|---|---|
-| [`primes.bas`](bench/primes.bas): primes below 5000 by trial division | 5.1 | 2.7 |
-| the same, below 20000 | 32.0 | 15.8 |
-| [`fib.bas`](bench/fib.bas): recursive `FNfib(22)` | 0.12 | 0.12 |
+| Program | mini_basic | lispy3 | SBCL | Clojure |
+|---|---|---|---|---|
+| [`primes.bas`](bench/primes.bas): primes below 5000 by trial division | 5.1 | 2.8 | 0.15 | 1.1 |
+| [`fib.bas`](bench/fib.bas): recursive `FNfib(22)` | 0.12 | 0.02 | 0.15 | 1.9 |
 
-Both remember the results of a pure `DEF FN`, so `FNfib` runs once for each
-`n`; without the cache lispy3 takes 2.5 s. The classic sieve
-(mini_basic's `examples/SIEVE.bbc`) needs `DIM`, `GOTO` and `TIME`, which the
-reader does not have yet.
+The SBCL and Clojure times are `(time (run-sbcl (slurp "compare/bench/primes.bas")))`
+from lispy3, so they include starting the other Lisp: about 0.1 s for SBCL
+and 1 s for Clojure. mini_basic and lispy3 remember the results of a pure
+`DEF FN`, so `FNfib` runs once for each `n` there; without the cache lispy3
+takes 2.5 s. The classic sieve (mini_basic's `examples/SIEVE.bbc`) needs
+`DIM`, `GOTO` and `TIME`, which the reader does not have yet.
+
+```lisp
+(time (run-lispy (slurp "compare/bench/primes.bas")))   ; also run-sbcl, run-clojure
+```
 
 ```sh
-python3 -c "import lispy3; lispy3.load_workspace('mini-basic'); lispy3.eval_exp(lispy3.parse('(bbc-load \"compare/bench/primes.bas\")'), lispy3.global_env)"
-cd ../mini_basic && python -m mini_basic -q ../lispy3/compare/bench/primes.bas
+cd ../mini_basic && time python -m mini_basic -q ../lispy3/compare/bench/primes.bas
 ```
 
 ## Running

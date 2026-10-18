@@ -128,6 +128,14 @@ class MemoTest(LispyTestCase):
         self.assertEqual(self.ev('(len (list 1 2 3))'), 3)
 
 
+class TimeTest(LispyTestCase):
+
+    def test_time_prints_the_elapsed_time_and_gives_the_value(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(self.ev('(time (+ 1 2))'), 3)
+        self.assertRegex(out.getvalue(), r'^Elapsed time: [0-9.]+ s\n$')
+
+
 class LispFolderTest(LispyTestCase):
     """Bare names in (save "x") and (load "x") mean the lisp/ folder."""
 
