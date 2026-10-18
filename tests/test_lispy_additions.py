@@ -88,7 +88,7 @@ class SaveAndLoadTest(LispyTestCase):
 
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as folder:
-            name = os.path.join(folder, "ws")
+            name = os.path.join(folder, "ws").replace("\\", "/")
             self.ev_all('(define greeting "hi \\"you\\"")', "(define nums '(1 2 3))",
                         "(define user {:name \"Tony\"})", "(define (twice x) (* 2 x))",
                         "(define car (lambda [x] 'mine))")   # a user function under a built-in name
@@ -104,7 +104,7 @@ class SaveAndLoadTest(LispyTestCase):
 
     def test_built_ins_are_not_saved(self):
         with tempfile.TemporaryDirectory() as folder:
-            name = os.path.join(folder, "ws")
+            name = os.path.join(folder, "ws").replace("\\", "/")
             self.ev(f'(save "{name}")')
             with open(name + ".lisp", encoding="utf-8") as f:
                 self.assertEqual(f.read(), "")
@@ -212,6 +212,6 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_every_example_is_covered(self):
         covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
-                   "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
+                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
         examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
         self.assertEqual(examples - covered, set(), "add a test for the new example program")

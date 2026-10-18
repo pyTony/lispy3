@@ -171,7 +171,7 @@ class SaveTest(LispyTestCase):
 
     def test_vectors_pairs_and_fractions_survive_save_and_load(self):
         with tempfile.TemporaryDirectory() as folder:
-            name = os.path.join(folder, "ws")
+            name = os.path.join(folder, "ws").replace("\\", "/")
             self.ev_all("(define v (vector 'a 2))", "(define p (cons 1 2))", "(define f 7/2)")
             self.ev(f'(save "{name}")')
             lispy3.global_env.clear()

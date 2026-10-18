@@ -157,6 +157,8 @@ def git_pull(folder: str = APP_DIR):
     makes a merge commit, so git cannot stop to open an editor; local changes
     that would be overwritten make git refuse, and its message names them.
     """
+    if not os.path.exists(os.path.join(folder, ".git")):
+        return "failed", "fatal: not a git repository"
     try:
         before = _git(folder, "rev-parse", "HEAD").stdout.strip()
         done = _git(folder, "pull", "--ff-only")

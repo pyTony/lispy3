@@ -2,6 +2,7 @@ from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
 from fractions import Fraction
 import calendar
+import datetime
 import functools
 import inspect
 import itertools
@@ -607,10 +608,11 @@ def _decode_universal_time(ut: Number, zone: Number = None) -> list:
         zone = -t.tm_gmtoff / 3600 + (1 if dst else 0)
         if zone == int(zone):
             zone = int(zone)
+        return [t.tm_sec, t.tm_min, t.tm_hour, t.tm_mday, t.tm_mon, t.tm_year, t.tm_wday, dst, zone]
     else:
-        t, dst = time.gmtime(stamp - zone * 3600), False
-    return [t.tm_sec, t.tm_min, t.tm_hour, t.tm_mday, t.tm_mon, t.tm_year, t.tm_wday, dst, zone]
-
+        dt = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(seconds=stamp - zone * 3600)
+        return [dt.second, dt.minute, dt.hour, dt.day, dt.month, dt.year, dt.weekday(), False, zone]
+    
 def _encode_universal_time(second, minute, hour, date, month, year, zone=None) -> int:
     """(encode-universal-time second minute hour date month year) with an optional zone."""
     if 0 <= year < 100:
@@ -1517,12 +1519,12 @@ def _unescape_string(raw: str) -> str:
         simple = {'\\n': '\n', '\\t': '\t', '\\r': '\r', '\\"': '"', '\\\\': '\\', '\\0': '\0'}
         if seq in simple:
             return simple[seq]
-        if seq.startswith('\\x'):
+        if seq.startswith('\\x') and len(seq) > 2:
             hex_digits = seq[2:].rstrip(';')
             return chr(int(hex_digits, 16))
-        if seq.startswith('\\u'):
+        if seq.startswith('\\u') and len(seq) == 6:
             return chr(int(seq[2:], 16))
-        if seq.startswith('\\U'):
+        if seq.startswith('\\U') and len(seq) == 10:
             return chr(int(seq[2:], 16))
         return seq[1:]
 

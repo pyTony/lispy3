@@ -340,7 +340,7 @@ class RestoredFeaturesTest(LispyTestCase):
 
     def test_save_quotes_lists_and_symbols(self):
         with tempfile.TemporaryDirectory() as folder:
-            name = os.path.join(folder, "ws")
+            name = os.path.join(folder, "ws").replace("\\", "/")
             self.ev_all("(define v '(1 2))", "(define k 'car)", "(define (sq x) (* x x))")
             self.ev(f'(save "{name}")')
             lispy3.global_env.clear()
