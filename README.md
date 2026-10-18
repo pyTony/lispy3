@@ -118,6 +118,8 @@ Run the interpreter directly using Python 3:
     python lispy3.py                  start the REPL
     python lispy3.py prog.lisp        run prog.lisp from top to bottom, then exit
     python lispy3.py -i prog.lisp     run prog.lisp, then stay in the REPL
+    python lispy3.py --version        show the Lispy and Python versions
+    python lispy3.py --help           show these options
 
 (`-i` may also come after the file name.)
 
@@ -220,6 +222,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
     python lispy_machine.pyw
     python lispy_machine.pyw tree.lisp      # open a file instead of startup.lisp
+    python lispy_machine.pyw --version      # show the editor and lispy3 versions
 
 Every file named on the command line opens in its own buffer. A bare file name that is not in the current folder means the file in `lisp/`. A name that does not exist yet opens an empty buffer that is created on the first **Save**. **File → Open** and **Save as** start in `lisp/` (or in the buffer's own folder). On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 

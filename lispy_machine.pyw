@@ -17,6 +17,7 @@ Features
   * Menu + status bar showing the current "package" (USER) and buffer
 
 Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
+      python lispy_machine.pyw --version   shows the editor and lispy3 versions
       --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
       Each file named on the command line opens in its own buffer; a file that
       does not exist yet opens empty and is created on the first Save. With no
@@ -125,6 +126,12 @@ def color_code(widget, start: str, text: str):
         widget.tag_add(tag, f"{start}+{a}c", f"{start}+{b}c")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+__version__ = "1.0"
+
+def version_text() -> str:
+    """The line `python lispy_machine.pyw --version` prints, also shown in Help > About."""
+    return f"Lispy3 Machine {__version__} (lispy3 {L.__version__}, Python {sys.version.split()[0]})"
 
 # Help > About
 ABOUT_CREDITS = (
@@ -2516,7 +2523,8 @@ class LispMachine(tk.Tk):
         messagebox.showinfo(
             "About Lispy3 Machine",
             "Lispy3 Machine — a Lisp Machine style editor\n"
-            "for the lispy3 interpreter.\n\n"
+            "for the lispy3 interpreter.\n"
+            + version_text() + "\n\n"
             + ABOUT_CREDITS + "\n\n"
             "F1  Lispy guide\n"
             "F5  eval form at cursor\n"
@@ -2540,6 +2548,9 @@ class LispMachine(tk.Tk):
 
 # =============================================================================
 def main():
+    if "--version" in sys.argv[1:] or "-V" in sys.argv[1:]:
+        print(version_text())
+        return
     plain_repl, files = parse_args(sys.argv[1:])
     app = LispMachine(files, plain_repl=True if plain_repl else None)
     app.mainloop()

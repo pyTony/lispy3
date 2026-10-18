@@ -1801,14 +1801,34 @@ def hold_turtle_window() -> None:
         except turtle.Terminator:
             pass
 
-if __name__ == "__main__":
-    # python lispy3.py            -> REPL
-    # python lispy3.py prog.lisp  -> run prog.lisp, keep a turtle window open, then exit
-    # python lispy3.py -i prog.lisp -> run prog.lisp, then stay in the REPL
-    #                                  (-i may also come after the file name)
-    args = sys.argv[1:]
-    interactive = '-i' in args
-    args = [a for a in args if a != '-i']
+__version__ = "3.0"
+
+USAGE = """usage: python lispy3.py [-i] [prog.lisp]
+
+  (no arguments)   start the REPL
+  prog.lisp        run prog.lisp, keep a turtle window open, then exit
+  -i prog.lisp     run prog.lisp, then stay in the REPL
+  --version, -V    show the Lispy and Python versions
+  --help, -h       show this help"""
+
+def version_text() -> str:
+    """The line `python lispy3.py --version` prints."""
+    return f"lispy3 {__version__} (Python {sys.version.split()[0]})"
+
+def main(argv: list[str]) -> int:
+    """Run lispy3 with command line arguments `argv`; return the exit status."""
+    if '--help' in argv or '-h' in argv:
+        print(USAGE)
+        return 0
+    if '--version' in argv or '-V' in argv:
+        print(version_text())
+        return 0
+    interactive = '-i' in argv                 # -i may also come after the file name
+    args = [a for a in argv if a != '-i']
+    unknown = [a for a in args if a.startswith('-')]
+    if unknown:
+        print(f"lispy3: unknown option {unknown[0]}\n\n{USAGE}", file=sys.stderr)
+        return 2
     if args:
         ok = run_file(args[0])
         if interactive:
@@ -1816,6 +1836,10 @@ if __name__ == "__main__":
         elif ok:
             hold_turtle_window()
         else:
-            sys.exit(1)
+            return 1
     else:
         repl()
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
