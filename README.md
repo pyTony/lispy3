@@ -9,7 +9,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - [Quick Start](docs/QUICK_START.md): five minutes from nothing to your own functions.
 - [Lispy by Example](docs/LISPY_BY_EXAMPLE.md): strings, lists, head and tail recursion, loops, maps and more, one runnable example at a time.
 - [Quick Reference](docs/QUICK_REFERENCE.md): every built-in on one page.
-- Inside Lispy, `(help)` lists the built-ins and `(help 'name)` explains one. In the editor: **Help → Built-in functions**.
+- Inside Lispy, `(help)` lists the built-ins and `(help 'name)` explains one. In the editor, `(help)` and **Help → Lispy guide** (F1) open the guide in its own window.
 - [TODO.md](TODO.md): features not implemented yet, with pointers to reference implementations in [fluentpython/lispy](https://github.com/fluentpython/lispy).
 
 ## Contents
@@ -224,6 +224,8 @@ The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `ic
 
 The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens what you did in the Listener as a new buffer that runs as a program: the `USER>`, `lispy3>` and `... (n)>` prompts are removed, results, output and errors become `;;` comments, and a form that gave an error is commented out too. Save it with Ctrl+S, or run it with F6.
 
+**Help → Lispy guide** (F1) opens this manual in its own window: Quick Start, Lispy by Example, Quick Reference and a page of every built-in, with a contents list, working links, Back, and a search box that also says which other pages have what you typed. `(help)` in the Listener opens it at the built-ins; `(help 'name)` still prints one line there, and turns an open guide to that name. **Help → About** gives the credits.
+
 **Help → Update** runs `git pull` in the program's folder, so a copy cloned with git updates without the command line. It warns about unsaved buffers first, and git refuses (and says which files) if your own edits to files in that folder would be overwritten. After a successful update it offers to restart the editor, reopening your saved buffers, so the new version is the one running.
 
 `lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
@@ -256,6 +258,7 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 
 | Key | Action |
 |-----|--------|
+| `F1` | Open the Lispy guide (in the guide: `Ctrl+F` search, `Enter`/`F3` next match, `Alt+Left` back, `Esc` close) |
 | `F5` / `Ctrl+Enter` | Evaluate the outermost form at the cursor |
 | `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
 | `F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
