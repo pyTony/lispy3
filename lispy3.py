@@ -224,6 +224,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     ],
     "Strings and characters": [
         ("str", "(str a b ...) - the values joined as one string"),
+        ("string-append", "(string-append s1 s2 ...) - the strings joined, \"\" for none; only strings"),
         ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~% newline"),
         ("substring", "(substring s start end) - part of s; end may be left out"),
         ("string-ref", "(string-ref s i) - character i of s"),
@@ -775,6 +776,13 @@ def _rest(x: Any) -> Any:
         return make_pair(x.items[1:], x.tail)
     return list(x[1:]) if isinstance(x, (list, tuple)) else []
 
+def _string_append(*strings: Any) -> String:
+    """(string-append "a" "b") gives "ab", as in Scheme: strings only, and "" when given none."""
+    for s in strings:
+        if not isinstance(s, String):
+            raise TypeError(f"string-append needs strings, got {lisp_str(s)}")
+    return String("".join(s.value for s in strings))
+
 def _length(x: Any) -> int:
     """(length lst) for a list, vector or string; a dotted pair has no length."""
     if isinstance(x, String):
@@ -899,6 +907,7 @@ def standard_env() -> Env:
 
         # Strings
         'str': lambda *args: String("".join(_unwrap_str(a) for a in args)),
+        'string-append': _string_append,
         'substring': lambda s, start, end=None: String(_unwrap_str(s)[start:end]),
         'string-ref': lambda s, k: Char(_unwrap_str(s)[k]),
         'upcase': lambda s: String(_unwrap_str(s).upper()),
