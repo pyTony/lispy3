@@ -34,8 +34,8 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(while test body...)` | loop while test is true |
 | `(quote x)` / `'x` | `x` itself, unevaluated |
 | `(:key map)` | look `:key` up in `map` |
-| `(save "name")` | write your definitions to `name.lisp` |
-| `(load "name")` | run `name.lisp` |
+| `(save "name")` | write your definitions to `lisp/name.lisp` |
+| `(load "name")` | run `name.lisp`, from `lisp/` if it is not in the current folder |
 
 ## Lists and strings
 

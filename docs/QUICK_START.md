@@ -76,7 +76,7 @@ Recursion is fine for a couple of hundred steps; for longer lists use `map`, `fi
 ## 8. Keep your work
 
     lispy3> (save "mine")
-    Workspace saved to mine.lisp
+    Workspace saved to .../lisp/mine.lisp
     lispy3> (load "mine")
 
 Next: [Lispy by Example](LISPY_BY_EXAMPLE.md).

@@ -7,6 +7,7 @@ import inspect
 import itertools
 import math
 import operator as op
+import os
 import re
 import shutil
 import sys
@@ -161,8 +162,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("quasiquote", "`(a ,b ,@c) - a template: ,b puts in the value of b, ,@c splices the list c"),
         ("define-macro", "(define-macro (name parms...) body) - a function that writes code, run before evaluation"),
         ("#t", "#t and #f - true and false. False in a test: #f, 0 and (); everything else is true"),
-        ("save", "(save \"name\") - write your definitions to name.lisp"),
-        ("load", "(load \"name\") - run name.lisp"),
+        ("save", "(save \"name\") - write your definitions to lisp/name.lisp"),
+        ("load", "(load \"name\") - run name.lisp (from lisp/ if not found here)"),
     ],
     "Lists and sequences": [
         ("car", "(car lst) - first item; same as first. () for an empty list"),
@@ -398,9 +399,29 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
     return lisp_str(exp)
 
 # --- Helper Functions for Workspace Save and Load ---
+# Lisp programs live in the lisp/ folder next to this file
+LISP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lisp")
+
+def lisp_file_for_load(filename: str) -> str:
+    """The file (load "name") runs: name.lisp as given if it exists, else the one in lisp/."""
+    real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
+    in_lisp_dir = os.path.join(LISP_DIR, real_filename)
+    if not os.path.exists(real_filename) and not os.path.isabs(real_filename) \
+            and os.path.exists(in_lisp_dir):
+        return in_lisp_dir
+    return real_filename
+
+def lisp_file_for_save(filename: str) -> str:
+    """The file (save "name") writes: a bare name goes to lisp/, a path is used as given."""
+    real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
+    if os.path.dirname(real_filename):
+        return real_filename
+    os.makedirs(LISP_DIR, exist_ok=True)
+    return os.path.join(LISP_DIR, real_filename)
+
 def save_workspace(filename: str) -> str:
     """Saves only user-defined variables and Lisp Procedures to a file, ignoring Python built-ins."""
-    real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
+    real_filename = lisp_file_for_save(filename)
     std = standard_env()
     
     with open(real_filename, 'w', encoding='utf-8') as f:
@@ -422,7 +443,7 @@ def save_workspace(filename: str) -> str:
 
 def load_workspace(filename: str) -> str:
     """Loads and evaluates all Lisp definitions from a file safely, preventing REPL leaks."""
-    real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
+    real_filename = lisp_file_for_load(filename)
     
     with open(real_filename, 'r', encoding='utf-8') as f:
         content = f.read().strip()

@@ -77,14 +77,25 @@ class ReadFileArg(unittest.TestCase):
         self.assertTrue(os.path.isabs(path))
         self.assertEqual(os.path.basename(path), "rel.lisp")
 
+    def test_bare_name_not_here_opens_the_one_in_lisp_folder(self):
+        cwd = os.getcwd()
+        os.chdir(self.dir.name)
+        self.addCleanup(os.chdir, cwd)
+        name, content, path = machine.read_file_arg("tree.lisp")
+        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "tree.lisp"))
+        self.assertIn('(load "lsystems")', content)
+        _, _, path = machine.read_file_arg("brand_new.lisp")
+        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "brand_new.lisp"))
+        self.assertFalse(os.path.exists(path))
+
     def test_a_folder_is_an_error(self):
         with self.assertRaises(OSError):
             machine.read_file_arg(self.dir.name)
 
 
 class ReadDemo(unittest.TestCase):
-    def test_demo_file_is_next_to_the_editor(self):
-        self.assertEqual(machine.DEMO_FILE, os.path.join(REPO_DIR, "demo.lisp"))
+    def test_demo_file_is_in_the_lisp_folder(self):
+        self.assertEqual(machine.DEMO_FILE, os.path.join(REPO_DIR, "lisp", "demo.lisp"))
         name, content, path = machine.read_demo()
         self.assertEqual((name, path), ("demo.lisp", machine.DEMO_FILE))
         with open(machine.DEMO_FILE, encoding="utf-8") as f:
