@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- `lisp/mini-basic.lisp`: structured BBC BASIC statements as macros. `PRINT`,
+  `LET`, multi-line `IF ... ELSE`, `FOR ... STEP`, `REPEAT ... UNTIL`, `WHILE`,
+  `CASE ... WHEN ... OTHERWISE`, `DEF-PROC` / `DEF-FN` with `LOCAL`,
+  `ENDPROC`, `FN=`, the `EXIT-` forms and `END` each expand into plain lispy3
+  code inside `(bbc-program ...)`. PROC and FN parameters and LOCAL variables
+  are dynamically scoped as in BBC BASIC.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.

@@ -212,6 +212,7 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_every_example_is_covered(self):
         covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
-                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
+                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp",
+                   "mini-basic.lisp"}  # pi: test_pi_digits.py, mini-basic: test_mini_basic.py
         examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
         self.assertEqual(examples - covered, set(), "add a test for the new example program")
