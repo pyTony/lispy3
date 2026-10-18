@@ -1273,8 +1273,24 @@ class LispMachine(tk.Tk):
             else:
                 self._icon_image = tk.PhotoImage(file=os.path.join(icons, "lispy_machine.png"))
                 self.iconphoto(True, self._icon_image)
+                # WSLg (Linux apps on Windows) reads the icon only when it changes
+                # after the window is on screen, so set it again on every map.
+                self.bind("<Map>", self._reset_icon, add="+")
+                self.bind_class("Toplevel", "<Map>", self._reset_icon, add="+")
         except tk.TclError:
             pass
+
+    def _reset_icon(self, event):
+        window = event.widget
+        if not isinstance(window, (tk.Tk, tk.Toplevel)):
+            return      # a widget inside the window was mapped, not the window
+
+        def again():
+            try:
+                window.iconphoto(False, self._icon_image)
+            except tk.TclError:
+                pass    # the window closed in the meantime
+        self.after(300, again)
 
     # ---------- ttk style ----------
     def _setup_style(self):
