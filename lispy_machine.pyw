@@ -27,6 +27,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -227,6 +228,46 @@ def restart_command(files, plain_repl: bool) -> list[str]:
     """The command that starts Lispy3 Machine again with these files open."""
     script = os.path.join(APP_DIR, "lispy_machine.pyw")
     return [sys.executable, script] + (["--repl"] if plain_repl else []) + list(files)
+
+# View > Open terminal: (program, arguments) tried in order on Linux; the
+# working directory is also passed to Popen, so plain terminals start there too.
+LINUX_TERMINALS = (
+    ("x-terminal-emulator", ()),
+    ("gnome-terminal",      ("--working-directory={cwd}",)),
+    ("konsole",             ("--workdir", "{cwd}")),
+    ("xfce4-terminal",      ("--working-directory={cwd}",)),
+    ("mate-terminal",       ("--working-directory={cwd}",)),
+    ("lxterminal",          ("--working-directory={cwd}",)),
+    ("alacritty",           ("--working-directory", "{cwd}")),
+    ("kitty",               ("--directory", "{cwd}")),
+    ("xterm",               ()),
+)
+
+def terminal_command(cwd: str, platform: str = sys.platform,
+                     which=shutil.which, env=os.environ) -> list[str] | None:
+    """The command that opens a system terminal in `cwd`, or None if none is found.
+
+    Windows: Windows Terminal, else cmd.exe (started in a new console).
+    Linux: $TERMINAL, then the usual terminals; under WSL without a Linux
+    terminal, a Windows terminal running wsl.exe in `cwd`.
+    """
+    if platform == "win32":
+        if which("wt.exe"):
+            return ["wt.exe", "-d", cwd]
+        return [env.get("COMSPEC", "cmd.exe")]
+    if platform == "darwin":
+        return ["open", "-a", "Terminal", cwd]
+    if env.get("TERMINAL") and which(env["TERMINAL"]):
+        return [env["TERMINAL"]]
+    for program, args in LINUX_TERMINALS:
+        if which(program):
+            return [program] + [a.format(cwd=cwd) for a in args]
+    if env.get("WSL_DISTRO_NAME"):
+        if which("wt.exe"):
+            return ["wt.exe", "wsl.exe", "--cd", cwd]
+        if which("cmd.exe"):
+            return ["cmd.exe", "/c", "start", "wsl.exe", "--cd", cwd]
+    return None
 
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
@@ -1351,6 +1392,7 @@ class LispMachine(tk.Tk):
         view_m.add_command(label="Reload lsystems",     command=lambda: self._run_silent('(load "lsystems")'))
         view_m.add_command(label="Show global env",     command=self._show_env)
         view_m.add_separator()
+        view_m.add_command(label="Open terminal",      command=self.open_terminal)
         view_m.add_command(label="Focus listener",      accelerator="Ctrl+E", command=self._focus_listener)
         view_m.add_checkbutton(label="Plain lispy3 REPL", variable=self.plain_repl,
                                command=self._toggle_plain_repl)
@@ -2410,6 +2452,20 @@ class LispMachine(tk.Tk):
             messagebox.showerror("Restart failed", f"Could not start Lispy3 Machine: {e}")
             return
         self.destroy()
+
+    def open_terminal(self):
+        """View > Open terminal: a system terminal in Lispy's working directory,
+        handy when the Machine was started from a shortcut without a console."""
+        cwd = os.getcwd()
+        command = terminal_command(cwd)
+        if command is None:
+            messagebox.showerror("Open terminal", "No terminal program was found.")
+            return
+        flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        try:
+            subprocess.Popen(command, cwd=cwd, creationflags=flags)
+        except OSError as e:
+            messagebox.showerror("Open terminal", f"Could not start {command[0]}: {e}")
 
     # ---------- Help window ----------
     def open_guide(self, page: str | None = None):
