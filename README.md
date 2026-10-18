@@ -220,7 +220,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
 Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 
-The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. On Windows, `python icons/make_shortcut.py` puts a *Lispy Machine* shortcut with this icon on your desktop.
+The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. `python make_shortcut.py` puts a *Lispy Machine* launcher with this icon on your desktop. It works on Windows and Linux; on Linux it also adds Lispy Machine to the applications menu, and it starts the editor with the Python that ran the script, so use your venv's `python` if you have one.
 
 The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens what you did in the Listener as a new buffer that runs as a program: the `USER>`, `lispy3>` and `... (n)>` prompts are removed, results, output and errors become `;;` comments, and a form that gave an error is commented out too. Save it with Ctrl+S, or run it with F6.
 

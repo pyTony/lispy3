@@ -1195,9 +1195,14 @@ class GuideWindow(tk.Toplevel):
             self.withdraw()
 
 
+WM_CLASS = "LispyMachine"
+
+
 class LispMachine(tk.Tk):
     def __init__(self, files=(), plain_repl=None):
-        super().__init__()
+        # The window class lets Linux docks match the window to the
+        # lispy-machine.desktop launcher (StartupWMClass) and show its icon.
+        super().__init__(className=WM_CLASS)
         self.title("Lispy3 Machine")
         self._set_icon()
         self.geometry("1280x820")
@@ -1255,10 +1260,10 @@ class LispMachine(tk.Tk):
 
     # ---------- window icon ----------
     def _set_icon(self):
-        """Use icons/lispy_machine.ico (Windows) or .png for the window and taskbar.
+        """Use icons/lispy_machine.ico (Windows) or .png (Linux, macOS) as the icon.
 
-        Only the icon picture changes: the taskbar button still belongs to
-        Python, so its list of recently opened files keeps working. A missing
+        On Windows only the icon picture changes: the taskbar button still
+        belongs to Python, so its list of recently opened files keeps working. A missing
         or unreadable icon file just leaves the default icon.
         """
         icons = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")

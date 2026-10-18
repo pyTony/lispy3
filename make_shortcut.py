@@ -1,4 +1,4 @@
-"""Put a "Lispy Machine" shortcut with the λ icon on the Windows desktop.
+"""Put a "Lispy Machine" launcher with the λ icon on the desktop (Windows or Linux).
 
     python make_shortcut.py
 
