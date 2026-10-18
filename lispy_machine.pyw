@@ -467,7 +467,7 @@ class _ListenerWriter(io.TextIOBase):
 # can end an endless loop. Tk (and so turtle) may only be used from the main
 # thread, so these built-ins are handed over to it and waited for.
 GUI_BUILTINS = frozenset(turtle.__all__) | {
-    'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help'}
+    'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help', 'onscroll'}
 
 
 class Stopped(BaseException):
@@ -2050,29 +2050,28 @@ class LispMachine(tk.Tk):
 
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
+        return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
+
+    def _eval_with_turtle(self, evaluate):
+        """Call `evaluate()` with stdout streamed to the Listener. Returns (value, error)."""
         import turtle as _turtle
 
         # The turtle Screen is a process-wide singleton whose _RUNNING flag
         # can be flipped to False by transient WM events when a second Tk
-        # root (the editor) exists in the same process. Force it back on
-        # before every evaluation.
+        # root (the editor) exists in the same process, and closing the
+        # window leaves it False. Force it back on before every evaluation,
+        # so the next drawing command opens a fresh window.
         _turtle.TurtleScreen._RUNNING = True
 
-        writer = _ListenerWriter(self)
         try:
-            with contextlib.redirect_stdout(writer):
-                ast = L.parse(code)
-                val = L.eval_exp(ast, L.global_env)
-            return val, None
+            with contextlib.redirect_stdout(_ListenerWriter(self)):
+                return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                writer = _ListenerWriter(self)
-                with contextlib.redirect_stdout(writer):
-                    ast = L.parse(code)
-                    val = L.eval_exp(ast, L.global_env)
-                return val, None
+                with contextlib.redirect_stdout(_ListenerWriter(self)):
+                    return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
                 return None, RuntimeError(
@@ -2151,19 +2150,20 @@ class LispMachine(tk.Tk):
 
     def _eval_forms(self, forms):
         """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread."""
-        writer = _ListenerWriter(self)
         for form in forms:
             self._ui(self._echo_form, form)
-            try:
-                with contextlib.redirect_stdout(writer):
-                    # Expand each form just before it runs, as the REPL does, so
-                    # defun, quasiquote and macros defined earlier in the buffer work.
-                    form = L.expand(form, toplevel=True)
-                    val = L.eval_exp(form, L.global_env)
-            except Exception as e:                   # noqa: BLE001
-                self._ui(self._report_form_error, e)
+
+            def run_form(form=form):
+                # Expand each form just before it runs, as the REPL does, so
+                # defun, quasiquote and macros defined earlier in the buffer work.
+                form = L.expand(form, toplevel=True)
+                return form, L.eval_exp(form, L.global_env)
+
+            result, err = self._eval_with_turtle(run_form)
+            if err is not None:
+                self._ui(self._report_form_error, err)
                 return
-            self._ui(self._report_form, form, val)
+            self._ui(self._report_form, *result)
         self._ui(self.listener_write, ";; --- done ---\n", "info")
 
     def _echo_form(self, form):
@@ -2177,7 +2177,7 @@ class LispMachine(tk.Tk):
         self.listener_write(f"{form_str}\n", "code")
 
     def _report_form_error(self, e):
-        msg = L.RECURSION_HINT if isinstance(e, RecursionError) else e
+        msg = L.RECURSION_HINT if isinstance(e, RecursionError) else (str(e) or type(e).__name__)
         self.listener_write(f"Error: {msg}\n", "error")
         self.set_inspector(f"Error: {msg}")
         self.listener_write(";; --- aborted ---\n", "info")

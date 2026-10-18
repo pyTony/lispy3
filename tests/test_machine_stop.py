@@ -17,7 +17,8 @@ from test_machine_args import machine
 class _FakeMachine:
     """Just enough of LispMachine for _start, _pump, stop and the GUI built-ins."""
     for _name in ("_start", "_pump", "_finish", "_ui", "_ui_post", "_busy", "_sleep",
-                  "_gui_builtins_on_main", "_on_main_fn", "_gui_call", "_run"):
+                  "_gui_builtins_on_main", "_on_main_fn", "_gui_call", "_run",
+                  "_eval_with_turtle"):
         locals()[_name] = getattr(machine.LispMachine, _name)
     del _name
 

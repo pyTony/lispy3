@@ -66,7 +66,34 @@ for _name in _COMMANDS:
 __all__ = _COMMANDS + ['position', 'heading', 'isdown', 'setposition', 'setheading',
                        'penup', 'pendown', 'Terminator']
 
-Screen = _recorder('Screen')
+class _Canvas:
+    """The Tk canvas, as far as onscroll uses it: bindings are kept in `bindings`."""
+
+    def __init__(self):
+        self.bindings = {}
+
+    def bind(self, event_name, handler):
+        self.bindings[event_name] = handler
+
+    def unbind(self, event_name):
+        self.bindings.pop(event_name, None)
+
+    def canvasx(self, x):
+        return x
+
+    def canvasy(self, y):
+        return y
+
+
+canvas = _Canvas()
+_screen = types.SimpleNamespace(xscale=1.0, yscale=1.0, getcanvas=lambda: canvas)
+
+
+def Screen():
+    calls.append(('Screen', ()))
+    return _screen
+
+
 TurtleScreen = types.SimpleNamespace(_RUNNING=True)
 Turtle = types.SimpleNamespace(_screen=None)
 
@@ -74,3 +101,4 @@ Turtle = types.SimpleNamespace(_screen=None)
 def reset_stub():
     calls.clear()
     _state.update(position=(0.0, 0.0), heading=0.0, isdown=True)
+    canvas.bindings.clear()

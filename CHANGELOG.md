@@ -8,6 +8,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   live during a long run or an endless loop, and the new **■ Stop** button
   (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on
   the window's thread.
+- `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the turtle
+  window, and `lisp/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
+  around the pointer.
+- Eval whole buffer (F6) in the Lispy Machine draws again after the turtle
+  window was closed, instead of stopping with an empty `Error:`.
 - Lispy Machine: right-click opens Cut / Copy / Paste / Select all in the editor,
   Listener, Inspector and Guide. Before, right-click did nothing.
 - Fraction results are simplified everywhere: `(mod 3/2 1/2)` is `0`, not `0/1`,
@@ -17,6 +22,7 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.
   A local variable or definition named `+`, `=`, `vector-ref` and so on is
   respected, and the extra built-ins are left out of `(save ...)`.
+  NumPy's dot product is `(a-dot a b)`, so turtle's `(dot size colour)` still works.
 - The Lispy Machine uses `lispy3-numpy.py` when NumPy is installed.
 - `lisp/sieve-optimized.lisp`: the sieve with bulk vector operations. It now
   finds the same 1899 primes as `sieve_lispy3.lisp`.
