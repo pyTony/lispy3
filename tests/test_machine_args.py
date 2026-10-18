@@ -67,6 +67,18 @@ class Version(unittest.TestCase):
             self.assertIn(f"lispy3 {machine.L.__version__}", out.getvalue())
 
 
+class NumpyInterpreter(unittest.TestCase):
+    def test_numpy_version_is_used_exactly_when_numpy_is_installed(self):
+        try:
+            import numpy  # noqa: F401
+            has_numpy = True
+        except ImportError:
+            has_numpy = False
+        self.assertEqual(machine.USING_NUMPY, has_numpy)
+        self.assertEqual("vector-fill!" in machine.L.global_env, has_numpy)
+        self.assertEqual("NumPy" in machine.version_text(), has_numpy)
+
+
 class ReadFileArg(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()

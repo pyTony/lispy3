@@ -40,6 +40,21 @@ from tkinter.scrolledtext import ScrolledText
 # --- import the interpreter (no side effects when imported) -------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
 import lispy3 as L
+
+def _use_numpy_interpreter() -> bool:
+    """With NumPy installed, load lispy3-numpy.py: it speeds up L in place and adds
+    the array built-ins. Without NumPy, or if it fails to load, keep plain lispy3."""
+    try:
+        import numpy  # noqa: F401
+        import importlib.util
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lispy3-numpy.py")
+        spec = importlib.util.spec_from_file_location("lispy3_numpy", path)
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+        return True
+    except Exception:
+        return False
+
+USING_NUMPY = _use_numpy_interpreter()
 import guide
 import syntax_highlight as SH
 
@@ -131,7 +146,8 @@ __version__ = "1.0"
 
 def version_text() -> str:
     """The line `python lispy_machine.pyw --version` prints, also shown in Help > About."""
-    return f"Lispy3 Machine {__version__} (lispy3 {L.__version__}, Python {sys.version.split()[0]})"
+    numpy = f", NumPy {sys.modules['numpy'].__version__}" if USING_NUMPY else ""
+    return f"Lispy3 Machine {__version__} (lispy3 {L.__version__}, Python {sys.version.split()[0]}{numpy})"
 
 # Help > About
 ABOUT_CREDITS = (
