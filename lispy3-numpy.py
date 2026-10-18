@@ -28,7 +28,7 @@ class NDOpArray:
             self.data = np.array(cleaned, dtype=dtype)
 
     def __repr__(self) -> str:
-        return f"#a({lp.lisp_str(self.data.tolist())})"
+        return f"#a{lp.lisp_str(self.data.tolist())}"
 
     def __getitem__(self, idx):
         if type(idx) is int:
@@ -101,7 +101,7 @@ def _sum_fn(arr: Any, axis: Any = None) -> Any:
 _orig_lisp_str = lp.lisp_str
 def _patched_lisp_str(exp: Any) -> str:
     if HAS_NUMPY and isinstance(exp, NDOpArray):
-        return f"#a({_orig_lisp_str(exp.data.tolist())})"
+        return f"#a{_orig_lisp_str(exp.data.tolist())}"
     return _orig_lisp_str(exp)
 
 lp.lisp_str = _patched_lisp_str

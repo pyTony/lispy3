@@ -71,10 +71,12 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | File | Role |
 |------|------|
 | `lispy3.py` | The interpreter (REPL + `python lispy3.py file.lisp` script runner). |
+| `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
 | `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |
 | `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
 | `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
+| `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
 | `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
@@ -151,6 +153,23 @@ A program file is ordinary Lisp code that runs from top to bottom, like a Python
 Good to know: `+ - * /` take exactly two arguments, so write `(+ (+ a b) c)`; `(if test then else)` always needs the else part; a `lambda` body is one expression, so wrap several in `(begin ...)`.
 
 `sieve_lispy3.lisp` is the Byte magazine prime sieve written this way: `python lispy3.py sieve_lispy3.lisp`.
+
+### Faster runs with lispy3-numpy.py
+
+`python lispy3-numpy.py prog.lisp` takes the same options as `lispy3.py` and runs the same programs, only faster: it adds a quicker evaluator for loops, arithmetic, comparisons and `vector-ref` / `vector-set!`. NumPy is optional. Without it everything below still works on ordinary vectors, except the array built-ins at the end.
+
+| Form | What it does |
+|------|--------------|
+| `(make-num-vector n fill)` | like `make-vector`, but a NumPy array of whole numbers when NumPy is installed; it prints as `#a(1 1 1)` |
+| `(vector-fill! v x [start] [stop])` | put `x` into items `start` up to (not including) `stop`; the whole vector if left out |
+| `(vector-slice-set! v start stop step x)` | put `x` into items `start`, `start+step`, ... below `stop` |
+| `(sum v)` | add up all items |
+| `(array 1 2 3)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` | make NumPy arrays (NumPy only) |
+| `(a+ a b)` `(a- a b)` `(a* a b)` `(a/ a b)` | item-by-item arithmetic on arrays or an array and a number (NumPy only) |
+| `(dot a b)` `(matmul a b)` `(mean a)` `(std a)` `(reshape a 2 3)` `(shape a)` | linear algebra and statistics (NumPy only) |
+| `(array? x)` `(array->list a)` `(list->array lst)` | test for an array and convert (NumPy only) |
+
+The speed comes from doing a whole vector in one built-in call instead of a Lisp loop, not from NumPy itself: reading or setting one item of a NumPy array is slower than of an ordinary vector. Ten rounds of the sieve take about 2.7 s with `python lispy3.py sieve_lispy3.lisp`, about 0.85 s with `python lispy3-numpy.py sieve_lispy3.lisp`, and about 0.4 s with `python lispy3-numpy.py sieve-optimized.lisp`, with or without NumPy. All three find 1899 primes.
 
 ---
 

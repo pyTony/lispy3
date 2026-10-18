@@ -103,6 +103,16 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
 | `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
 
+Only in `python lispy3-numpy.py` (NumPy optional):
+
+| Form | Meaning |
+|------|---------|
+| `(make-num-vector n fill)` | like `make-vector`; a NumPy array when NumPy is installed |
+| `(vector-fill! v x [start] [stop])` | set a range of items to `x` |
+| `(vector-slice-set! v start stop step x)` | set every `step`th item from `start` below `stop` to `x` |
+| `(sum v)` | total of the items |
+| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |
+
 ## Turtle graphics
 
 | Function | Result |

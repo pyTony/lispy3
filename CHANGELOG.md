@@ -2,6 +2,16 @@
 
 All notable changes to Lispy3 and the Lispy Machine editor.
 
+## Unreleased
+
+- `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
+  built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
+  and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.
+- `lisp/sieve-optimized.lisp`: the sieve with bulk vector operations. It now
+  finds the same 1899 primes as `sieve_lispy3.lisp`.
+- Fixes for Windows path escapes, universal times before 1970, and Help >
+  Update outside a git checkout.
+
 ## Lispy Machine 1.0 (lispy3 interpreter 3.0)
 
 Everything merged since the "Lispy3 Machine" release (tag `#editor`,
