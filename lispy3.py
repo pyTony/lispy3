@@ -280,6 +280,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("push-pose", "(push-pose) - remember position, heading and pen"),
         ("pop-pose", "(pop-pose) - go back to the last remembered pose, without drawing"),
         ("clear-poses", "(clear-poses) - forget all remembered poses"),
+        ("onscroll", "(onscroll f) - call (f x y step) on each mouse wheel turn; step 1 is up; (onscroll #f) stops"),
         ("reinit-turtle", "(reinit-turtle) - reopen a closed turtle window; also reset"),
     ],
 }
@@ -500,6 +501,38 @@ def pop_pose() -> None:
 def clear_poses() -> None:
     """Forget all remembered poses."""
     _turtle_pose_stack.clear()
+
+_SCROLL_EVENTS = ('<MouseWheel>', '<Button-4>', '<Button-5>')  # Windows/macOS, then X11
+
+def onscroll(fn: Any = False) -> None:
+    """(onscroll f) calls (f x y step) when the mouse wheel turns over the turtle window.
+
+    x y is the pointer in turtle coordinates; step is 1 for a turn away from
+    you and -1 towards you. (onscroll #f) stops it. A turn that comes while f
+    is still running (say, from its own (update)) is ignored.
+    """
+    screen = turtle.Screen()
+    canvas = screen.getcanvas()
+    if not fn:
+        for event_name in _SCROLL_EVENTS:
+            canvas.unbind(event_name)
+        return None
+    busy = False
+
+    def on_wheel(event):
+        nonlocal busy
+        if busy:
+            return
+        busy = True
+        try:
+            step = 1 if event.num == 4 or event.delta > 0 else -1
+            fn(canvas.canvasx(event.x) / screen.xscale, -canvas.canvasy(event.y) / screen.yscale, step)
+        finally:
+            busy = False
+
+    for event_name in _SCROLL_EVENTS:
+        canvas.bind(event_name, on_wheel)
+    return None
 
 def reinit_turtle():
     """Completely recreates the Turtle window if it was closed."""
@@ -1032,6 +1065,7 @@ def standard_env() -> Env:
         'vector->list': list,
         'list->vector': Vector,
         'push-pose': push_pose,
+        'onscroll': onscroll,
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
         'reinit-turtle': reinit_turtle,

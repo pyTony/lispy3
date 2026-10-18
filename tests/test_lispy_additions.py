@@ -9,6 +9,7 @@ import contextlib
 import io
 import os
 import tempfile
+import types
 
 import turtle_stub
 from support import LispyTestCase, REPO_DIR, lispy3
@@ -232,6 +233,27 @@ class ExampleProgramsTest(LispyTestCase):
         """sieve_lispy3.lisp finds 1899 primes."""
         self.assertIn("Primes found: 1899", self.run_example("sieve_lispy3.lisp"))
 
+    def test_mandelbrot_zooms_on_the_mouse_wheel(self):
+        """mandelbrot.lisp draws, and a wheel turn zooms in around the pointer."""
+        with open(os.path.join(lispy3.LISP_DIR, "mandelbrot.lisp")) as f:
+            source = f.read()
+        # the same program on a 12 x 8 picture, so the test stays quick
+        source = source.replace("(define mandel-w 120)", "(define mandel-w 12)")
+        source = source.replace("(define mandel-h 80)", "(define mandel-h 8)")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "mandelbrot.lisp")
+            with open(path, "w") as f:
+                f.write(source)
+            self.run_example(path)
+        strokes = [c for c in turtle_stub.calls if c[0] == 'fd']
+        self.assertEqual(len(strokes), 12 * 8)
+        step = self.ev("mandel-step")
+        # wheel away from you (X11 button 4) with the pointer 10 pixels right of centre
+        turtle_stub.canvas.bindings['<Button-4>'](types.SimpleNamespace(num=4, delta=0, x=10, y=0))
+        self.assertAlmostEqual(self.ev("mandel-step"), step / 2)
+        self.assertAlmostEqual(self.ev("mandel-x"), -0.6 + 10 * step / 2)
+        self.assertEqual(len([c for c in turtle_stub.calls if c[0] == 'fd']), 2 * 12 * 8)
+
     def test_saved_workspace_loads(self):
         """my_workspace.lisp loads without an error."""
         self.run_example("my_workspace.lisp")
@@ -239,6 +261,25 @@ class ExampleProgramsTest(LispyTestCase):
     def test_every_example_is_covered(self):
         """Every .lisp file in lisp/ has a test."""
         covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
-                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp"}  # pi: test_pi_digits.py
+                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp",
+                   "mandelbrot.lisp"}  # pi: test_pi_digits.py
         examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
         self.assertEqual(examples - covered, set(), "add a test for the new example program")
+
+class OnScrollTest(LispyTestCase):
+
+    def test_wheel_calls_back_with_turtle_coordinates(self):
+        """(onscroll f) calls (f x y step); y grows upwards, as in turtle."""
+        self.ev("(define seen '())")
+        self.ev("(onscroll (lambda (x y step) (set! seen (list x y step))))")
+        bindings = turtle_stub.canvas.bindings
+        bindings['<MouseWheel>'](types.SimpleNamespace(num='??', delta=120, x=5, y=20))
+        self.assertEqual(self.ev("seen"), [5.0, -20.0, 1])
+        bindings['<Button-5>'](types.SimpleNamespace(num=5, delta=0, x=0, y=0))
+        self.assertEqual(self.ev("seen")[2], -1)
+
+    def test_onscroll_false_stops(self):
+        """(onscroll #f) removes the wheel bindings."""
+        self.ev("(onscroll (lambda (x y step) step))")
+        self.ev("(onscroll #f)")
+        self.assertEqual(turtle_stub.canvas.bindings, {})

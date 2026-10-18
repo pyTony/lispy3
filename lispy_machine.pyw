@@ -1850,29 +1850,28 @@ class LispMachine(tk.Tk):
     # =========================================================================
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
+        return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
+
+    def _eval_with_turtle(self, evaluate):
+        """Call `evaluate()` with stdout streamed to the Listener. Returns (value, error)."""
         import turtle as _turtle
 
         # The turtle Screen is a process-wide singleton whose _RUNNING flag
         # can be flipped to False by transient WM events when a second Tk
-        # root (the editor) exists in the same process. Force it back on
-        # before every evaluation.
+        # root (the editor) exists in the same process, and closing the
+        # window leaves it False. Force it back on before every evaluation,
+        # so the next drawing command opens a fresh window.
         _turtle.TurtleScreen._RUNNING = True
 
-        writer = _ListenerWriter(self)
         try:
-            with contextlib.redirect_stdout(writer):
-                ast = L.parse(code)
-                val = L.eval_exp(ast, L.global_env)
-            return val, None
+            with contextlib.redirect_stdout(_ListenerWriter(self)):
+                return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                writer = _ListenerWriter(self)
-                with contextlib.redirect_stdout(writer):
-                    ast = L.parse(code)
-                    val = L.eval_exp(ast, L.global_env)
-                return val, None
+                with contextlib.redirect_stdout(_ListenerWriter(self)):
+                    return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
                 return None, RuntimeError(
@@ -1947,7 +1946,6 @@ class LispMachine(tk.Tk):
             self.listener_write(";; --- done ---\n", "info")
             return
 
-        writer = _ListenerWriter(self)
         for form in forms:
             try:
                 form_str = L.lisp_str(form)
@@ -1958,17 +1956,20 @@ class LispMachine(tk.Tk):
             self.listener_write("USER> ", "prompt")
             self.listener_write(f"{form_str}\n", "code")
 
-            try:
-                with contextlib.redirect_stdout(writer):
-                    # Expand each form just before it runs, as the REPL does, so
-                    # defun, quasiquote and macros defined earlier in the buffer work.
-                    form = L.expand(form, toplevel=True)
-                    val = L.eval_exp(form, L.global_env)
-            except Exception as e:                   # noqa: BLE001
-                self.listener_write(f"Error: {e}\n", "error")
-                self.set_inspector(f"Error: {e}")
+            def run_form(form=form):
+                # Expand each form just before it runs, as the REPL does, so
+                # defun, quasiquote and macros defined earlier in the buffer work.
+                form = L.expand(form, toplevel=True)
+                return form, L.eval_exp(form, L.global_env)
+
+            result, err = self._eval_with_turtle(run_form)
+            if err is not None:
+                msg = str(err) or type(err).__name__
+                self.listener_write(f"Error: {msg}\n", "error")
+                self.set_inspector(f"Error: {msg}")
                 self.listener_write(";; --- aborted ---\n", "info")
                 return
+            form, val = result
 
             if val is None:
                 name = self._defined_name(form)
