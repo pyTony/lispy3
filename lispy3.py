@@ -95,17 +95,23 @@ class Procedure:
         """Create a local environment supporting standard and variadic (rest) parameters."""
         if isinstance(self.parms, str):
             return Env([self.parms], [list(args)], self.env)
-        if '.' in self.parms:
-            idx = self.parms.index('.')
-            fixed = self.parms[:idx]
-            rest_sym = self.parms[idx + 1]
-            return Env(fixed + [rest_sym], list(args[:idx]) + [list(args[idx:])], self.env)
-        if '&' in self.parms:
-            idx = self.parms.index('&')
-            fixed = self.parms[:idx]
-            rest_sym = self.parms[idx + 1]
-            return Env(fixed + [rest_sym], list(args[:idx]) + [list(args[idx:])], self.env)
+        for marker in ('.', '&'):
+            if marker in self.parms:
+                idx = self.parms.index(marker)
+                fixed = self.parms[:idx]
+                rest_sym = self.parms[idx + 1]
+                if len(args) < idx:
+                    self._wrong_count(args, f"at least {idx}")
+                return Env(fixed + [rest_sym], list(args[:idx]) + [list(args[idx:])], self.env)
+        if len(args) != len(self.parms):
+            self._wrong_count(args, str(len(self.parms)))
         return Env(self.parms, list(args), self.env)
+
+    def _wrong_count(self, args: list[Any], expected: str) -> None:
+        """Raise the error for a call with too few or too many arguments."""
+        name = self.name or "lambda"
+        plural = "" if expected == "1" else "s"
+        raise TypeError(f"{name} takes {expected} argument{plural}, got {len(args)}")
 
     def __call__(self, *args: Any) -> Any:
         if self.native_fn:
@@ -840,8 +846,8 @@ def standard_env() -> Env:
         'inexact->exact': _exact,
         'expt': _expt,
         'abs': abs,
-        'min': min,
-        'max': max,
+        'min': lambda first, *rest: min(first, *rest) if rest else first,
+        'max': lambda first, *rest: max(first, *rest) if rest else first,
         'round': round,
 
         # Variadic Comparisons

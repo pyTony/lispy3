@@ -184,5 +184,32 @@ class SaveTest(LispyTestCase):
         self.assertEqual(self.show("f"), "7/2")
 
 
+class ArgumentCountTest(LispyTestCase):
+
+    def test_rest_parameters(self):
+        self.assertEqual(self.show("((lambda args args))"), "()")
+        self.assertEqual(self.show("((lambda (a . rest) rest) 1 2 3)"), "(2 3)")
+        self.ev("(define (g a . xs) (list a xs))")
+        self.assertEqual(self.show("(g 1)"), "(1 ())")
+        self.assertEqual(self.show("(apply g 1 '(2 3))"), "(1 (2 3))")
+
+    def test_too_few_arguments_is_an_error(self):
+        with self.assertRaisesRegex(TypeError, "takes 2 arguments, got 1"):
+            self.ev("((lambda (a b) (+ a b)) 1)")
+        self.ev("(define (g a b . xs) xs)")
+        with self.assertRaisesRegex(TypeError, "g takes at least 2 arguments, got 1"):
+            self.ev("(g 1)")
+
+    def test_too_many_arguments_is_an_error(self):
+        self.ev("(define (sq x) (* x x))")
+        with self.assertRaisesRegex(TypeError, "sq takes 1 argument, got 2"):
+            self.ev("(sq 1 2)")
+
+    def test_min_and_max_of_one_value(self):
+        self.assertEqual(self.ev("(min 3)"), 3)
+        self.assertEqual(self.ev("(max 3)"), 3)
+        self.assertEqual(self.ev("(max 1 5 2)"), 5)
+
+
 if __name__ == "__main__":
     unittest.main()
