@@ -1346,7 +1346,25 @@ class LispMachine(tk.Tk):
         self.config(menu=bar)
 
     def _listener_complete(self, event=None):
-        before = self.listener_input.get()[:self.listener_input.index("insert")]
+        """Ctrl+Space: complete the name being typed, with a list when several fit."""
+        console = self.plain_repl.get()
+        if console:                                  # the plain REPL types into the Listener text
+            t = self.listener_text
+            if not self.console_ready:
+                return "break"
+            if t.compare("insert", "<", "input"):
+                t.mark_set("insert", "end-1c")
+            widget, before = t, t.get("input", "insert")
+        else:
+            widget = self.listener_input
+            before = widget.get()[:widget.index("insert")]
+
+        def put(text):
+            widget.insert("insert", text)
+            if console:
+                self._console_recolor()
+            widget.focus_force()          # back from the popup to where you type
+
         m = SYMBOL_TAIL.search(before)
         prefix = m.group(0) if m else ""
         
@@ -1354,15 +1372,22 @@ class LispMachine(tk.Tk):
         if not matches:
             return "break"
         if len(matches) == 1:
-            self.listener_input.insert("insert", matches[0][len(prefix):])
+            put(matches[0][len(prefix):])
             return "break"
             
         # Popup listbox for listener
         popup = tk.Toplevel(self)
         popup.wm_overrideredirect(True)
         popup.configure(bg="#333")
-        x = self.listener_input.winfo_rootx() + 20
-        y = self.listener_input.winfo_rooty() - 120
+        box = widget.bbox("insert") if console else None
+        if box:                                      # just under the cursor in the Listener text
+            x = widget.winfo_rootx() + box[0]
+            y = widget.winfo_rooty() + box[1] + box[3]
+            if y + 200 > self.winfo_screenheight():   # no room below: open above the line
+                y = widget.winfo_rooty() + box[1] - 20 * min(10, len(matches)) - 4
+        else:
+            x = widget.winfo_rootx() + 20
+            y = widget.winfo_rooty() - 120
         popup.wm_geometry(f"+{x}+{y}")
 
         lb = tk.Listbox(popup, bg="#1e1e1e", fg="#d4d4d4",
@@ -1375,13 +1400,15 @@ class LispMachine(tk.Tk):
 
         def choose(evt=None):
             sel = lb.curselection()
-            if sel:
-                self.listener_input.insert("insert", matches[sel[0]][len(prefix):])
             popup.destroy()
+            if sel:
+                put(matches[sel[0]][len(prefix):])
+            else:
+                widget.focus_force()
 
         lb.bind("<Return>", choose)
         lb.bind("<Double-Button-1>", choose)
-        lb.bind("<Escape>", lambda e: popup.destroy())
+        lb.bind("<Escape>", lambda e: (popup.destroy(), widget.focus_force()))
         popup.bind("<FocusOut>", lambda e: popup.destroy())
         lb.focus_set()
         lb.selection_set(0)
@@ -1513,6 +1540,7 @@ class LispMachine(tk.Tk):
         for seq, handler in (("<Return>", self._console_return),
                              ("<KP_Enter>", self._console_return),
                              ("<Tab>", self._listener_tab),
+                             ("<Control-space>", self._listener_complete),
                              ("<Escape>", self._cancel_pending),
                              ("<Up>", lambda e: self._console_history(-1)),
                              ("<Down>", lambda e: self._console_history(1)),
