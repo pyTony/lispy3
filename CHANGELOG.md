@@ -2,7 +2,7 @@
 
 All notable changes to Lispy3 and the Lispy Machine editor.
 
-## [0.2.0] - unreleased
+## [1.0.0] - unreleased
 
 Everything merged since the "Lispy3 Machine" release (tag `#editor`,
 15 October 2026): pull requests #4 to #36.
