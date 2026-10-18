@@ -4,6 +4,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- The Lispy Machine runs Lisp code on its own thread, so the window stays
+  live during a long run or an endless loop, and the new **■ Stop** button
+  (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on
+  the window's thread.
 - `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the turtle
   window, and `lisp/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
   around the pointer.

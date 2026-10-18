@@ -27,6 +27,22 @@ class _FakeMachine:
     _parse_top_level_forms = machine.LispMachine._parse_top_level_forms
     _defined_name = staticmethod(machine.LispMachine._defined_name)
     _eval_with_turtle = machine.LispMachine._eval_with_turtle
+    _eval_forms = machine.LispMachine._eval_forms
+    _echo_form = machine.LispMachine._echo_form
+    _report_form = machine.LispMachine._report_form
+    _report_form_error = machine.LispMachine._report_form_error
+    _ui_post = machine.LispMachine._ui_post
+
+    def _busy(self):
+        return False
+
+    def _start(self, work, on_done=None):
+        """Run the work here and now, as the Lisp thread would."""
+        work()
+        return True
+
+    def _ui(self, fn, *args):
+        return fn(*args)
 
     def __init__(self, content):
         self.tab = _Tab(content)

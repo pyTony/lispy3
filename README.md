@@ -60,6 +60,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - **Persistent Listener** with history, coloured prompts/results/errors.
 - **Inspector pane** showing the pretty-printed last value.
 - **Evaluate form at cursor** or the whole buffer without restarting the interpreter.
+- **Stop button**: code runs in the background, so the window stays live during an endless loop, and **■ Stop** (`Ctrl+Break`) ends it.
 - **Search & replace** with case / whole-word / regex options, next/previous, replace-all.
 - **Paren matching**, auto-indent, and **symbol completion** (`Ctrl+Space`).
 - **`display` routed into the Listener** — no more stray terminal output.
@@ -291,6 +292,7 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
 | `F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
 | `F9` | Evaluate what you typed in the Listener |
+| `Ctrl+Break` | Stop the code that is running (also the Listener's **■ Stop** button, **Eval → Stop**, and `Esc` in the plain REPL) |
 | `Ctrl+F` | Open Find |
 | `Ctrl+H` | Open Find & Replace |
 | `F3` / `Shift+F3` | Next / previous match |
@@ -309,6 +311,8 @@ The Listener is a real REPL backed by the interpreter's `global_env`. Code in th
 **Plain lispy3 REPL.** Tick **View → Plain lispy3 REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener becomes a console like `python lispy3.py`, still sharing the editor's `global_env`: the `USER>` entry line goes away and you type at a `lispy3>` prompt in the Listener itself, so your input and the output scroll together. Enter on an unfinished form continues it on the next line under a `... (1)>` prompt, pasted lines are read one by one, `Tab` completes like readline (the shared start, then the list of choices) and `Ctrl+Space` opens the same pick list as elsewhere, `↑` / `↓` bring back earlier lines, `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`, and a result too long for one line, such as a whole function, indented like in the Inspector). The text above the prompt is read-only: `←` stops at the prompt, and a click in older output puts the cursor back at the prompt (drag to select and copy). The choice is remembered in `~/.lispy3_machine.json`; untick it to get the `USER>` Listener back.
 
 F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
+
+**Running and stopping.** Code runs on its own thread, so the editor stays live while it works: you can scroll, edit, read the guide, and watch `display` output arrive. While it runs the status bar says *Running...* and the **■ Stop** button at the top right of the Listener turns red; press it (or `Ctrl+Break`, or **Eval → Stop**) to end an endless loop or a long `(sleep ...)`. The Listener prints `;; Stopped.` and everything defined so far stays defined. `(try ...)` does not catch a Stop. One evaluation runs at a time: F5, F6 or F9 during a run says *Still running* and does nothing. Turtle commands are still carried out by the window's own thread, as Tk requires, so drawings work as before.
 
 F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely what `python lispy3.py file.lisp` does under the hood, so the results are identical.
 
