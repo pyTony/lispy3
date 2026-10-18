@@ -10,6 +10,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   `ENDPROC`, `FN=`, the `EXIT-` forms and `END` each expand into plain lispy3
   code inside `(bbc-program ...)`. PROC and FN parameters and LOCAL variables
   are dynamically scoped as in BBC BASIC.
+- `compare/`: the same mini-basic macros in SBCL and Clojure, side by side,
+  with shared test programs that print the same output in all three Lisps.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.

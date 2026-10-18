@@ -1,0 +1,18 @@
+; PRINT: right-justified numbers, ; and , separators, ' newlines, TAB and SPC
+(bbc-program
+  (PRINT 1 :semi 2 :comma 3)
+  (PRINT "A" :semi 1 :semi "B")
+  (PRINT "AB" :comma "C" :comma 7)
+  (PRINT "same " :semi)
+  (PRINT "line")
+  (PRINT "A" :nl "B")
+  (PRINT (TAB 3) "x" :semi (SPC 2) "y")
+  (PRINT "abcdef" :semi (TAB 2) "x")
+  (PRINT :semi (/ 1 3) :semi " " :semi 2.0 :semi " " :semi 1e10 :semi " " :semi 1.5e-5)
+  (PRINT (/ 2 3) :comma -5 :comma 123456789 :comma 0.001)
+  (PRINT TRUE :semi " " :semi FALSE :semi " " :semi (> 2 1) :semi " " :semi (< 2 1))
+  (LET a% 3.7) (LET b% -3.7)
+  (PRINT :semi a% :semi " " :semi b%)
+  (LET t 5)
+  (PRINT t)
+  (PRINT))

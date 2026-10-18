@@ -1,0 +1,48 @@
+# mini-basic in three Lisps
+
+The structured BBC BASIC statements of [`lisp/mini-basic.lisp`](../lisp/mini-basic.lisp),
+written as macros in lispy3, SBCL (Common Lisp) and Clojure, side by side. All
+three read the same programs in [`programs/`](programs) and print the same
+output, which is kept in the `.out` file next to each program.
+
+| | lispy3 | SBCL | Clojure |
+|---|---|---|---|
+| File | [`lisp/mini-basic.lisp`](../lisp/mini-basic.lisp) | [`sbcl/mini-basic.lisp`](sbcl/mini-basic.lisp) | [`clojure/mini_basic.clj`](clojure/mini_basic.clj) |
+| Lines of code (no comments) | 224 | 203 | 234 |
+| Macro definition | `define-macro` | `defmacro` | `defmacro` |
+| Fresh names | `gensym` | `gensym` | `gensym`, and `x#` in syntax-quote |
+| BBC variable | global, `set!` | special variable (`defparameter`), `setf` | `^:dynamic` var, `set!` inside one `binding` for the whole program |
+| PROC/FN parameters and `LOCAL` (dynamic scope) | saved on entry, put back on exit by hand | `let` of the special variables | nested `binding` |
+| `FOR`, `REPEAT`, `WHILE` | `while` with the body inside the test | `loop` in a `block` | `loop` / `recur` |
+| `ENDPROC`, `FN=` part-way, `EXIT-FOR` and so on | `error` / `try`, only where used | `block` / `return-from`, free | `ex-info` / `try`, only where used |
+| `FN=` as the last statement | a plain value | `return-from` (costs nothing) | a plain value |
+| `END` | `error` / `try` | `catch` / `throw` | `ex-info` / `try` |
+| Clashes with the host Lisp | statements are UPPERCASE symbols, lispy3 is case-sensitive | the reader upcases, so `PRINT`, `IF`, `LET`, `CASE` are shadowed in package `mini-basic` | statements are UPPERCASE symbols, Clojure is case-sensitive |
+| Program namespace | the global environment (a BBC variable named `list` would hide lispy3's `list`) | package `bbc-user`: only `+ - * / < > <= >= = /= mod not` from CL | namespace `bbc-user`: only `+ - * / < > <= >= = == not= not mod` from clojure.core |
+
+What the comparison shows:
+
+- **Common Lisp has BASIC's control flow built in.** Special variables give BBC's
+  dynamic scope, and `block` / `return-from` give every early exit at no cost.
+  The SBCL version is the shortest and needs no tail-position tricks.
+- **lispy3 and Clojure have no non-local exit except exceptions.** So their macros
+  look through the body (`bbc-uses?` / `uses?`) and add a `try` only where an
+  early exit appears. They also turn a final `FN=` into a plain value
+  (`bbc-tail` / `tail`), even at the end of `IF` and `CASE` branches.
+- **Clojure's vars need a binding before `set!` works.** So `bbc-program` binds
+  every variable once around the whole run.
+- **lispy3 is the only one without packages or namespaces.** The text reader of
+  the next step has to rename any BBC variable that clashes with a built-in.
+
+## Running
+
+```sh
+python3 lispy3.py            # then (load "mini-basic") and (load "compare/programs/fact.lisp")
+sbcl --script compare/sbcl/run.lisp compare/programs/fact.lisp
+clojure -M compare/clojure/run.clj compare/programs/fact.lisp
+# or, with the jars: java -cp "clojure.jar:spec.alpha.jar:core.specs.alpha.jar" clojure.main compare/clojure/run.clj ...
+```
+
+`python -m unittest tests.test_compare` checks every program against its `.out`
+file in lispy3. It does the same in SBCL when `sbcl` is installed, and in
+Clojure when `clojure` is installed or `CLOJURE_CP` holds the jars' class path.
