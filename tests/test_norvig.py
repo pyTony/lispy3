@@ -22,16 +22,19 @@ class ParsingTest(LispyTestCase):
     program = "(begin (define r 10) (* pi (* r r)))"
 
     def test_tokenize(self):
+        """tokenize splits Norvig's area program into brackets and atoms."""
         self.assertEqual(lispy3.tokenize(self.program),
                          ['(', 'begin', '(', 'define', 'r', '10', ')',
                           '(', '*', 'pi', '(', '*', 'r', 'r', ')', ')', ')'])
 
     def test_parse(self):
+        """parse turns the area program into nested lists."""
         self.assertEqual(lispy3.parse(self.program),
                          ['begin', ['define', 'r', 10], ['*', 'pi', ['*', 'r', 'r']]])
 
     def test_atoms(self):
         # Norvig: ints, then floats, else symbols
+        """atom reads ints as ints, decimals as floats, anything else as a symbol."""
         self.assertEqual(lispy3.atom('10'), 10)
         self.assertIsInstance(lispy3.atom('10'), int)
         self.assertEqual(lispy3.atom('-3.14e159'), -3.14e159)
@@ -40,22 +43,26 @@ class ParsingTest(LispyTestCase):
         self.assertIsInstance(lispy3.atom('r'), str)
 
     def test_nested_list(self):
+        """parse reads nested lists with numbers inside."""
         self.assertEqual(lispy3.parse("(quote (testing 1 (2.0) -3.14e159))"),
                          ['quote', ['testing', 1, [2.0], -3.14e159]])
 
     def test_extra_closing_bracket_is_an_error(self):
         # Norvig: read_from_tokens raises SyntaxError('unexpected )')
+        """A lone ) is a SyntaxError."""
         with self.assertRaises(SyntaxError):
             lispy3.parse(")")
 
     def test_empty_input_is_an_error(self):
         # Norvig: SyntaxError('unexpected EOF')
+        """Empty input is a SyntaxError."""
         with self.assertRaises(SyntaxError):
             lispy3.parse("")
 
     def test_missing_closing_bracket(self):
         # Intentional difference: Norvig raises 'unexpected EOF' for "(+ 1 2";
         # Lispy closes the open brackets for you.
+        """Missing ) at the end are closed for you, unlike in lis.py."""
         self.assertEqual(lispy3.parse("(+ 1 (* 2 3"), ['+', 1, ['*', 2, 3]])
 
 
@@ -63,34 +70,42 @@ class EvalTest(LispyTestCase):
     """Norvig's "Evaluation: eval" section and its first program."""
 
     def test_program(self):
+        """Norvig's (begin (define r 10) (* pi (* r r))) gives 314.159..."""
         self.assertAlmostEqual(self.ev("(begin (define r 10) (* pi (* r r)))"),
                                314.1592653589793)
 
     def test_variable_reference(self):
+        """A defined variable evaluates to its value."""
         self.ev("(define r 10)")
         self.assertEqual(self.ev("r"), 10)
 
     def test_undefined_variable(self):
         # Norvig: a KeyError from the dict lookup; Lispy names the symbol.
+        """An undefined name is a NameError."""
         with self.assertRaises(NameError):
             self.ev("undefined-thing")
 
     def test_constant_number(self):
+        """Numbers evaluate to themselves."""
         self.assertEqual(self.ev("12"), 12)
         self.assertEqual(self.ev("-2.5"), -2.5)
 
     def test_if_takes_then_branch(self):
         # Norvig: (if (> (* 11 11) 120) (* 7 6) oops) => 42, and oops is never looked up.
+        """if takes the then branch and never looks at the else branch."""
         self.assertEqual(self.ev("(if (> (* 11 11) 120) (* 7 6) oops)"), 42)
 
     def test_if_takes_else_branch(self):
+        """if takes the else branch and never looks at the then branch."""
         self.assertEqual(self.ev("(if (< (* 11 11) 120) oops (* 7 6))"), 42)
 
     def test_define_returns_nothing(self):
         # Nothing is printed after a define in Norvig's REPL or in Lispy's.
+        """define returns nothing, so the REPL prints nothing."""
         self.assertIsNone(self.ev("(define r 10)"))
 
     def test_procedure_call(self):
+        """A built-in call like (sqrt (* 2 8)) gives 4.0."""
         self.assertEqual(self.ev("(sqrt (* 2 8))"), 4.0)
 
 
@@ -104,6 +119,7 @@ class ReplTest(LispyTestCase):
         # lis.py> (if (> (* 11 11) 120) (* 7 6) oops)
         # 42
         # lis.py> (list (+ 1 1) (+ 2 2) (* 2 3) (expt 2 3))   -> see NorvigStandardEnvTest for expt
+        """Norvig's example REPL session gives his results."""
         self.ev("(define r 10)")
         self.assertEqual(self.show("(* pi (* r r))"), "314.1592653589793")
         self.assertEqual(self.show("(if (> (* 11 11) 120) (* 7 6) oops)"), "42")
@@ -111,15 +127,18 @@ class ReplTest(LispyTestCase):
 
     def test_lists_print_in_scheme_syntax(self):
         # Norvig's schemestr: a Python list is printed as (a b c)
+        """Lists print as (1 (a 2.5) ())."""
         self.assertEqual(lispy3.lisp_str([1, ['a', 2.5], []]), "(1 (a 2.5) ())")
 
     def test_booleans_print_as_hash_t_and_hash_f(self):
         # Intentional difference: Norvig's lis.py prints True and False;
         # Lispy prints Scheme's #t and #f.
+        """True and false print as #t and #f, not Python's True and False."""
         self.assertEqual(self.show("(> 2 1)"), "#t")
         self.assertEqual(self.show("(< 2 1)"), "#f")
 
     def test_repl_prints_results_and_errors(self):
+        """The REPL prints results and errors and stops at exit."""
         import builtins
         import contextlib
         import io
@@ -143,10 +162,12 @@ class LanguageTest(LispyTestCase):
     """Norvig's "Language 1: Lispy Calculator" and "Language 2: Full Lispy" examples."""
 
     def test_circle_area(self):
+        """Norvig's circle-area function."""
         self.ev("(define circle-area (lambda (r) (* pi (* r r))))")
         self.assertAlmostEqual(self.ev("(circle-area 3)"), 28.274333877)
 
     def test_factorial(self):
+        """Norvig's fact, up to the 158-digit (fact 100)."""
         self.ev("(define fact (lambda (n) (if (<= n 1) 1 (* n (fact (- n 1))))))")
         self.assertEqual(self.ev("(fact 10)"), 3628800)
         self.assertEqual(
@@ -154,12 +175,14 @@ class LanguageTest(LispyTestCase):
             93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000)
 
     def test_circle_area_of_factorial(self):
+        """circle-area of (fact 10), one function result fed into another."""
         self.ev_all("(define circle-area (lambda (r) (* pi (* r r))))",
                     "(define fact (lambda (n) (if (<= n 1) 1 (* n (fact (- n 1))))))")
         self.assertAlmostEqual(self.ev("(circle-area (fact 10))") / 4.1369087198e+13, 1.0)
 
     def test_first_and_rest_as_names_for_car_and_cdr(self):
         # Norvig defines them himself; Lispy already has both, and redefining works.
+        """first and rest can be defined as car and cdr, as Norvig does."""
         self.ev_all("(define first car)", "(define rest cdr)")
         self.assertEqual(self.ev("(first (list 1 2 3))"), 1)
         self.assertEqual(self.ev("(rest (list 1 2 3))"), [2, 3])
@@ -167,6 +190,7 @@ class LanguageTest(LispyTestCase):
     def test_count(self):
         # Norvig's count uses equal? (see NorvigStandardEnvTest); = does the same job in Lispy.
         # It also relies on (+ #t ...) counting #t as 1, as in Python.
+        """Norvig's recursive count counts the matches in a list."""
         self.ev_all("(define first car)", "(define rest cdr)",
                     "(define count (lambda (item L) (if L (+ (= item (first L)) (count item (rest L))) 0)))")
         self.assertEqual(self.ev("(count 0 (list 0 1 2 3 0 0))"), 3)
@@ -174,6 +198,7 @@ class LanguageTest(LispyTestCase):
             self.ev("(count (quote the) (quote (the more the merrier the bigger the better)))"), 4)
 
     def test_twice_and_repeat(self):
+        """Functions that take and return functions: twice and repeat."""
         self.ev_all("(define twice (lambda (x) (* 2 x)))",
                     "(define repeat (lambda (f) (lambda (x) (f (f x)))))")
         self.assertEqual(self.ev("(twice 5)"), 10)
@@ -183,9 +208,11 @@ class LanguageTest(LispyTestCase):
         self.assertEqual(self.ev("((repeat (repeat (repeat (repeat twice)))) 10)"), 655360)
 
     def test_pow(self):
+        """(pow 2 16) gives 65536.0."""
         self.assertEqual(self.ev("(pow 2 16)"), 65536.0)
 
     def test_fib_and_range(self):
+        """Norvig's fib and his own range, mapped over each other."""
         self.ev_all("(define fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))",
                     "(define range (lambda (a b) (if (= a b) (quote ()) (cons a (range (+ a 1) b)))))")
         self.assertEqual(self.show("(range 0 10)"), "(0 1 2 3 4 5 6 7 8 9)")
@@ -195,22 +222,26 @@ class LanguageTest(LispyTestCase):
             "(1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765)")
 
     def test_quote(self):
+        """quote and ' return the list unevaluated."""
         self.assertEqual(self.ev("(quote (the more the merrier))"),
                          ['the', 'more', 'the', 'merrier'])
         self.assertEqual(self.ev("'(a b)"), ['a', 'b'])   # Lispy's ' shorthand
 
     def test_lambda_closes_over_its_environment(self):
+        """A lambda keeps the n it was made with, so (add3 4) is 7."""
         self.ev("(define adder (lambda (n) (lambda (x) (+ x n))))")
         self.ev("(define add3 (adder 3))")
         self.assertEqual(self.ev("(add3 4)"), 7)
 
     def test_procedure_parameters_shadow_globals(self):
+        """A parameter named x hides the global x and leaves it unchanged."""
         self.ev_all("(define x 1)", "(define f (lambda (x) (* x 10)))")
         self.assertEqual(self.ev("(f 5)"), 50)
         self.assertEqual(self.ev("x"), 1)
 
     def test_make_account_with_set(self):
         # Norvig's set! example: a bank account that remembers its balance.
+        """Norvig's bank accounts: set! changes the balance each account keeps."""
         self.ev("""(define make-account
                      (lambda (balance)
                        (lambda (amt)
@@ -224,6 +255,7 @@ class LanguageTest(LispyTestCase):
         self.assertEqual(self.ev("(account1 0)"), 60.0)   # each account has its own balance
 
     def test_set_of_undefined_variable_is_an_error(self):
+        """set! of a name that was never defined is an error."""
         with self.assertRaises(NameError):
             self.ev("(set! nowhere 1)")
 
@@ -232,6 +264,7 @@ class StandardEnvTest(LispyTestCase):
     """The procedures in Norvig's standard_env() that Lispy also has."""
 
     def test_arithmetic_and_comparison(self):
+        """The arithmetic and comparison built-ins from Norvig's standard_env."""
         cases = {"(+ 2 3)": 5, "(- 2 3)": -1, "(* 2 3)": 6, "(/ 6 4)": 1.5,
                  "(> 2 3)": False, "(< 2 3)": True, "(>= 3 3)": True,
                  "(<= 4 3)": False, "(= 3 3)": True}
@@ -240,6 +273,7 @@ class StandardEnvTest(LispyTestCase):
                 self.assertEqual(self.ev(source), expected)
 
     def test_math_module(self):
+        """pi, e and Python's math functions like sqrt, floor and sin."""
         self.assertAlmostEqual(self.ev("pi"), 3.141592653589793)
         self.assertAlmostEqual(self.ev("e"), 2.718281828459045)
         self.assertEqual(self.ev("(sqrt 16)"), 4.0)
@@ -247,12 +281,14 @@ class StandardEnvTest(LispyTestCase):
         self.assertAlmostEqual(self.ev("(sin 0)"), 0.0)
 
     def test_numbers(self):
+        """abs, max, min and round."""
         self.assertEqual(self.ev("(abs -3)"), 3)
         self.assertEqual(self.ev("(max 1 5 3)"), 5)
         self.assertEqual(self.ev("(min 1 5 3)"), 1)
         self.assertEqual(self.ev("(round 2.6)"), 3)
 
     def test_lists(self):
+        """append, car, cdr, cons, length and list."""
         self.assertEqual(self.ev("(append (list 1 2) (list 3))"), [1, 2, 3])
         self.assertEqual(self.ev("(car (list 1 2 3))"), 1)
         self.assertEqual(self.ev("(cdr (list 1 2 3))"), [2, 3])
@@ -264,9 +300,11 @@ class StandardEnvTest(LispyTestCase):
     def test_car_of_empty_list(self):
         # Intentional difference: Norvig's car raises IndexError on ();
         # Lispy's car (and first) give () back.
+        """(car '()) gives () instead of Norvig's IndexError."""
         self.assertEqual(self.ev("(car (quote ()))"), [])
 
     def test_predicates(self):
+        """null?, not and number?."""
         self.assertIs(self.ev("(null? (quote ()))"), True)
         self.assertIs(self.ev("(null? (list 1))"), False)
         self.assertIs(self.ev("(not #f)"), True)
@@ -278,9 +316,11 @@ class StandardEnvTest(LispyTestCase):
 
     def test_begin(self):
         # Norvig: begin is a procedure returning its last argument; Lispy: a special form.
+        """begin returns its last value."""
         self.assertEqual(self.ev("(begin 1 2 3)"), 3)
 
     def test_procedures_are_first_class(self):
+        """An if can choose which function to call."""
         self.assertEqual(self.ev("((if #t + -) 5 3)"), 8)
         self.assertEqual(self.ev("((if #f + -) 5 3)"), 2)
 
@@ -330,6 +370,7 @@ class NorvigLispyTestSuite(LispyTestCase):
     ]
 
     def test_lis_tests(self):
+        """Every case in Norvig's lis_tests gives his expected result."""
         for source, expected in self.lis_tests:
             with self.subTest(source.split('\n')[0]):
                 self.assertEqual(self.ev(source), expected)
@@ -342,34 +383,43 @@ class NorvigStandardEnvTest(LispyTestCase):
     """
 
     def test_equal(self):
+        """equal? compares lists by content."""
         self.assertIs(self.ev("(equal? (list 1 2) (list 1 2))"), True)
 
     def test_count_with_equal(self):
+        """Norvig's count written with equal?, as on his page."""
         self.ev_all("(define first car)", "(define rest cdr)",
                     "(define count (lambda (item L) (if L (+ (equal? item (first L)) (count item (rest L))) 0)))")
         self.assertEqual(self.ev("(count 0 (list 0 1 2 3 0 0))"), 3)
 
     def test_eq(self):
+        """eq? is true for the same list object."""
         self.ev("(define a (list 1))")
         self.assertIs(self.ev("(eq? a a)"), True)
 
     def test_expt(self):
+        """expt works in Norvig's (list (+ 1 1) ... (expt 2 3)) example."""
         self.assertEqual(self.show("(list (+ 1 1) (+ 2 2) (* 2 3) (expt 2 3))"), "(2 4 6 8)")
 
     def test_apply(self):
+        """apply calls a function with a list of arguments."""
         self.assertEqual(self.ev("(apply + (list 1 2))"), 3)
 
     def test_list_predicate(self):
+        """list? is true for a list."""
         self.assertIs(self.ev("(list? (list 1))"), True)
 
     def test_procedure_predicate(self):
+        """procedure? is true for a built-in."""
         self.assertIs(self.ev("(procedure? car)"), True)
 
     def test_print(self):
+        """print runs without an error."""
         self.ev("(print 1)")
 
     def test_map_over_two_lists(self):
         # Norvig's map is Python's map, so it takes several lists.
+        """map takes several lists and goes through them side by side."""
         self.assertEqual(self.ev("(map + (list 1 2) (list 10 20))"), [11, 22])
 
 

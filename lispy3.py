@@ -1412,7 +1412,9 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 result = spec[2] if len(spec) > 2 else None
                 loop_env = Env(outer=env)
                 for i in range(limit):
-                    loop_env[var_sym] = i
+                    # A fresh binding each pass, as in Clojure, so a closure made in
+                    # the body keeps the i it saw
+                    loop_env = Env([var_sym], [i], env)
                     for b in body_exps:
                         eval_exp(b, loop_env)
                 return eval_exp(result, loop_env) if result is not None else None

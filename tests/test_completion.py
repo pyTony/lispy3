@@ -13,28 +13,34 @@ from test_machine_args import machine
 class CompleteNamesTest(LispyTestCase):
 
     def test_built_ins_and_special_forms(self):
+        """Completion offers built-ins and special forms such as define and lambda."""
         self.assertEqual(lispy3.complete_names("defi"), ["define", "define-macro"])
         self.assertIn("lambda", lispy3.complete_names("lam"))
         self.assertIn("sqrt", lispy3.complete_names("sq"))
 
     def test_own_definitions(self):
+        """Completion offers names you defined yourself."""
         self.ev("(define my-square (lambda [x] (* x x)))")
         self.assertEqual(lispy3.complete_names("my-sq"), ["my-square"])
 
     def test_keywords_of_global_maps(self):
+        """Typing : offers the keywords of maps stored in global variables."""
         self.ev('(define user {:name "Tony" :status "Trusty"})')
         self.assertEqual(lispy3.complete_names(":"), [":name", ":status"])
 
     def test_no_match(self):
+        """A prefix nothing starts with gives no completions."""
         self.assertEqual(lispy3.complete_names("no-such-name-"), [])
 
 
 class ReplStrTest(LispyTestCase):
 
     def test_short_result_stays_on_one_line(self):
+        """A short result prints on one line, as lisp_str gives it."""
         self.assertEqual(lispy3.repl_str(self.ev("[1 2 3]"), 40), lispy3.lisp_str(self.ev("[1 2 3]")))
 
     def test_long_function_is_indented(self):
+        """A long function prints as an indented define over several lines."""
         self.ev("(define f (lambda [x] (begin (define a 1) (define b 2) (while (< a x) (set! a (+ a 1))) a)))")
         lines = lispy3.repl_str(self.ev("f"), 40).splitlines()
         self.assertEqual(lines[:3], ["(define f", "  (lambda [x]", "    (begin"])
@@ -44,32 +50,39 @@ class ReplStrTest(LispyTestCase):
 class InspectorListTest(LispyTestCase):
 
     def test_definitions_with_previews(self):
+        """The Inspector lists your definitions with a preview of each value."""
         self.ev('(define user {:name "Tony"})')
         self.ev("(define n 42)")
         self.assertEqual(machine.inspector_items(), [("n", "42"), ("user", '{:name "Tony"}')])
 
     def test_built_ins_are_left_out(self):
+        """The Inspector does not list built-ins."""
         self.assertEqual(machine.inspector_items(), [])
 
     def test_long_values_are_shortened(self):
+        """A long value's preview is cut off with ..."""
         self.assertEqual(machine.preview(tuple(range(100)), 10), "[0 1 2 ...")
 
 
 class MachineOptionsTest(unittest.TestCase):
 
     def test_repl_flag_anywhere(self):
+        """--repl can come anywhere among the file names."""
         self.assertEqual(machine.parse_args(["a.lisp", "--repl", "b.lisp"]),
                          (True, ["a.lisp", "b.lisp"]))
         self.assertEqual(machine.parse_args(["a.lisp"]), (False, ["a.lisp"]))
 
     def test_common_prefix(self):
+        """The common start of the completions is what Tab fills in."""
         self.assertEqual(machine.common_prefix(["define", "define-macro"]), "define")
 
     def test_name_being_typed(self):
+        """The name being typed is found before the cursor, keywords and -> included."""
         self.assertEqual(machine.SYMBOL_TAIL.search("(:na").group(0), ":na")
         self.assertEqual(machine.SYMBOL_TAIL.search("(string->sy").group(0), "string->sy")
 
     def test_settings_round_trip(self):
+        """Settings saved to the JSON file load back, and a broken file gives {}."""
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "settings.json")
             self.assertEqual(machine.load_settings(path), {})
