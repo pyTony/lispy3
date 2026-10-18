@@ -7,6 +7,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 - Help > About names the git branch the editor runs from (or says it is not
   a git checkout).
 - Tab completion offers `defun`.
+- `(make-num-vector [1 2 3])` makes a num vector from a vector or list, and
+  `(help 'make-num-vector)` and the other `lispy3-numpy.py` extras have help.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.

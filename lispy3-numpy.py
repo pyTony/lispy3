@@ -70,7 +70,9 @@ def _wrap_result(res: Any) -> Any:
     return res
 
 
-def _make_num_vector(n: int, fill: Any = 0) -> Any:
+def _make_num_vector(n: Any, fill: Any = 0) -> Any:
+    if isinstance(n, (list, tuple, NDOpArray)):     # (make-num-vector [1 2 3]) or '(1 2 3)
+        return NDOpArray(n) if HAS_NUMPY else lp.Vector(n)
     if HAS_NUMPY:
         return NDOpArray(np.full(int(n), fill, dtype=np.int64))
     return lp.Vector([fill] * int(n))
@@ -147,6 +149,35 @@ if HAS_NUMPY:
         ),
         'shape': lambda arr: list(arr.data.shape) if isinstance(arr, NDOpArray) else [],
     })
+
+
+# (help 'name) and (help) know the extras too
+EXTRA_HELP = {
+    "Fast vectors (lispy3-numpy.py)": [
+        ("make-num-vector", "(make-num-vector n fill) - n items, all fill (0 if left out); "
+                            "(make-num-vector [1 2 3]) - from the items of a vector or list. "
+                            "A NumPy array when NumPy is installed"),
+        ("vector-fill!", "(vector-fill! v x [start] [stop]) - put x into items start up to stop; the whole vector if left out"),
+        ("vector-slice-set!", "(vector-slice-set! v start stop step x) - put x into items start, start+step, ... below stop"),
+        ("sum", "(sum v) - add up all items"),
+    ],
+}
+if HAS_NUMPY:
+    EXTRA_HELP["NumPy arrays (lispy3-numpy.py)"] = [
+        ("array", "(array 1 2 3) - a NumPy array of the values; (array? x) tests for one"),
+        ("zeros", "(zeros n) - n zeros, as floats"),
+        ("ones", "(ones n) - n ones, as floats"),
+        ("arange", "(arange stop) or (arange start stop [step]) - evenly stepped numbers"),
+        ("linspace", "(linspace start stop [num]) - num evenly spaced numbers, 50 if left out"),
+        ("list->array", "(list->array lst) - an array of the items; array->list goes back"),
+        ("array->list", "(array->list a) - a list of the items"),
+        ("a+", "(a+ a b) - item by item +; also a- a* a/"),
+        ("dot", "(dot a b) - dot product; matmul multiplies matrices"),
+        ("mean", "(mean a) - average; std gives the standard deviation"),
+        ("reshape", "(reshape a rows cols) - the same items in a new shape; (shape a) gives the shape"),
+    ]
+lp.HELP_TOPICS.update(EXTRA_HELP)
+lp._HELP_INDEX.update((name, text) for entries in EXTRA_HELP.values() for name, text in entries)
 
 
 # --- 2. Fast Primitives & Evaluator Loop ---
