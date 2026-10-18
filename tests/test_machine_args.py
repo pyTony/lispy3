@@ -82,5 +82,19 @@ class ReadFileArg(unittest.TestCase):
             machine.read_file_arg(self.dir.name)
 
 
+class ReadDemo(unittest.TestCase):
+    def test_demo_file_is_next_to_the_editor(self):
+        self.assertEqual(machine.DEMO_FILE, os.path.join(REPO_DIR, "demo.lisp"))
+        name, content, path = machine.read_demo()
+        self.assertEqual((name, path), ("demo.lisp", machine.DEMO_FILE))
+        with open(machine.DEMO_FILE, encoding="utf-8") as f:
+            self.assertEqual(content, f.read())
+
+    def test_missing_demo_gives_an_empty_untitled_buffer(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(machine.read_demo(os.path.join(d, "demo.lisp")),
+                             ("untitled.lisp", "", None))
+
+
 if __name__ == "__main__":
     unittest.main()
