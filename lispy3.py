@@ -97,7 +97,7 @@ class Procedure:
         """Create a local environment supporting standard and variadic (rest) parameters."""
         if isinstance(self.parms, str):
             return Env([self.parms], [list(args)], self.env)
-        for marker in ('.', '&'):
+        for marker in ('.', '&', '&rest', '&body'):
             if marker in self.parms:
                 idx = self.parms.index(marker)
                 fixed = self.parms[:idx]
@@ -180,7 +180,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("empty?", "(empty? x) - true for an empty list, string or map"),
         ("append", "(append a b ...) - join lists, or join strings"),
         ("last", "(last lst) - the last item"),
-        ("nth", "(nth lst i) - item i, counting from 0; also works on a string"),
+        ("nth", "(nth lst i) - item i, counting from 0; also works on a string; Common Lisp order (nth i lst) works too"),
         ("reverse", "(reverse lst) - the items backwards; also works on a string"),
         ("range", "(range 5), (range 1 6), (range 0 10 2) - a list of whole numbers"),
         ("seq", "(seq \"abc\") - a string as a list of characters (#\\a #\\b #\\c)"),
@@ -229,7 +229,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Strings and characters": [
         ("str", "(str a b ...) - the values joined as one string"),
         ("string-append", "(string-append s1 s2 ...) - the strings joined, \"\" for none; only strings"),
-        ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~% newline"),
+        ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~d number, ~% newline; (format t ...) prints it, (format nil ...) returns it"),
         ("substring", "(substring s start end) - part of s; end may be left out"),
         ("string-ref", "(string-ref s i) - character i of s"),
         ("upcase", "(upcase s), (downcase s) - change the case"),
@@ -285,6 +285,15 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
 }
 
 _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
+
+# Common Lisp names for lispy3 built-ins: (mapcar f lst) is (map f lst) and so on
+CL_ALIASES = {'null': 'null?', 'listp': 'list?', 'consp': 'pair?', 'eq': 'eq?', 'eql': 'eq?',
+              'equal': 'equal?', 'evenp': 'even?', 'oddp': 'odd?', 'zerop': 'zero?',
+              'plusp': 'positive?', 'minusp': 'negative?', 'numberp': 'number?',
+              'integerp': 'integer?', 'stringp': 'string?', 'symbolp': 'symbol?',
+              'mapcar': 'map', 'remove-if-not': 'filter', 'rem': 'remainder',
+              'string-upcase': 'upcase', 'string-downcase': 'downcase', 'intern': 'string->symbol',
+              'terpri': 'newline', 'aref': 'vector-ref'}
 for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset': 'reinit-turtle',
                       '>': '<', '<=': '<', '>=': '<', 'fold': 'reduce', 'downcase': 'upcase',
                       'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
@@ -292,6 +301,11 @@ for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset'
                       'odd?': 'even?', 'positive?': 'zero?', 'negative?': 'zero?', 'inexact': 'exact',
                       'exact->inexact': 'exact', 'inexact->exact': 'exact'}.items():
     _HELP_INDEX[_alias] = _HELP_INDEX[_name]
+for _alias, _name in {**CL_ALIASES, 'progn': 'begin', 'setq': 'set!', 'defvar': 'define',
+                      'defparameter': 'define', 'defconstant': 'define',
+                      'defmacro': 'define-macro'}.items():
+    if _name in _HELP_INDEX and _alias not in _HELP_INDEX:
+        _HELP_INDEX[_alias] = _HELP_INDEX[_name]
 
 def lisp_help(*args: Any) -> None:
     """(help) lists the built-ins; (help 'name) or (help name) explains one of them."""
@@ -724,7 +738,7 @@ def _takes_one_arg(proc: Any) -> bool:
     """True when proc can only be called with one argument, like (lambda (x) ...) or abs."""
     if isinstance(proc, Procedure) and proc.native_fn is None:
         parms = proc.parms
-        return isinstance(parms, list) and len(parms) == 1 and parms[0] not in ('.', '&')
+        return isinstance(parms, list) and len(parms) == 1 and parms[0] not in ('.', '&', '&rest', '&body')
     fn = proc.native_fn if isinstance(proc, Procedure) else proc
     try:
         sig = inspect.signature(fn)
@@ -748,7 +762,16 @@ def _string_to_number(s: Any, base: int = 10) -> Any:
         except ValueError:
             return False
 
-def _format_lisp(fmt: Any, *args: Any) -> String:
+def _format_lisp(fmt: Any, *args: Any) -> String | None:
+    # Common Lisp style (format nil "~a" x) returns the text and (format t "~a" x) prints it
+    if fmt is True or fmt == [] or fmt is False:
+        if not args:
+            raise TypeError("format needs a format string after nil or t")
+        text = _format_lisp(*args)
+        if fmt is True:
+            print(text.value, end="")
+            return None
+        return text
     raw_fmt = _unwrap_str(fmt)
     out = []
     arg_idx = 0
@@ -760,6 +783,12 @@ def _format_lisp(fmt: Any, *args: Any) -> String:
                 val = args[arg_idx] if arg_idx < len(args) else ""
                 arg_idx += 1
                 out.append(_unwrap_str(val) if isinstance(val, (String, Char)) else lisp_str(val))
+                i += 2
+                continue
+            elif directive == 'd':
+                val = args[arg_idx] if arg_idx < len(args) else ""
+                arg_idx += 1
+                out.append(lisp_str(val))
                 i += 2
                 continue
             elif directive == 's':
@@ -784,6 +813,16 @@ def _format_lisp(fmt: Any, *args: Any) -> String:
         unwrapped_args = [_unwrap_str(a) if isinstance(a, (String, Char)) else a for a in args]
         res = raw_fmt.format(*unwrapped_args)
     return String(res)
+
+def _nth(lst: Any, idx: Any) -> Any:
+    """(nth lst i), or Common Lisp's (nth i lst): item i of a list or character i of a string."""
+    if isinstance(lst, int) and not isinstance(lst, bool) and isinstance(idx, (list, tuple, String)):
+        lst, idx = idx, lst
+    if isinstance(lst, (list, tuple)):
+        return lst[idx]
+    if isinstance(lst, String):
+        return Char(lst.value[idx])
+    raise TypeError(f"nth needs a list or a string, got {lisp_str(lst)}")
 
 def _first(x: Any) -> Any:
     """(first lst): the head of a list, or the first character of a string; () when empty."""
@@ -918,7 +957,7 @@ def standard_env() -> Env:
         'first': _first,
         'rest': _rest,
         'last': lambda x: Char(x.value[-1]) if isinstance(x, String) and x.value else (x[-1] if isinstance(x, (list, tuple)) and x else []),
-        'nth': lambda lst, idx: lst[idx] if isinstance(lst, (list, tuple)) else (Char(lst.value[idx]) if isinstance(lst, String) else []),
+        'nth': _nth,
         'reverse': lambda x: list(reversed(x)) if isinstance(x, (list, tuple)) else (String(x.value[::-1]) if isinstance(x, String) else []),
         'range': lambda *args: list(range(*args)),
         'map': lambda proc, *lists: list(map(proc, *lists)),
@@ -1002,6 +1041,8 @@ def standard_env() -> Env:
     env['nil'] = []
     env['else'] = True
     env['t'] = True  # Common Lisp's true, for (cond ... (t default))
+    for cl_name, name in CL_ALIASES.items():
+        env[cl_name] = env[name]
     env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
 
     # 3. Add turtle graphics support dynamically
@@ -1067,6 +1108,19 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         if len(x) != 2:
             raise SyntaxError("quasiquote requires 1 argument")
         return expand(expand_quasiquote(x[1]), toplevel)
+
+    # Common Lisp spellings of lispy3 special forms
+    if head == 'progn':
+        return expand(['begin'] + list(x[1:]), toplevel)
+    if head == 'setq':
+        return expand(['set!'] + list(x[1:]), toplevel)
+    if head in ('defvar', 'defparameter', 'defconstant'):
+        # The optional documentation string after the value is dropped
+        return expand(['define'] + list(x[1:3]), toplevel)
+    if head == 'defmacro':
+        if len(x) < 4 or not isinstance(x[2], (list, tuple)):
+            raise SyntaxError("defmacro needs a name, a parameter list and a body: (defmacro m (x) ...)")
+        return expand(['define-macro', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
 
     if head == 'define-macro':
         if not toplevel:
