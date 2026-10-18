@@ -280,6 +280,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("push-pose", "(push-pose) - remember position, heading and pen"),
         ("pop-pose", "(pop-pose) - go back to the last remembered pose, without drawing"),
         ("clear-poses", "(clear-poses) - forget all remembered poses"),
+        ("onscroll", "(onscroll f) - call (f x y step) on each mouse wheel turn; step 1 is up; (onscroll #f) stops"),
         ("reinit-turtle", "(reinit-turtle) - reopen a closed turtle window; also reset"),
     ],
 }
@@ -501,6 +502,38 @@ def clear_poses() -> None:
     """Forget all remembered poses."""
     _turtle_pose_stack.clear()
 
+_SCROLL_EVENTS = ('<MouseWheel>', '<Button-4>', '<Button-5>')  # Windows/macOS, then X11
+
+def onscroll(fn: Any = False) -> None:
+    """(onscroll f) calls (f x y step) when the mouse wheel turns over the turtle window.
+
+    x y is the pointer in turtle coordinates; step is 1 for a turn away from
+    you and -1 towards you. (onscroll #f) stops it. A turn that comes while f
+    is still running (say, from its own (update)) is ignored.
+    """
+    screen = turtle.Screen()
+    canvas = screen.getcanvas()
+    if not fn:
+        for event_name in _SCROLL_EVENTS:
+            canvas.unbind(event_name)
+        return None
+    busy = False
+
+    def on_wheel(event):
+        nonlocal busy
+        if busy:
+            return
+        busy = True
+        try:
+            step = 1 if event.num == 4 or event.delta > 0 else -1
+            fn(canvas.canvasx(event.x) / screen.xscale, -canvas.canvasy(event.y) / screen.yscale, step)
+        finally:
+            busy = False
+
+    for event_name in _SCROLL_EVENTS:
+        canvas.bind(event_name, on_wheel)
+    return None
+
 def reinit_turtle():
     """Completely recreates the Turtle window if it was closed."""
     turtle.TurtleScreen._RUNNING = True
@@ -570,17 +603,23 @@ def _lisp_eq(a: Any, b: Any) -> bool:
         return a == b
     return a == b
 
+def _is_exact(x: Any) -> bool:
+    """Whole numbers and fractions are exact; decimals and #t/#f are not."""
+    return isinstance(x, (int, Fraction)) and not isinstance(x, bool)
+
 def _quotient(a: Number, b: Number) -> int:
     """Whole-number division rounding toward zero, exact for big whole numbers."""
     if isinstance(a, int) and isinstance(b, int):
         q = abs(a) // abs(b)
         return q if (a < 0) == (b < 0) else -q
+    if _is_exact(a) and _is_exact(b):
+        return math.trunc(Fraction(a) / b)
     return int(math.trunc(a / b))
 
 def _remainder(a: Number, b: Number) -> Number:
     """What is left over after quotient: a - b * (quotient a b), with the sign of a."""
-    if isinstance(a, int) and isinstance(b, int):
-        return a - b * _quotient(a, b)
+    if _is_exact(a) and _is_exact(b):
+        return normalize(a - b * _quotient(a, b))
     return math.fmod(a, b)
 
 def _div(a: Number, b: Number) -> Number:
@@ -596,11 +635,15 @@ def _whole(n: Any, name: str) -> int:
     raise TypeError(f"{name} needs a whole number, got {lisp_str(n)}")
 
 def _exact(x: Number) -> Number:
-    """A decimal as an exact number: (exact 3.0) gives 3, (exact 2.5) gives 5/2."""
+    """A decimal as an exact number: (exact 3.0) gives 3, (exact 2.5) gives 5/2.
+
+    The decimal is read as it prints, so (exact 0.1) is 1/10 rather than the
+    binary float's 3602879701896397/36028797018963968.
+    """
     if isinstance(x, float):
         if not math.isfinite(x):
             raise ValueError(f"exact: {lisp_str(x)} has no exact value")
-        return normalize(Fraction(x))
+        return normalize(Fraction(repr(x)))
     return x
 
 _DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -693,10 +736,8 @@ def _number_to_string(n: Number, base: int = 10) -> String:
     return String(('-' if m < 0 else '') + ''.join(reversed(digits)))
 
 def _modulo(a: Number, b: Number) -> Number:
-    res = a % b
-    if isinstance(a, int) and isinstance(b, int):
-        return int(res)
-    return res
+    """What is left over after dividing, with the sign of b: (mod 3/2 1/2) is 0, not 0/1."""
+    return normalize(a % b)
 
 def _member(item: Any, lst: list[Any]) -> Any:
     if not isinstance(lst, (list, tuple)):
@@ -1024,6 +1065,7 @@ def standard_env() -> Env:
         'vector->list': list,
         'list->vector': Vector,
         'push-pose': push_pose,
+        'onscroll': onscroll,
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
         'reinit-turtle': reinit_turtle,

@@ -269,6 +269,37 @@ def listener_to_code(log: str) -> str:
             out.append(";; " + line)
     return "\n".join(out) + "\n" if out else ""
 
+def context_menu_items(has_selection: bool, editable: bool) -> list[tuple[str, str, bool]]:
+    """The right-click menu: [(label, virtual event, enabled), ...]."""
+    return [("Cut",        "<<Cut>>",       has_selection and editable),
+            ("Copy",       "<<Copy>>",      has_selection),
+            ("Paste",      "<<Paste>>",     editable),
+            ("Select all", "<<SelectAll>>", True)]
+
+def add_context_menu(widget, read_only: bool = False):
+    """Right-click (and Ctrl+click on macOS) on a Text or Entry opens Cut / Copy / Paste.
+
+    A disabled widget, or one marked read_only, offers only Copy and Select all."""
+    menu = tk.Menu(widget, tearoff=0)
+
+    def popup(event):
+        widget.focus_set()
+        if isinstance(widget, tk.Entry):
+            has_sel = widget.selection_present()
+        else:
+            has_sel = bool(widget.tag_ranges("sel"))
+        menu.delete(0, "end")
+        for label, virtual, enabled in context_menu_items(has_sel, not read_only and str(widget.cget("state")) != "disabled"):
+            menu.add_command(label=label, state="normal" if enabled else "disabled",
+                             command=lambda v=virtual: widget.event_generate(v))
+        menu.tk_popup(event.x_root, event.y_root)
+        return "break"
+
+    widget.bind("<Button-3>", popup, add="+")
+    if sys.platform == "darwin":
+        widget.bind("<Button-2>", popup, add="+")
+        widget.bind("<Control-Button-1>", popup, add="+")
+
 def preview(val, limit: int = 40) -> str:
     """A value on one short line for the Inspector's list."""
     try:
@@ -521,9 +552,10 @@ class EditorTab(tk.Frame):
         t.bind("<<Paste>>", self._schedule_highlight)
         t.bind("<<Cut>>",   self._schedule_highlight)
 
-        # X11 middle-click paste and Windows right-click paste
+        # X11 middle-click paste; right-click opens Cut / Copy / Paste
         t.bind("<ButtonRelease-2>", self._on_key)
         t.bind("<ButtonRelease-3>", self._on_key)
+        add_context_menu(t)
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -1104,6 +1136,7 @@ class GuideWindow(tk.Toplevel):
                                  spacing1=1, spacing3=2, cursor="arrow")
         pane.add(self.text, minsize=300, stretch="always")
         self._setup_tags()
+        add_context_menu(self.text, read_only=True)
         # Read-only, but text can still be selected and copied
         self.text.bind("<Key>", lambda e: None if (e.state & 0x4 and e.keysym.lower() in ("c", "a"))
                        or e.keysym in ("Up", "Down", "Prior", "Next", "Home", "End") else "break")
@@ -1622,6 +1655,7 @@ class LispMachine(tk.Tk):
         setup_code_tags(self.inspector)
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
+        add_context_menu(self.inspector)
 
         # ---- right-hand area: search bar (hidden) + editor notebook ----
         right_area = tk.Frame(hpane, bg=COLORS["bg"])
@@ -1655,6 +1689,7 @@ class LispMachine(tk.Tk):
             borderwidth=0, highlightthickness=0, padx=8, pady=4)
         self.listener_text.pack(fill="both", expand=True)
         self.listener_text.configure(state="disabled")
+        add_context_menu(self.listener_text)
         self.listener_text.tag_configure("prompt", foreground=COLORS["prompt"], font=FONT_MONO_BOLD)
         self.listener_text.tag_configure("result", foreground=COLORS["result"])
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
@@ -1690,6 +1725,7 @@ class LispMachine(tk.Tk):
             highlightthickness=1, highlightbackground="#333",
             highlightcolor=COLORS["prompt"])
         self.listener_input.pack(side="left", fill="x", expand=True, ipady=4)
+        add_context_menu(self.listener_input)
         self.listener_input.bind("<Return>",  lambda e: (self._listener_submit(), "break")[1])
         self.listener_input.bind("<Control-space>", self._listener_complete)
         self.listener_input.bind("<Control-Key-space>", self._listener_complete)
@@ -1848,29 +1884,28 @@ class LispMachine(tk.Tk):
     # =========================================================================
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
+        return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
+
+    def _eval_with_turtle(self, evaluate):
+        """Call `evaluate()` with stdout streamed to the Listener. Returns (value, error)."""
         import turtle as _turtle
 
         # The turtle Screen is a process-wide singleton whose _RUNNING flag
         # can be flipped to False by transient WM events when a second Tk
-        # root (the editor) exists in the same process. Force it back on
-        # before every evaluation.
+        # root (the editor) exists in the same process, and closing the
+        # window leaves it False. Force it back on before every evaluation,
+        # so the next drawing command opens a fresh window.
         _turtle.TurtleScreen._RUNNING = True
 
-        writer = _ListenerWriter(self)
         try:
-            with contextlib.redirect_stdout(writer):
-                ast = L.parse(code)
-                val = L.eval_exp(ast, L.global_env)
-            return val, None
+            with contextlib.redirect_stdout(_ListenerWriter(self)):
+                return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                writer = _ListenerWriter(self)
-                with contextlib.redirect_stdout(writer):
-                    ast = L.parse(code)
-                    val = L.eval_exp(ast, L.global_env)
-                return val, None
+                with contextlib.redirect_stdout(_ListenerWriter(self)):
+                    return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
                 return None, RuntimeError(
@@ -1945,7 +1980,6 @@ class LispMachine(tk.Tk):
             self.listener_write(";; --- done ---\n", "info")
             return
 
-        writer = _ListenerWriter(self)
         for form in forms:
             try:
                 form_str = L.lisp_str(form)
@@ -1956,17 +1990,20 @@ class LispMachine(tk.Tk):
             self.listener_write("USER> ", "prompt")
             self.listener_write(f"{form_str}\n", "code")
 
-            try:
-                with contextlib.redirect_stdout(writer):
-                    # Expand each form just before it runs, as the REPL does, so
-                    # defun, quasiquote and macros defined earlier in the buffer work.
-                    form = L.expand(form, toplevel=True)
-                    val = L.eval_exp(form, L.global_env)
-            except Exception as e:                   # noqa: BLE001
-                self.listener_write(f"Error: {e}\n", "error")
-                self.set_inspector(f"Error: {e}")
+            def run_form(form=form):
+                # Expand each form just before it runs, as the REPL does, so
+                # defun, quasiquote and macros defined earlier in the buffer work.
+                form = L.expand(form, toplevel=True)
+                return form, L.eval_exp(form, L.global_env)
+
+            result, err = self._eval_with_turtle(run_form)
+            if err is not None:
+                msg = str(err) or type(err).__name__
+                self.listener_write(f"Error: {msg}\n", "error")
+                self.set_inspector(f"Error: {msg}")
                 self.listener_write(";; --- aborted ---\n", "info")
                 return
+            form, val = result
 
             if val is None:
                 name = self._defined_name(form)

@@ -140,7 +140,7 @@ if HAS_NUMPY:
         'a-': lambda a, b: NDOpArray(_to_raw(a) - _to_raw(b)),
         'a*': lambda a, b: NDOpArray(_to_raw(a) * _to_raw(b)),
         'a/': lambda a, b: NDOpArray(_to_raw(a) / _to_raw(b)),
-        'dot': lambda a, b: _wrap_result(np.dot(_to_raw(a), _to_raw(b))),
+        'a-dot': lambda a, b: _wrap_result(np.dot(_to_raw(a), _to_raw(b))),
         'matmul': lambda a, b: _wrap_result(np.matmul(_to_raw(a), _to_raw(b))),
         'mean': lambda arr, axis=None: _wrap_result(np.mean(_to_raw(arr), axis=axis)),
         'std': lambda arr, axis=None: _wrap_result(np.std(_to_raw(arr), axis=axis)),
