@@ -110,6 +110,24 @@ class SaveAndLoadTest(LispyTestCase):
                 self.assertEqual(f.read(), "")
 
 
+class MemoTest(LispyTestCase):
+
+    def test_define_memo_remembers_results(self):
+        # Without the cache (fib 90) would take far too long
+        self.ev('(define-memo (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))')
+        self.assertEqual(self.ev('(fib 90)'), 2880067194370816120)
+
+    def test_memoize_calls_once_per_argument(self):
+        self.ev_all('(define calls 0)',
+                    '(define sq (memoize (lambda (x) (set! calls (+ calls 1)) (* x x))))',
+                    '(sq 3)', '(sq 3)', '(sq 4)')
+        self.assertEqual(self.ev('calls'), 2)
+
+    def test_list_arguments_skip_the_cache(self):
+        self.ev('(define len (memoize (lambda (xs) (length xs))))')
+        self.assertEqual(self.ev('(len (list 1 2 3))'), 3)
+
+
 class LispFolderTest(LispyTestCase):
     """Bare names in (save "x") and (load "x") mean the lisp/ folder."""
 

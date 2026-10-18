@@ -47,6 +47,28 @@ differ in mini_basic and follow BBC BASIC here:
 - `PRINT INSTR(c$,"World"), INSTR(c$,"x")`: mini_basic does not right-justify the numbers when a string literal appears inside a function's brackets.
 - `PRINT ;1;2;3`: mini_basic still pads to the 10-column field; BBC BASIC prints `123`.
 
+## Speed against mini_basic
+
+[`bench/`](bench) holds two programs for a first timing of lispy3's reader
+against `python -m mini_basic`. Wall-clock seconds on one machine, startup
+(about 0.1 s for both) included:
+
+| Program | mini_basic | lispy3 mini-basic |
+|---|---|---|
+| [`primes.bas`](bench/primes.bas): primes below 5000 by trial division | 5.1 | 2.7 |
+| the same, below 20000 | 32.0 | 15.8 |
+| [`fib.bas`](bench/fib.bas): recursive `FNfib(22)` | 0.12 | 0.12 |
+
+Both remember the results of a pure `DEF FN`, so `FNfib` runs once for each
+`n`; without the cache lispy3 takes 2.5 s. The classic sieve
+(mini_basic's `examples/SIEVE.bbc`) needs `DIM`, `GOTO` and `TIME`, which the
+reader does not have yet.
+
+```sh
+python3 -c "import lispy3; lispy3.load_workspace('mini-basic'); lispy3.eval_exp(lispy3.parse('(bbc-load \"compare/bench/primes.bas\")'), lispy3.global_env)"
+cd ../mini_basic && python -m mini_basic -q ../lispy3/compare/bench/primes.bas
+```
+
 ## Running
 
 ```sh

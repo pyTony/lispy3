@@ -149,6 +149,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
+        ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
         ("if", "(if test then else) - the else part may be left out"),
@@ -275,6 +276,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
+        ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -437,6 +439,21 @@ def slurp(filename: Any) -> String:
         name = in_lisp_dir
     with open(name, encoding='utf-8') as f:
         return String(f.read())
+
+def memoize(proc: Callable) -> Callable:
+    """(memoize f) - f with a cache of its results, as Python's functools.cache.
+
+    Arguments that cannot be dict keys, such as lists, skip the cache."""
+    cache: dict = {}
+    def memo(*args: Any) -> Any:
+        try:
+            return cache[args]
+        except KeyError:
+            value = cache[args] = proc(*args)
+            return value
+        except TypeError:
+            return proc(*args)
+    return memo
 
 def lisp_file_for_save(filename: str) -> str:
     """The file (save "name") writes: a bare name goes to lisp/, a path is used as given."""
@@ -1009,6 +1026,7 @@ def standard_env() -> Env:
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
+        'memoize': memoize,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
@@ -1155,6 +1173,12 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         if len(x) < 4 or not isinstance(x[2], (list, tuple)):
             raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
         return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
+
+    if head == 'define-memo':
+        # (define-memo (f x) body...) is (define f (memoize (lambda (x) body...)))
+        if len(x) < 3 or not isinstance(x[1], (list, tuple)) or not x[1]:
+            raise SyntaxError("define-memo needs a name with parameters and a body: (define-memo (f x) ...)")
+        return expand(['define', x[1][0], ['memoize', ['lambda', list(x[1][1:])] + list(x[2:])]], toplevel)
 
     if head == 'define':
         # Support shorthand: (define (f x y) body1 body2...)

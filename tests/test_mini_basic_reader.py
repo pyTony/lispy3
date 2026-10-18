@@ -97,6 +97,34 @@ class RunTest(ReaderTestCase):
         self.assertEqual(out.getvalue(), '        42\n')
 
 
+class MemoTest(ReaderTestCase):
+    """A pure FN remembers its results, as in mini_basic."""
+
+    def memoized(self, name: str) -> bool:
+        return not isinstance(lispy3.global_env[name], lispy3.Procedure)
+
+    def test_pure_fn_is_memoized(self):
+        # Without the cache FNfib(60) would take far too long
+        source = 'PRINT FNfib(60)\nEND\nDEF FNfib(n)\nIF n < 2 THEN = n\n= FNfib(n-1) + FNfib(n-2)'
+        self.assertEqual(self.run_bbc(source), '1548008755920\n')
+        self.assertTrue(self.memoized('FN-fib'))
+
+    def test_fn_reading_a_program_variable_is_not(self):
+        source = 'k = 1 : PRINT FNf(1) : k = 2 : PRINT FNf(1)\nEND\nDEF FNf(x) = x + k'
+        self.assertEqual(self.run_bbc(source), '         2\n         3\n')
+        self.assertFalse(self.memoized('FN-f'))
+
+    def test_fn_that_prints_is_not(self):
+        source = 'a = FNp(1) : a = FNp(1)\nEND\nDEF FNp(x)\nPRINT "hi"\n= x'
+        self.assertEqual(self.run_bbc(source), 'hi\nhi\n')
+        self.assertFalse(self.memoized('FN-p'))
+
+    def test_fn_with_locals_is(self):
+        source = 'PRINT FNsum(4)\nDEF FNsum(n)\n  LOCAL i, s\n  FOR i = 1 TO n : s += i : NEXT\n= s'
+        self.assertEqual(self.run_bbc(source), '        10\n')
+        self.assertTrue(self.memoized('FN-sum'))
+
+
 class ErrorTest(ReaderTestCase):
 
     def assert_error(self, source: str, message: str):

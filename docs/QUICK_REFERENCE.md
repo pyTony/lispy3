@@ -26,6 +26,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | Form | What it does |
 |------|--------------|
 | `(define name value)` | name a value or a function |
+| `(define-memo (f a b) body...)` | like `define`, but remembers each result, as Python's `@cache` |
 | `(set! name value)` | change an existing variable |
 | `(lambda [a b] body)` | a function; one body expression |
 | `(if test then else)` | choose; else is required |
@@ -103,6 +104,7 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
 | `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
 | `(slurp "file.txt")` | the whole text file as one string; looks in `lisp/` if not found here |
+| `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |
 
 Only in `python lispy3-numpy.py` (NumPy optional):
 

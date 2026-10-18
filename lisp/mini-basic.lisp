@@ -285,7 +285,7 @@
                       (cdr (cdr stmt)))))
         (else stmt)))
 
-(define (bbc-def kind head body)
+(define (bbc-def kind head body memo)
   (let [name (car head)
         parms (cdr head)
         args (map (lambda (p) (gensym "arg")) parms)
@@ -297,25 +297,51 @@
         tag (if (eq? kind 'FN) "bbc:return" "bbc:endproc")
         run (if (bbc-uses? '(FN= ENDPROC) tail-body)
                 (bbc-catch tag `(begin #f ,@tail-body) 'bbc-fn-value)
-                `(begin #f ,@tail-body))]
-    `(define (,(bbc-def-name kind name) ,@args)
-       (let ,(map list saves saved)
-         ,@(map (lambda (p a) `(set! ,p ,a)) parms args)
-         (let ((,result ,run))
-           ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
-           ,result)))))
+                `(begin #f ,@tail-body))
+        fn `(lambda ,args
+              (let ,(map list saves saved)
+                ,@(map (lambda (p a) `(set! ,p ,a)) parms args)
+                (let ((,result ,run))
+                  ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                  ,result)))]
+    `(define ,(bbc-def-name kind name) ,(if memo `(memoize ,fn) fn))))
 
-(define-macro (DEF-PROC head & body) (bbc-def 'PROC head body))
-(define-macro (DEF-FN head & body) (bbc-def 'FN head body))
+(define-macro (DEF-PROC head & body) (bbc-def 'PROC head body #f))
+(define-macro (DEF-FN head & body) (bbc-def 'FN head body #f))
+;; A pure FN remembers its results, as mini_basic does: FNfib(30) runs once per n
+(define-macro (DEF-MEMO-FN head & body) (bbc-def 'FN head body #t))
+
+(define (bbc-symbols x found)
+  ;; Every symbol in code x
+  (cond ((symbol? x) (bbc-adjoin (list x) found))
+        ((and (pair? x) (list? x) (not (eq? (car x) 'quote)))
+         (reduce (lambda (acc e) (bbc-symbols e acc)) found x))
+        (else found)))
+
+(define (bbc-pure-fn? def vars)
+  ;; A DEF-FN that reads no program variable but its own parameters and LOCALs,
+  ;; prints nothing and calls no PROC and no other FN: the same arguments
+  ;; always give the same result
+  (let [head (bbc-second def)
+        body (cdr (cdr def))
+        own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
+        calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
+    (and (eq? (car def) 'DEF-FN)
+         (not (bbc-uses? '(PRINT PROC END) body))
+         (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
+                        (bbc-symbols body '())))
+         (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
 
 ;;; --- A whole program ---
 
 (define-macro (bbc-program & stmts)
-  (let [defs (filter bbc-def? stmts)
+  (let [vars (bbc-assigned-vars stmts)
+        defs (map (lambda (d) (if (bbc-pure-fn? d vars) (cons 'DEF-MEMO-FN (cdr d)) d))
+                  (filter bbc-def? stmts))
         main (filter (lambda (s) (not (bbc-def? s))) stmts)
         run `(begin #f ,@main)]
     `(begin
-       ,@(map (lambda (v) `(define ,v ,(bbc-default v))) (bbc-assigned-vars stmts))
+       ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
        ,@defs
        (set! bbc-col 0)
        ,(if (bbc-uses? '(END) stmts) (bbc-catch "bbc:end" run #f) run)
