@@ -32,6 +32,17 @@ def clojure_command() -> list[str] | None:
     return None
 
 
+def run_in_lispy(expression: str) -> str:
+    """What lispy3 prints for expression, with lisp/mini-basic.lisp loaded."""
+    lispy3.global_env.clear()
+    lispy3.global_env.update(lispy3.standard_env())
+    lispy3.load_workspace('mini-basic')
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        lispy3.eval_exp(lispy3.expand(lispy3.parse(expression), True), lispy3.global_env)
+    return out.getvalue()
+
+
 class CompareTestCase(unittest.TestCase):
 
     def run_command(self, command: list[str]) -> None:
@@ -56,6 +67,9 @@ class LispyCompareTest(LispyTestCase):
                     lispy3.load_workspace(program)
                 self.assertEqual(out.getvalue(), expected_output(program))
 
+    def test_run_lispy_takes_a_string(self):
+        self.assertEqual(run_in_lispy('(run-lispy "FOR i=1 TO 2 : PRINT i : NEXT")'), '         1\n         2\n')
+
     def test_basic_programs(self):
         # BBC BASIC text read by the reader in lisp/mini-basic.lisp
         self.assertGreater(len(BASIC_PROGRAMS), 0)
@@ -75,12 +89,28 @@ class SbclCompareTest(CompareTestCase):
     def test_programs(self):
         self.run_command(['sbcl', '--script', os.path.join(COMPARE_DIR, 'sbcl', 'run.lisp')])
 
+    def test_basic_programs(self):
+        # (run-sbcl text): the reader's forms run with compare/sbcl/mini-basic.lisp
+        for program in BASIC_PROGRAMS:
+            with self.subTest(program=os.path.basename(program)):
+                self.assertEqual(run_in_lispy(f'(run-sbcl (slurp "{program}"))'), expected_output(program))
+
 
 @unittest.skipUnless(clojure_command(), 'Clojure is not installed (or set CLOJURE_CP)')
 class ClojureCompareTest(CompareTestCase):
 
     def test_programs(self):
         self.run_command(clojure_command() + [os.path.join(COMPARE_DIR, 'clojure', 'run.clj')])
+
+
+@unittest.skipUnless(shutil.which('clojure'), 'clojure is not installed')
+class RunClojureTest(unittest.TestCase):
+
+    def test_basic_programs(self):
+        # (run-clojure text): the reader's forms run with compare/clojure/mini_basic.clj
+        for program in BASIC_PROGRAMS:
+            with self.subTest(program=os.path.basename(program)):
+                self.assertEqual(run_in_lispy(f'(run-clojure (slurp "{program}"))'), expected_output(program))
 
 
 if __name__ == '__main__':

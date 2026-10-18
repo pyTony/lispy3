@@ -18,16 +18,24 @@
   (:shadow #:print #:if #:let #:case)
   (:export #:bbc-program #:let #:print #:if #:for #:repeat #:while #:case
            #:def-proc #:def-fn #:proc #:fn #:fn= #:local #:endproc #:end
-           #:exit-for #:exit-repeat #:exit-while #:true #:false))
+           #:exit-for #:exit-repeat #:exit-while #:true #:false
+           ;; What the BBC BASIC text reader writes for operators and functions
+           #:bbc= #:bbc< #:bbc> #:bbc<= #:bbc>= #:bbc-eq? #:bbc-if
+           #:bbc-quotient #:bbc-remainder #:bbc-trunc #:bbc-float #:bbc-expt
+           #:bbc-abs #:bbc-floor #:bbc-sqrt #:bbc-sin #:bbc-cos #:bbc-tan #:bbc-atan
+           #:bbc-log #:bbc-log10 #:bbc-exp #:bbc-pi #:bbc-length #:bbc-string-append
+           #:bbc-and #:bbc-or #:bbc-eor #:bbc-not #:bbc-sgn #:bbc-val #:bbc-str
+           #:bbc-asc #:bbc-chr #:bbc-left #:bbc-right #:bbc-mid #:bbc-instr))
 
 (defpackage :mini-basic.impl
   (:use :cl))
 
 (defpackage :bbc-user
   (:use :mini-basic)
-  (:import-from :cl #:+ #:- #:* #:/ #:< #:> #:<= #:>= #:= #:/= #:mod #:not))
+  (:import-from :cl #:+ #:- #:* #:/ #:< #:> #:<= #:>= #:= #:/= #:mod #:not #:and #:or))
 
 (in-package :mini-basic.impl)
+(import 'mini-basic:bbc-str)
 
 ;;; --- Run-time support ---
 
@@ -77,7 +85,7 @@
         (string-right-trim "." (string-right-trim "0" text))
         text)))
 
-(defun bbc-str (x)
+(defun mini-basic:bbc-str (x)
   ;; A number as BBC BASIC prints it with the default @%: up to 9 significant digits
   (cond ((eq x t) "-1")
         ((null x) "0")
@@ -98,6 +106,59 @@
         (bbc-write (cl:if (and justify (< (length text) *zone-width*))
                           (format nil "~v@a" *zone-width* text)
                           text)))))
+
+;;; --- Operators and functions, as the BBC BASIC text reader writes them ---
+;;; The reader in lisp/mini-basic.lisp writes lispy3 code; compare/run_basic.py
+;;; renames its lispy3 names (quotient, =, string-append ...) to these.
+
+(defun mini-basic:bbc= (a b) (cl:if (stringp a) (string= a b) (= a b)))
+(defun mini-basic:bbc< (a b) (cl:if (stringp a) (and (string< a b) t) (< a b)))
+(defun mini-basic:bbc> (a b) (cl:if (stringp a) (and (string> a b) t) (> a b)))
+(defun mini-basic:bbc<= (a b) (cl:if (stringp a) (and (string<= a b) t) (<= a b)))
+(defun mini-basic:bbc>= (a b) (cl:if (stringp a) (and (string>= a b) t) (>= a b)))
+(defun mini-basic:bbc-eq? (a b) (eq a b))
+(defmacro mini-basic:bbc-if (test then else) `(cl:if ,test ,then ,else))
+(defun mini-basic:bbc-trunc (x) (values (truncate x)))
+(defun mini-basic:bbc-quotient (a b) (values (truncate a b)))
+(defun mini-basic:bbc-remainder (a b) (rem a b))
+(defun mini-basic:bbc-float (x) (float x 1d0))
+(defun mini-basic:bbc-expt (a b) (expt a b))
+(defun mini-basic:bbc-abs (x) (abs x))
+(defun mini-basic:bbc-floor (x) (values (floor x)))
+(defun mini-basic:bbc-sqrt (x) (sqrt (float x 1d0)))
+(defun mini-basic:bbc-sin (x) (sin (float x 1d0)))
+(defun mini-basic:bbc-cos (x) (cos (float x 1d0)))
+(defun mini-basic:bbc-tan (x) (tan (float x 1d0)))
+(defun mini-basic:bbc-atan (x) (atan (float x 1d0)))
+(defun mini-basic:bbc-log (x) (log (float x 1d0)))
+(defun mini-basic:bbc-log10 (x) (log (float x 1d0) 10))
+(defun mini-basic:bbc-exp (x) (exp (float x 1d0)))
+(defparameter mini-basic:bbc-pi pi)
+(defun mini-basic:bbc-length (s) (length s))
+(defun mini-basic:bbc-string-append (a b) (concatenate 'string a b))
+(defun mini-basic:bbc-and (a b) (logand (truncate a) (truncate b)))
+(defun mini-basic:bbc-or (a b) (logior (truncate a) (truncate b)))
+(defun mini-basic:bbc-eor (a b) (logxor (truncate a) (truncate b)))
+(defun mini-basic:bbc-not (a) (lognot (truncate a)))
+(defun mini-basic:bbc-sgn (x) (signum (truncate (signum x))))
+(defun mini-basic:bbc-val (s)
+  (cl:let ((n (ignore-errors (cl:let ((*read-default-float-format* 'double-float)
+                                      (*read-eval* nil))
+                               (read-from-string s)))))
+    (cl:if (realp n) n 0)))
+(defun mini-basic:bbc-asc (s) (cl:if (= (length s) 0) -1 (char-code (char s 0))))
+(defun mini-basic:bbc-chr (n) (string (code-char (truncate n))))
+(defun mini-basic:bbc-left (s n) (subseq s 0 (max 0 (min (truncate n) (length s)))))
+(defun mini-basic:bbc-right (s n)
+  (cl:let ((l (length s))) (subseq s (max 0 (- l (truncate n))) l)))
+(defun mini-basic:bbc-mid (s p &optional n)
+  (cl:let* ((l (length s))
+            (start (max 0 (min l (- (truncate p) 1))))
+            (end (cl:if n (max start (min l (+ start (truncate n)))) l)))
+    (subseq s start end)))
+(defun mini-basic:bbc-instr (s target &optional start)
+  (cl:let ((pos (search target s :start2 (cl:if start (max 0 (min (length s) (- (truncate start) 1))) 0))))
+    (cl:if pos (1+ pos) 0)))
 
 ;;; --- Helpers the macros use while they expand ---
 
@@ -147,7 +208,9 @@
 (defun def-p (form)
   (or (form-p form "DEF-PROC") (form-p form "DEF-FN")))
 
-(defparameter *boolean-heads* '(< > <= >= = /= not null eq eql equal zerop))
+(defparameter *boolean-heads* '(< > <= >= = /= not null eq eql equal zerop
+                                mini-basic:bbc= mini-basic:bbc< mini-basic:bbc>
+                                mini-basic:bbc<= mini-basic:bbc>= mini-basic:bbc-eq?))
 
 (defun bbc-test (test)
   ;; Code for a BBC test; Lisp comparisons already give T or NIL

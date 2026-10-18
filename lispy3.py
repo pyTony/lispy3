@@ -11,6 +11,7 @@ import operator as op
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import turtle
@@ -276,6 +277,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
+        ("run-program", "(run-program \"sbcl\" (list \"--version\") [input]) - run another program with input text, print what it prints, give its exit code"),
+        ("lispy-home", "lispy-home - the folder lispy3.py is in"),
         ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
     ],
     "Turtle graphics": [
@@ -439,6 +442,18 @@ def slurp(filename: Any) -> String:
         name = in_lisp_dir
     with open(name, encoding='utf-8') as f:
         return String(f.read())
+
+def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
+    """(run-program "sbcl" (list "--version") [input]) - run another program, print what it prints, give its exit code."""
+    command = [_unwrap_str(program)] + [_unwrap_str(a) if isinstance(a, String) else str(a) for a in args]
+    if shutil.which(command[0]) is None:
+        raise LispyError(f"run-program: {command[0]} is not installed")
+    result = subprocess.run(command, capture_output=True, text=True,
+                            input=None if text_input is None else _unwrap_str(text_input))
+    # Printed through Python, so the output goes where Lispy's own printing goes
+    print(result.stdout, end="")
+    print(result.stderr, end="", file=sys.stderr)
+    return result.returncode
 
 def memoize(proc: Callable) -> Callable:
     """(memoize f) - f with a cache of its results, as Python's functools.cache.
@@ -1027,6 +1042,7 @@ def standard_env() -> Env:
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
         'memoize': memoize,
+        'run-program': run_program,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
@@ -1073,6 +1089,7 @@ def standard_env() -> Env:
     for cl_name, name in CL_ALIASES.items():
         env[cl_name] = env[name]
     env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
+    env['lispy-home'] = String(os.path.dirname(os.path.abspath(__file__)))
 
     # 3. Add turtle graphics support dynamically
     def _call_turtle(k: str, *args: Any) -> Any:

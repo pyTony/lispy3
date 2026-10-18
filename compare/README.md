@@ -71,6 +71,23 @@ cd ../mini_basic && python -m mini_basic -q ../lispy3/compare/bench/primes.bas
 
 ## Running
 
+From lispy3, with `(load "mini-basic")`, one BBC BASIC program in all three Lisps.
+Each takes the program text; `slurp` reads a file:
+
+```lisp
+(run-lispy (slurp "compare/basic/structure.bas"))
+(run-sbcl (slurp "compare/basic/structure.bas"))
+(run-clojure "FOR i=1 TO 3 : PRINT i : NEXT")
+```
+
+`run-sbcl` and `run-clojure` write the reader's forms out as SBCL or Clojure
+text, with its lispy3 names (`quotient`, `=`, `string-append` ...) renamed to
+the `bbc-` functions in `sbcl/mini-basic.lisp` and `clojure/mini_basic.clj`,
+and run `sbcl` or `clojure` with them (`run-program`). Only lispy3 memoizes a
+pure `DEF FN`.
+
+The Lisp-form programs in `programs/` run directly:
+
 ```sh
 python3 lispy3.py            # then (load "mini-basic") and (load "compare/programs/fact.lisp")
 sbcl --script compare/sbcl/run.lisp compare/programs/fact.lisp

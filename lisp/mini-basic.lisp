@@ -913,3 +913,83 @@
 
 (define-macro (bbc-load filename)
   (bbc-expand (slurp (bbc-source filename))))
+
+;;; --- The same program in lispy3, SBCL and Clojure ---
+;;;
+;;;   (run-lispy (slurp "prog.bas"))
+;;;   (run-sbcl "FOR i=1 TO 3 : PRINT i : NEXT")
+;;;   (run-clojure (slurp "prog.bas"))
+;;;
+;;; run-sbcl and run-clojure write the reader's forms out as text for the
+;;; macros in compare/sbcl and compare/clojure, with the reader's lispy3 names
+;;; (quotient, =, string-append ...) renamed to the bbc- functions there, and
+;;; give the text to sbcl or clojure on standard input. They give the exit code.
+
+(define (run-lispy text)
+  (eval (bbc-expand text))
+  #f)
+
+(define bbc-foreign-names
+  '((= bbc=) (< bbc<) (> bbc>) (<= bbc<=) (>= bbc>=) (eq? bbc-eq?) (if bbc-if)
+    (quotient bbc-quotient) (remainder bbc-remainder) (trunc bbc-trunc) (float bbc-float)
+    (expt bbc-expt) (abs bbc-abs) (floor bbc-floor) (sqrt bbc-sqrt) (sin bbc-sin)
+    (cos bbc-cos) (tan bbc-tan) (atan bbc-atan) (log bbc-log) (log10 bbc-log10)
+    (exp bbc-exp) (pi bbc-pi) (length bbc-length) (string-append bbc-string-append)))
+
+(define (bbc-rename sym)
+  (let loop ((names bbc-foreign-names))
+    (cond ((null? names) sym)
+          ((eq? (car (car names)) sym) (bbc-second (car names)))
+          (else (loop (cdr names))))))
+
+(define (bbc-has? text part)
+  (>= (text/find part) 0))
+
+(define (bbc-foreign-symbol sym target)
+  ;; SBCL upcases what it reads, so a BBC name with a lower-case letter goes
+  ;; in |bars|; the bbc- names and and, or, not are read as written
+  (let [name (symbol->string (bbc-rename sym))]
+    (if (and (eq? target :sbcl)
+             (not (equal? (upcase name) name))
+             (not (and (>= (length name) 3) (equal? (substring name 0 3) "bbc")))
+             (not (member name '("and" "or" "not"))))
+        (str "|" name "|")
+        name)))
+
+(define (bbc-foreign-string s)
+  (apply str (append (list "\"")
+                     (map (lambda (c) (cond ((eq? c #\") "\\\"") ((eq? c #\\) "\\\\") (else c)))
+                          (seq s))
+                     (list "\""))))
+
+(define (bbc-foreign-number x target)
+  ;; SBCL reads 2.5 as a single float, so a float gets a d exponent
+  (let [text (str x)]
+    (cond ((not (eq? target :sbcl)) text)
+          ((bbc-has? text "e") (str (text/replace "e" "d")))
+          ((bbc-has? text ".") (str text "d0"))
+          (else text))))
+
+(define (bbc-foreign-text x target)
+  ;; Code x as SBCL (target :sbcl) or Clojure (:clojure) source text
+  (cond ((eq? x #t) (if (eq? target :sbcl) "t" "true"))
+        ((eq? x #f) (if (eq? target :sbcl) "nil" "false"))
+        ((string? x) (bbc-foreign-string x))
+        ((number? x) (bbc-foreign-number x target))
+        ((and (symbol? x) (equal? (substring (symbol->string x) 0 1) ":")) (symbol->string x))
+        ((symbol? x) (bbc-foreign-symbol x target))
+        ((null? x) "()")
+        (else (str "(" (reduce (lambda (acc e) (str acc " " (bbc-foreign-text e target)))
+                               (bbc-foreign-text (car x) target) (cdr x))
+                   ")"))))
+
+(define (bbc-compare-file path)
+  (str lispy-home "/compare/" path))
+
+(define (run-sbcl text)
+  (run-program "sbcl" (list "--script" (bbc-compare-file "sbcl/run.lisp"))
+               (bbc-foreign-text (bbc-expand text) :sbcl)))
+
+(define (run-clojure text)
+  (run-program "clojure" (list "-M" (bbc-compare-file "clojure/run.clj"))
+               (bbc-foreign-text (bbc-expand text) :clojure)))

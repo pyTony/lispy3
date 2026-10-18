@@ -15,6 +15,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   UPPERCASE keywords, BBC operator precedence, string functions and line
   numbers, into the statement macros. GOTO, GOSUB, DATA and arrays come later.
 - `(slurp "file")` reads a whole text file into a string.
+- `(run-lispy text)`, `(run-sbcl text)`, `(run-clojure text)` in
+  `lisp/mini-basic.lisp` run one BBC BASIC program with the mini-basic macros
+  of lispy3, SBCL or Clojure: `(run-sbcl (slurp "prog.bas"))`.
+- `(run-program "prog" args [input])` runs another program and prints its
+  output; `lispy-home` is the folder `lispy3.py` is in.
 - `(define-memo (f x) ...)` and `(memoize f)`: a function that remembers its
   results, like Python's `@functools.cache`. The BBC BASIC reader memoizes a
   pure `DEF FN` (one that reads only its own parameters and `LOCAL`s, prints

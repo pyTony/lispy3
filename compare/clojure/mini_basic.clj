@@ -90,6 +90,64 @@
     (let [text (bbc-str v)]
       (bbc-write (if justify (format (str "%" zone-width "s") text) text)))))
 
+;;; --- Operators and functions, as the BBC BASIC text reader writes them ---
+;;; The reader in lisp/mini-basic.lisp writes lispy3 code; compare/run_basic.py
+;;; renames its lispy3 names (quotient, =, string-append ...) to these.
+
+(defn- compare-values [a b] (if (string? a) (compare a b) (compare (double a) (double b))))
+(defn bbc= [a b] (if (string? a) (= a b) (== a b)))
+(defn bbc< [a b] (neg? (compare-values a b)))
+(defn bbc> [a b] (pos? (compare-values a b)))
+(defn bbc<= [a b] (not (pos? (compare-values a b))))
+(defn bbc>= [a b] (not (neg? (compare-values a b))))
+(defn bbc-eq? [a b] (= a b))
+(defmacro bbc-if [test then else] `(if ~test ~then ~else))
+(defn bbc-trunc [x] (if (integer? x) x (long x)))
+(defn bbc-quotient [a b] (quot a b))
+(defn bbc-remainder [a b] (rem a b))
+(defn bbc-float [x] (double x))
+(defn bbc-expt [a b]
+  (if (and (integer? a) (integer? b) (not (neg? b)))
+    (reduce *' 1 (repeat b a))
+    (Math/pow a b)))
+(defn bbc-abs [x] (if (neg? x) (- x) x))
+(defn bbc-floor [x] (if (integer? x) x (long (Math/floor x))))
+(defn bbc-sqrt [x] (Math/sqrt x))
+(defn bbc-sin [x] (Math/sin x))
+(defn bbc-cos [x] (Math/cos x))
+(defn bbc-tan [x] (Math/tan x))
+(defn bbc-atan [x] (Math/atan x))
+(defn bbc-log [x] (Math/log x))
+(defn bbc-log10 [x] (Math/log10 x))
+(defn bbc-exp [x] (Math/exp x))
+(def bbc-pi Math/PI)
+(defn bbc-length [^String s] (.length s))
+(defn bbc-string-append [a b] (str a b))
+(defn bbc-and [a b] (bit-and (bbc-trunc a) (bbc-trunc b)))
+(defn bbc-or [a b] (bit-or (bbc-trunc a) (bbc-trunc b)))
+(defn bbc-eor [a b] (bit-xor (bbc-trunc a) (bbc-trunc b)))
+(defn bbc-not [a] (bit-not (bbc-trunc a)))
+(defn bbc-sgn [x] (cond (pos? x) 1 (neg? x) -1 :else 0))
+(defn bbc-val [s]
+  (cond (re-matches #"[+-]?\d+" s) (Long/parseLong s)
+        :else (try (Double/parseDouble s) (catch NumberFormatException _ 0))))
+(defn bbc-asc [^String s] (if (empty? s) -1 (int (.charAt s 0))))
+(defn bbc-chr [n] (str (char (bbc-trunc n))))
+(defn bbc-left [^String s n] (subs s 0 (max 0 (min (bbc-trunc n) (count s)))))
+(defn bbc-right [^String s n]
+  (let [l (count s)] (subs s (max 0 (- l (bbc-trunc n))) l)))
+(defn bbc-mid
+  ([^String s p] (bbc-mid s p (count s)))
+  ([^String s p n]
+   (let [l (count s)
+         start (max 0 (min l (dec (bbc-trunc p))))
+         end (max start (min l (+ start (bbc-trunc n))))]
+     (subs s start end))))
+(defn bbc-instr
+  ([^String s target] (bbc-instr s target 1))
+  ([^String s ^String target start]
+   (inc (.indexOf s target (int (max 0 (dec (bbc-trunc start))))))))
+
 ;;; --- Helpers the macros use while they expand ---
 
 (defn marker? [x nm]
@@ -141,7 +199,8 @@
 (defn def? [form]
   (or (form? form "DEF-PROC") (form? form "DEF-FN")))
 
-(def boolean-heads #{"<" ">" "<=" ">=" "=" "==" "not=" "not" "nil?" "zero?"})
+(def boolean-heads #{"<" ">" "<=" ">=" "=" "==" "not=" "not" "nil?" "zero?"
+                     "bbc=" "bbc<" "bbc>" "bbc<=" "bbc>=" "bbc-eq?"})
 
 (defn bbc-test
   "Code for a BBC test; Clojure comparisons already give true or false."
