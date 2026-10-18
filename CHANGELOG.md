@@ -8,6 +8,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   live during a long run or an endless loop, and the new **■ Stop** button
   (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on
   the window's thread.
+- Lispy Machine: right-click opens Cut / Copy / Paste / Select all in the editor,
+  Listener, Inspector and Guide. Before, right-click did nothing.
 - Fraction results are simplified everywhere: `(mod 3/2 1/2)` is `0`, not `0/1`,
   `remainder` and `quotient` stay exact on fractions, and `(exact 0.1)` is `1/10`.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector

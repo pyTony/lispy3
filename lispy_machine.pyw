@@ -241,6 +241,37 @@ def listener_to_code(log: str) -> str:
             out.append(";; " + line)
     return "\n".join(out) + "\n" if out else ""
 
+def context_menu_items(has_selection: bool, editable: bool) -> list[tuple[str, str, bool]]:
+    """The right-click menu: [(label, virtual event, enabled), ...]."""
+    return [("Cut",        "<<Cut>>",       has_selection and editable),
+            ("Copy",       "<<Copy>>",      has_selection),
+            ("Paste",      "<<Paste>>",     editable),
+            ("Select all", "<<SelectAll>>", True)]
+
+def add_context_menu(widget, read_only: bool = False):
+    """Right-click (and Ctrl+click on macOS) on a Text or Entry opens Cut / Copy / Paste.
+
+    A disabled widget, or one marked read_only, offers only Copy and Select all."""
+    menu = tk.Menu(widget, tearoff=0)
+
+    def popup(event):
+        widget.focus_set()
+        if isinstance(widget, tk.Entry):
+            has_sel = widget.selection_present()
+        else:
+            has_sel = bool(widget.tag_ranges("sel"))
+        menu.delete(0, "end")
+        for label, virtual, enabled in context_menu_items(has_sel, not read_only and str(widget.cget("state")) != "disabled"):
+            menu.add_command(label=label, state="normal" if enabled else "disabled",
+                             command=lambda v=virtual: widget.event_generate(v))
+        menu.tk_popup(event.x_root, event.y_root)
+        return "break"
+
+    widget.bind("<Button-3>", popup, add="+")
+    if sys.platform == "darwin":
+        widget.bind("<Button-2>", popup, add="+")
+        widget.bind("<Control-Button-1>", popup, add="+")
+
 def preview(val, limit: int = 40) -> str:
     """A value on one short line for the Inspector's list."""
     try:
@@ -538,9 +569,10 @@ class EditorTab(tk.Frame):
         t.bind("<<Paste>>", self._schedule_highlight)
         t.bind("<<Cut>>",   self._schedule_highlight)
 
-        # X11 middle-click paste and Windows right-click paste
+        # X11 middle-click paste; right-click opens Cut / Copy / Paste
         t.bind("<ButtonRelease-2>", self._on_key)
         t.bind("<ButtonRelease-3>", self._on_key)
+        add_context_menu(t)
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -1121,6 +1153,7 @@ class GuideWindow(tk.Toplevel):
                                  spacing1=1, spacing3=2, cursor="arrow")
         pane.add(self.text, minsize=300, stretch="always")
         self._setup_tags()
+        add_context_menu(self.text, read_only=True)
         # Read-only, but text can still be selected and copied
         self.text.bind("<Key>", lambda e: None if (e.state & 0x4 and e.keysym.lower() in ("c", "a"))
                        or e.keysym in ("Up", "Down", "Prior", "Next", "Home", "End") else "break")
@@ -1645,6 +1678,7 @@ class LispMachine(tk.Tk):
         setup_code_tags(self.inspector)
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
+        add_context_menu(self.inspector)
 
         # ---- right-hand area: search bar (hidden) + editor notebook ----
         right_area = tk.Frame(hpane, bg=COLORS["bg"])
@@ -1684,6 +1718,7 @@ class LispMachine(tk.Tk):
             borderwidth=0, highlightthickness=0, padx=8, pady=4)
         self.listener_text.pack(fill="both", expand=True)
         self.listener_text.configure(state="disabled")
+        add_context_menu(self.listener_text)
         self.listener_text.tag_configure("prompt", foreground=COLORS["prompt"], font=FONT_MONO_BOLD)
         self.listener_text.tag_configure("result", foreground=COLORS["result"])
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
@@ -1719,6 +1754,7 @@ class LispMachine(tk.Tk):
             highlightthickness=1, highlightbackground="#333",
             highlightcolor=COLORS["prompt"])
         self.listener_input.pack(side="left", fill="x", expand=True, ipady=4)
+        add_context_menu(self.listener_input)
         self.listener_input.bind("<Return>",  lambda e: (self._listener_submit(), "break")[1])
         self.listener_input.bind("<Control-space>", self._listener_complete)
         self.listener_input.bind("<Control-Key-space>", self._listener_complete)
