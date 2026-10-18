@@ -18,6 +18,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   and `t` as true, so `(cond ... (t default))` works.
 - `(float x)`, the Common Lisp name for `(inexact x)`: `(float (/ 1 3))` gives
   0.3333333333333333.
+- More Common Lisp: `&rest` and `&body` parameters, `(nth i lst)` order,
+  `(format nil ...)` and `(format t ...)` with `~d`, `progn`, `setq`, `defvar`,
+  `defparameter`, `defconstant`, `defmacro`, and names such as `mapcar`,
+  `null`, `evenp`, `zerop`, `rem` and `string-upcase` for the built-ins.
 - Eval whole buffer (F6) in the Lispy Machine expands each form first, so
   `defun`, quasiquote and macros work there as they do in the REPL.
 
