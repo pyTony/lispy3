@@ -216,7 +216,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 ### Running the editor
 
     python lispy_machine.pyw
-    python lispy_machine.pyw tree.lisp      # open a file instead of the welcome example
+    python lispy_machine.pyw tree.lisp      # open a file instead of demo.lisp
 
 Every file named on the command line opens in its own buffer. A name that does not exist yet opens an empty buffer that is created on the first **Save**. On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 

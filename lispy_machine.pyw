@@ -18,9 +18,9 @@ Features
 
 Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
       --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
-      Each file named on the command line opens in its own buffer instead of
-      the welcome example; a file that does not exist yet opens empty and is
-      created on the first Save.
+      Each file named on the command line opens in its own buffer; a file that
+      does not exist yet opens empty and is created on the first Save. With no
+      files, demo.lisp from the Lispy folder opens instead.
 """
 import io
 import contextlib
@@ -894,6 +894,20 @@ def read_file_arg(arg: str):
     return os.path.basename(path), content, path
 
 
+DEMO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo.lisp")
+
+
+def read_demo(path=DEMO_FILE):
+    """Return (buffer name, content, path) for the buffer opened when no file
+    is named on the command line: demo.lisp, or an empty untitled buffer if
+    it is missing or unreadable."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return os.path.basename(path), f.read(), path
+    except (OSError, UnicodeDecodeError):
+        return "untitled.lisp", "", None
+
+
 class LispMachine(tk.Tk):
     def __init__(self, files=(), plain_repl=None):
         super().__init__()
@@ -923,7 +937,7 @@ class LispMachine(tk.Tk):
         self._build_status()
         self._bind_global()
 
-        # files from the command line, or the welcome buffer
+        # files from the command line, or demo.lisp
         open_errors = []
         for arg in files:
             try:
@@ -933,7 +947,8 @@ class LispMachine(tk.Tk):
                 continue
             self.new_buffer(name, content, path=path)
         if not self.tabs:
-            self.new_buffer("untitled.lisp", WELCOME)
+            name, content, path = read_demo()
+            self.new_buffer(name, content, path=path)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
@@ -2079,37 +2094,6 @@ class LispMachine(tk.Tk):
             ):
                 return
         self.destroy()
-
-
-# =============================================================================
-# Welcome content
-# =============================================================================
-WELCOME = r''';; Welcome to Lispy3 Machine.
-;; F5  - evaluate the top-level form at the cursor
-;; F6  - evaluate the whole buffer
-;; F9  - evaluate what you typed in the Listener
-;; Ctrl+Space - complete a symbol
-;; Ctrl+/     - toggle comment
-
-(define square (lambda [x] (* x x)))
-(square 12)
-
-(define fact
-  (lambda [n]
-    (if (< n 2)
-        1
-        (* n (fact (- n 1))))))
-(fact 100)
-
-;; Clojure-style data
-(define user {:name "Tony" :status "Trusty"})
-(:name user)
-
-;; Turtle graphics — load the engine, then draw:
-(load "lsystems")
-(lsystem-from "F" "F[+F]F[-F]F" 4 3 23.5 0 -250 90)
-(lsystem-from "F" "FF-[-F+F+F]+[+F-F-F]" 3 6 23 -50 -250 90)
-'''
 
 
 # =============================================================================
