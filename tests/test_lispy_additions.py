@@ -68,11 +68,11 @@ class MapsAndKeywordsTest(LispyTestCase):
 class VectorsAndWhileTest(LispyTestCase):
 
     def test_bracket_vectors_evaluate_their_items(self):
-        self.assertEqual(self.show("[1 (+ 1 1) 3]"), "(1 2 3)")
+        self.assertEqual(self.show("[1 (+ 1 1) 3]"), "[1 2 3]")
 
     def test_mutable_vectors(self):
         self.ev_all("(define v (make-vector 4))", "(vector-set! v 2 7)")
-        self.assertEqual(self.show("v"), "(0 0 7 0)")
+        self.assertEqual(self.show("v"), "[0 0 7 0]")
         self.assertEqual(self.ev("(vector-ref v 2)"), 7)
 
     def test_while_loops_without_using_the_stack(self):

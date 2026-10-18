@@ -29,8 +29,8 @@ TODO_EXAMPLES = {
         ("(or)", "#f"),
         ("(and #f (car))", "#f"),                            # (car) would be an error
         ("(or 1 (car))", "1"),
-        ("(and 1 0 2)", "0"),                                # 0 is false in Lispy
-        ("(or '() 0 #f 'x)", "x"),
+        ("(and 1 0 2)", "2"),                                # 0 is true, as in every Lisp
+        ("(or '() #f 'x)", "x"), ("(or '() 0 'x)", "0"),
     ],
     "Macros: `define-macro`, quasiquote": [
         (["(define-macro (swap! a b) (let [tmp (gensym)] `(let [,tmp ,a] (set! ,a ,b) (set! ,b ,tmp))))",
@@ -70,7 +70,7 @@ TODO_EXAMPLES = {
     # --- Numbers
     "`+ - * /` with any number of arguments": [
         ("(+ 1 2 3)", "6"), ("(+)", "0"), ("(*)", "1"), ("(- 10 1 2 3)", "4"),
-        ("(- 5)", "-5"), ("(/ 2)", "0.5"), ("(/ 60 2 3)", "10.0"), ("(+ 0.5 1 2)", "3.5"),
+        ("(- 5)", "-5"), ("(/ 2)", "1/2"), ("(/ 60 2 3)", "10"), ("(/ 2.0)", "0.5"), ("(+ 0.5 1 2)", "3.5"),
     ],
     "`<`, `=`, ... comparing more than two values": [
         ("(< 1 2 3)", "#t"), ("(< 1 3 2)", "#f"), ("(<= 1 1 2)", "#t"),
@@ -94,7 +94,7 @@ TODO_EXAMPLES = {
         ("(even? 10)", "#t"), ("(odd? -3)", "#t"), ("(even? 2.5)", "!TypeError"),
         ("(zero? 0.0)", "#t"), ("(positive? -1)", "#f"), ("(negative? -1)", "#t"),
         ("(integer? 3)", "#t"), ("(integer? 3.0)", "#t"), ("(integer? 3.5)", "#f"), ("(integer? #t)", "#f"),
-        ("(exact 3.0)", "3"), ("(exact 3.5)", "!TypeError"), ("(inexact 3)", "3.0"),
+        ("(exact 3.0)", "3"), ("(exact 3.5)", "7/2"), ("(inexact 3)", "3.0"),
         ("(number->string 255 16)", '"ff"'), ("(number->string -10 2)", '"-1010"'),
         ("(string->number (number->string 12345 36) 36)", "12345"),
         ("(div 1 0)", "!ZeroDivisionError"),

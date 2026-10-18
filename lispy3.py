@@ -1,7 +1,9 @@
 from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
+from fractions import Fraction
 import calendar
 import functools
+import inspect
 import itertools
 import math
 import operator as op
@@ -13,7 +15,7 @@ import turtle
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
-Number: TypeAlias = int | float
+Number: TypeAlias = int | float | Fraction
 Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char']
 List: TypeAlias = list['Exp']
 Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
@@ -33,6 +35,48 @@ class Char:
 
     def __repr__(self) -> str:
         return self.value
+
+class Vector(list):
+    """A vector such as [1 2 3] or (vector 1 2 3): a mutable list that vector? recognises."""
+    pass
+
+@dataclass
+class Pair:
+    """An improper list such as (1 . 2) or (1 2 . 3): the items, then a tail that is not a list."""
+    items: list
+    tail: Any
+
+def make_pair(items: list, tail: Any) -> Any:
+    """items followed by tail: a plain list when tail is a list, otherwise a Pair."""
+    if not items:
+        return tail
+    if isinstance(tail, Pair):
+        return Pair(list(items) + tail.items, tail.tail)
+    if type(tail) is list:
+        return list(items) + tail
+    return Pair(list(items), tail)
+
+def _scheme_bindings(bindings: Any) -> bool:
+    """True for Scheme-style let bindings ((a 1) (b 2)); Lispy's own style is [a 1 b 2]."""
+    return len(bindings) > 0 and all(isinstance(b, (list, tuple)) and len(b) == 2 and isinstance(b[0], str)
+                                     for b in bindings)
+
+def _dotted(x: Any) -> Any:
+    """Quoted data with dots, '(1 . 2), as a Pair; anything without a dot comes back unchanged."""
+    if type(x) is not list:
+        return x
+    if len(x) >= 3 and x[-2] == '.':
+        return make_pair([_dotted(e) for e in x[:-2]], _dotted(x[-1]))
+    items = [_dotted(e) for e in x]
+    return x if all(a is b for a, b in zip(items, x)) else items
+
+def is_true(x: Any) -> bool:
+    """Only #f, () and nothing count as false; 0, "" and [] are true, as in Lisp."""
+    return not (x is False or x is None or (type(x) is list and not x))
+
+def normalize(x: Any) -> Any:
+    """A fraction with denominator 1 becomes a whole number: (/ 6 3) is 2, not 2/1."""
+    return x.numerator if type(x) is Fraction and x.denominator == 1 else x
 
 class LispyError(Exception):
     """User-raised error from within Lisp via (error ...)."""
@@ -103,7 +147,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("and", "(and e1 e2 ...) - stops at the first false value, else gives the last"),
         ("or", "(or e1 e2 ...) - stops at the first true value"),
         ("begin", "(begin e1 e2 ...) - run each, return the last value"),
-        ("let", "(let [a 1 b 2] body...) - local names; later ones may use earlier ones"),
+        ("let", "(let [a 1 b 2] body...) - local names; later ones may use earlier ones. Scheme's (let ((a 1) (b 2)) ...) and (let loop ((i 0)) ...) work too"),
         ("while", "(while test body...) - loop while test is true, no recursion depth used"),
         ("dotimes", "(dotimes [i count] body...) - run body with i = 0, 1, ... count-1"),
         ("try", "(try exp (catch e handler...)) - run exp; on an error, run handler with e = the message"),
@@ -119,7 +163,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("first", "(first lst) - first item (the head)"),
         ("cdr", "(cdr lst) - everything but the first item; same as rest"),
         ("rest", "(rest lst) - everything but the first item (the tail)"),
-        ("cons", "(cons x lst) - a new list with x in front"),
+        ("cons", "(cons x lst) - a new list with x in front; (cons 1 2) is the pair (1 . 2)"),
+        ("pair?", "(pair? x) - #t for a non-empty list or a dotted pair such as (1 . 2)"),
         ("list", "(list a b ...) - a list of the values"),
         ("length", "(length x) - number of items in a list or characters in a string"),
         ("null?", "(null? lst) - true for the empty list; same as empty?"),
@@ -146,7 +191,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("+", "(+ a b ...) - add any number of numbers (also plus)"),
         ("-", "(- a b ...) - subtract; (- a) is minus a"),
         ("*", "(* a b ...) - multiply"),
-        ("/", "(/ a b ...) - divide, gives a decimal"),
+        ("/", "(/ a b ...) - divide; whole numbers give an exact fraction, (/ 7 2) is 7/2"),
         ("div", "(div a b) - whole-number division rounding down, like Python's //"),
         ("mod", "(mod a b) - what is left over after div, like Python's %; same as modulo"),
         ("divmod", "(divmod a b) - both at once: (div mod), e.g. (divmod 17 5) gives (3 2)"),
@@ -158,10 +203,11 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("even?", "(even? n), (odd? n) - true for an even or odd whole number"),
         ("zero?", "(zero? x), (positive? x), (negative? x) - compare with 0"),
         ("integer?", "(integer? x) - true for a whole number, also 3.0"),
-        ("exact", "(exact x) - a decimal as a whole number, 3.0 gives 3; (inexact x) the other way"),
+        ("exact", "(exact x) - a decimal as an exact number, 3.0 gives 3 and 2.5 gives 5/2; (inexact x) the other way"),
+        ("numerator", "(numerator 7/2) gives 7, (denominator 7/2) gives 2; (exact? x) is #t for whole numbers and fractions"),
         ("=", "(= a b ...) - equal; works on numbers, symbols, strings and characters"),
         ("<", "(< a b ...), also > <= >= - true when each value is in order with the next"),
-        ("not", "(not x) - #t if x is #f, 0 or empty, else #f"),
+        ("not", "(not x) - #t if x is #f or (), else #f"),
         ("abs", "(abs x) - absolute value"),
         ("min", "(min a b ...) - smallest"),
         ("max", "(max a b ...) - largest"),
@@ -196,6 +242,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
         ("vector-ref", "(vector-ref v i) - item i of v"),
         ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
+        ("vector", "(vector 1 2 3) - a vector of the values, same as [1 2 3]; (vector? v) tests for one"),
+        ("vector-length", "(vector-length v) - how many items; (vector->list v) and (list->vector lst) convert"),
         ("clock", "(clock) - seconds since Lispy started, as a decimal number, for timing"),
         ("clock->string", "(clock->string) - the date and time now, like \"2026-10-17 21:53:20\"; (clock->string t) for a (clock) value t; (clock->string t \"%H:%M\") with a format"),
         ("get-universal-time", "(get-universal-time) - whole seconds since 1900-01-01 GMT (Common Lisp's universal time)"),
@@ -288,7 +336,7 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
     if '\n' not in flat_str and (len(flat_str) + len(pad) <= width):
         return flat_str
 
-    if isinstance(exp, tuple):
+    if isinstance(exp, (tuple, Vector)):
         if not exp:
             return "[]"
         items = "\n".join(f"{pad}  {pretty_print(x, indent + 1, width).lstrip()}" for x in exp)
@@ -357,7 +405,10 @@ def save_workspace(filename: str) -> str:
             if callable(value) and type(value).__name__ != 'Procedure':
                 continue
             # Lists and symbols are data: quote them so loading does not run them as code
-            quote = "'" if isinstance(value, (list, str)) and value != [] else ""
+            if isinstance(value, Vector):
+                f.write(f"(define {key} (list->vector '{lisp_str(list(value))}))\n")
+                continue
+            quote = "'" if isinstance(value, (list, str, Pair)) and value != [] else ""
             f.write(f"(define {key} {quote}{lisp_str(value)})\n")
             
     return f"Workspace saved to {real_filename}"
@@ -441,8 +492,22 @@ def _variadic_div(*args: Number) -> Number:
     if not args:
         raise TypeError("/ requires at least 1 argument")
     if len(args) == 1:
-        return 1 / args[0]
-    return functools.reduce(op.truediv, args)
+        args = (1,) + args
+    return functools.reduce(_div2, args)
+
+def _div2(a: Number, b: Number) -> Number:
+    """Whole numbers and fractions divide exactly, (/ 7 2) is 7/2; decimals stay decimal."""
+    if isinstance(a, (int, Fraction)) and isinstance(b, (int, Fraction)) and not isinstance(a, bool) and not isinstance(b, bool):
+        if b == 0:
+            raise ZeroDivisionError("division by zero")
+        return normalize(Fraction(a) / b)
+    return a / b
+
+def _expt(a: Number, b: Number) -> Number:
+    """(expt 2 -1) is 1/2, exact like Scheme; decimals stay decimal."""
+    if isinstance(a, (int, Fraction)) and type(b) is int and b < 0:
+        return normalize(Fraction(a) ** b)
+    return normalize(a ** b) if isinstance(a, Fraction) else pow(a, b)
 
 def _variadic_cmp(cmp_fn: Callable[[Any, Any], bool]) -> Callable[..., bool]:
     def compare(*args: Any) -> bool:
@@ -485,9 +550,13 @@ def _whole(n: Any, name: str) -> int:
         return int(n)
     raise TypeError(f"{name} needs a whole number, got {lisp_str(n)}")
 
-def _exact(x: Number) -> int:
-    """A decimal with no fraction as a whole number: (exact 3.0) gives 3."""
-    return _whole(x, 'exact')
+def _exact(x: Number) -> Number:
+    """A decimal as an exact number: (exact 3.0) gives 3, (exact 2.5) gives 5/2."""
+    if isinstance(x, float):
+        if not math.isfinite(x):
+            raise ValueError(f"exact: {lisp_str(x)} has no exact value")
+        return normalize(Fraction(x))
+    return x
 
 _DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -604,19 +673,41 @@ def _reduce_fn(proc: Callable, *args: Any) -> Any:
 def _sort_fn(items: list[Any], key_or_cmp: Callable = None) -> list[Any]:
     if key_or_cmp is None:
         return sorted(items, key=lambda x: x.value if isinstance(x, (String, Char)) else x)
-    # Try comparator of 2 args, fallback to key function of 1 arg
-    try:
-        def cmp(a: Any, b: Any) -> int:
-            res = key_or_cmp(a, b)
-            if isinstance(res, bool):
-                return -1 if res else (1 if key_or_cmp(b, a) else 0)
-            return int(res)
-        return sorted(items, key=functools.cmp_to_key(cmp))
-    except TypeError:
+    # A one-argument function is a key, (sort lst abs); otherwise a comparison such as <.
+    # Errors from the comparison are reported, not hidden behind a retry.
+    if _takes_one_arg(key_or_cmp):
         return sorted(items, key=key_or_cmp)
+
+    def cmp(a: Any, b: Any) -> int:
+        try:
+            res = key_or_cmp(a, b)
+        except TypeError:
+            raise TypeError(f"sort: cannot compare {lisp_str(a)} and {lisp_str(b)} with {lisp_str(key_or_cmp)}") from None
+        if isinstance(res, bool):
+            return -1 if res else (1 if key_or_cmp(b, a) else 0)
+        return int(res)
+    return sorted(items, key=functools.cmp_to_key(cmp))
+
+def _takes_one_arg(proc: Any) -> bool:
+    """True when proc can only be called with one argument, like (lambda (x) ...) or abs."""
+    if isinstance(proc, Procedure) and proc.native_fn is None:
+        parms = proc.parms
+        return isinstance(parms, list) and len(parms) == 1 and parms[0] not in ('.', '&')
+    fn = proc.native_fn if isinstance(proc, Procedure) else proc
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+    try:
+        sig.bind(None, None)
+        return False
+    except TypeError:
+        return True
 
 def _string_to_number(s: Any, base: int = 10) -> Any:
     raw = _unwrap_str(s).strip()
+    if base == 10 and FRACTION_RE.fullmatch(raw):
+        return normalize(Fraction(raw))
     try:
         return int(raw, base)
     except ValueError:
@@ -666,13 +757,25 @@ def _first(x: Any) -> Any:
     """(first lst): the head of a list, or the first character of a string; () when empty."""
     if isinstance(x, String):
         return Char(x.value[0]) if x.value else []
+    if isinstance(x, Pair):
+        return x.items[0]
     return x[0] if isinstance(x, (list, tuple)) and x else []
 
 def _rest(x: Any) -> Any:
     """(rest lst): all but the head of a list, or of a string; () when empty."""
     if isinstance(x, String):
         return String(x.value[1:]) if x.value else []
+    if isinstance(x, Pair):
+        return make_pair(x.items[1:], x.tail)
     return list(x[1:]) if isinstance(x, (list, tuple)) else []
+
+def _length(x: Any) -> int:
+    """(length lst) for a list, vector or string; a dotted pair has no length."""
+    if isinstance(x, String):
+        return len(x.value)
+    if isinstance(x, Pair):
+        raise TypeError(f"length: {lisp_str(x)} is not a proper list")
+    return len(x)
 
 def _append(*items: Any) -> Any:
     """(append a b ...) joins lists, or joins strings when every argument is a string."""
@@ -709,10 +812,10 @@ def standard_env() -> Env:
     # 2. Core Primitives (including all TODO items)
     primitives = {
         # Variadic Arithmetic & Numbers
-        '+': lambda *args: sum(args, 0),
-        'plus': lambda *args: sum(args, 0),
-        '-': _variadic_sub,
-        '*': lambda *args: functools.reduce(op.mul, args, 1),
+        '+': lambda *args: normalize(sum(args, 0)),
+        'plus': lambda *args: normalize(sum(args, 0)),
+        '-': lambda *args: normalize(_variadic_sub(*args)),
+        '*': lambda *args: normalize(functools.reduce(op.mul, args, 1)),
         '/': _variadic_div,
         'quotient': _quotient,
         'remainder': _remainder,
@@ -726,11 +829,16 @@ def standard_env() -> Env:
         'positive?': lambda x: x > 0,
         'negative?': lambda x: x < 0,
         'integer?': lambda x: isinstance(x, int) and not isinstance(x, bool) or isinstance(x, float) and x.is_integer(),
+        'rational?': lambda x: isinstance(x, (int, Fraction)) and not isinstance(x, bool) or isinstance(x, float) and math.isfinite(x),
+        'exact?': lambda x: isinstance(x, (int, Fraction)) and not isinstance(x, bool),
+        'inexact?': lambda x: isinstance(x, float),
+        'numerator': lambda x: Fraction(x).numerator if not isinstance(x, float) else float(Fraction(x).numerator),
+        'denominator': lambda x: Fraction(x).denominator if not isinstance(x, float) else float(Fraction(x).denominator),
         'exact': _exact,
         'inexact': float,
         'exact->inexact': float,
         'inexact->exact': _exact,
-        'expt': pow,
+        'expt': _expt,
         'abs': abs,
         'min': min,
         'max': max,
@@ -742,17 +850,18 @@ def standard_env() -> Env:
         '>=': _variadic_cmp(op.ge),
         '<=': _variadic_cmp(op.le),
         '=': _variadic_cmp(_lisp_eq),
-        'not': op.not_,
+        'not': lambda x: not is_true(x),
 
         # Type & Equality Predicates
-        'null?': lambda x: x == [],
+        'null?': lambda x: type(x) is list and not x,
         'empty?': lambda x: len(_unwrap_str(x) if isinstance(x, String) else x) == 0 if isinstance(x, (list, tuple, dict, str, String)) else False,
-        'number?': lambda x: isinstance(x, (int, float)) and not isinstance(x, bool),
+        'number?': lambda x: isinstance(x, (int, float, Fraction)) and not isinstance(x, bool),
         'symbol?': lambda x: isinstance(x, str),
         'string?': lambda x: isinstance(x, String),
         'char?': lambda x: isinstance(x, Char),
-        'list?': lambda x: isinstance(x, list),
-        'vector?': lambda x: isinstance(x, tuple),
+        'list?': lambda x: type(x) is list,
+        'pair?': lambda x: (type(x) is list and len(x) > 0) or isinstance(x, Pair),
+        'vector?': lambda x: isinstance(x, (Vector, tuple)),
         'map?': lambda x: isinstance(x, dict) and not isinstance(x, Env),
         'procedure?': lambda x: isinstance(x, Procedure) or callable(x),
         'boolean?': lambda x: isinstance(x, bool),
@@ -763,8 +872,8 @@ def standard_env() -> Env:
         'append': _append,
         'car': _first,
         'cdr': _rest,
-        'cons': lambda x, y: [x] + (list(y) if isinstance(y, tuple) else (y if isinstance(y, list) else [y])),
-        'length': lambda x: len(x.value) if isinstance(x, String) else len(x),
+        'cons': lambda x, y: [x] + list(y) if isinstance(y, (tuple, Vector)) else make_pair([x], y),
+        'length': _length,
         'list': lambda *x: list(x),
         'first': _first,
         'rest': _rest,
@@ -773,7 +882,7 @@ def standard_env() -> Env:
         'reverse': lambda x: list(reversed(x)) if isinstance(x, (list, tuple)) else (String(x.value[::-1]) if isinstance(x, String) else []),
         'range': lambda *args: list(range(*args)),
         'map': lambda proc, *lists: list(map(proc, *lists)),
-        'filter': lambda proc, items: list(filter(proc, items)),
+        'filter': lambda proc, items: [x for x in items if is_true(proc(x))],
         'for-each': lambda proc, *lists: (list(map(proc, *lists)), None)[1],
         'reduce': _reduce_fn,
         'fold': _reduce_fn,
@@ -810,7 +919,7 @@ def standard_env() -> Env:
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         # Mutable vectors (Python lists) and a timer
-        'make-vector': lambda n, fill=0: [fill] * int(n),
+        'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
         'clock': _clock,
@@ -830,7 +939,10 @@ def standard_env() -> Env:
         'read': lambda text: parse(_unwrap_str(text)),
         'string->symbol': lambda text: Symbol(_unwrap_str(text)),
         'symbol->string': lambda sym: String(str(sym)),
-        'vector': lambda *x: list(x),
+        'vector': lambda *x: Vector(x),
+        'vector-length': len,
+        'vector->list': list,
+        'list->vector': Vector,
         'push-pose': push_pose,
         'pop-pose': pop_pose,
         'clear-poses': clear_poses,
@@ -952,11 +1064,20 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
     if head == 'let':
         if len(x) < 3:
             raise SyntaxError("let requires bindings and a body")
+        if isinstance(x[1], str):
+            # named let: (let loop ((i 0)) body...)
+            if len(x) < 4 or not _scheme_bindings(x[2]):
+                raise SyntaxError("named let needs a name, ((var value) ...) and a body")
+            body = x[3] if len(x) == 4 else ['begin'] + list(x[3:])
+            return ['let', x[1], [[b[0], expand(b[1], False)] for b in x[2]], expand(body, False)]
         bindings = x[1]
-        expanded_bindings = [
-            expand(b, False) if i % 2 == 1 else b
-            for i, b in enumerate(bindings)
-        ]
+        if _scheme_bindings(bindings):
+            expanded_bindings = [[b[0], expand(b[1], False)] for b in bindings]
+        else:
+            expanded_bindings = [
+                expand(b, False) if i % 2 == 1 else b
+                for i, b in enumerate(bindings)
+            ]
         body = x[2] if len(x) == 3 else ['begin'] + list(x[2:])
         return ['let', expanded_bindings, expand(body, False)]
 
@@ -983,7 +1104,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         kind = type(x)
         if kind is str:
             return x if x.startswith(':') else env.find(x)[x]
-        if kind is int or kind is float:
+        if kind is int or kind is float or kind is Fraction:
             return x
         # (proc args...): function application, unless the head is a special form,
         # a :keyword lookup or an obj/method call. TCO: a Lisp procedure's body
@@ -1030,7 +1151,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 return env.find(symbol)[symbol]
                 
             # 3. Constant numeric literal
-            case int() | float():
+            case int() | float() | Fraction():
                 return x
                 
             # 4. Pure string literals (dataclass String) and Characters (dataclass Char)
@@ -1039,7 +1160,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 
             # 5. Clojure-style data Vector [1 2 3] (tuple in Python) -> evaluates its contents
             case tuple(elements):
-                return [eval_exp(e, env) for e in elements]
+                return Vector(eval_exp(e, env) for e in elements)
                 
             # 6. Clojure-style Map {key val} (dict in Python) -> evaluates values, keeps string keys raw
             case dict(d):
@@ -1052,7 +1173,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
 
             # 7. (quote exp)
             case ['quote', exp]:
-                return exp
+                return _dotted(exp)
 
             # 7b. (quasiquote exp)
             case ['quasiquote', exp]:
@@ -1061,7 +1182,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 
             # 8. (if test conseq [alt]) - TCO enabled
             case ['if', test, conseq, *alt]:
-                if eval_exp(test, env):
+                if is_true(eval_exp(test, env)):
                     x = conseq
                 else:
                     x = alt[0] if alt else None
@@ -1074,8 +1195,8 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     if not isinstance(clause, (list, tuple)) or len(clause) == 0:
                         raise SyntaxError(f"Invalid cond clause: {clause}")
                     test_exp = clause[0]
-                    is_true = True if test_exp == 'else' else bool(eval_exp(test_exp, env))
-                    if is_true:
+                    passed = True if test_exp == 'else' else is_true(eval_exp(test_exp, env))
+                    if passed:
                         if len(clause) == 1:
                             return eval_exp(test_exp, env) if test_exp != 'else' else True
                         for exp in clause[1:-1]:
@@ -1093,7 +1214,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     return True
                 for exp in exps[:-1]:
                     val = eval_exp(exp, env)
-                    if not val:
+                    if not is_true(val):
                         return val
                 x = exps[-1]
                 continue
@@ -1104,7 +1225,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     return False
                 for exp in exps[:-1]:
                     val = eval_exp(exp, env)
-                    if val:
+                    if is_true(val):
                         return val
                 x = exps[-1]
                 continue
@@ -1153,16 +1274,31 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 continue
 
             # 13. (let [var1 val1...] body1 body2...) - TCO enabled
+            #     Scheme's (let ((var1 val1) ...) body...) works too, values worked out first.
             case ['let', list(bindings) | tuple(bindings), *body_exps]:
-                if len(bindings) % 2 != 0:
-                    raise SyntaxError("Let bindings must have an even number of elements")
                 local_env = Env(outer=env)
-                for i in range(0, len(bindings), 2):
-                    local_env[bindings[i]] = eval_exp(bindings[i + 1], local_env)
+                if _scheme_bindings(bindings):
+                    values = [eval_exp(b[1], env) for b in bindings]
+                    local_env.update(zip((b[0] for b in bindings), values))
+                elif len(bindings) % 2 != 0:
+                    raise SyntaxError("let needs pairs of name and value: (let [a 1 b 2] ...)")
+                else:
+                    for i in range(0, len(bindings), 2):
+                        local_env[bindings[i]] = eval_exp(bindings[i + 1], local_env)
                 for exp in body_exps[:-1]:
                     eval_exp(exp, local_env)
                 x = body_exps[-1] if body_exps else None
                 env = local_env
+                continue
+
+            # 13a. Scheme's named let: (let loop ((i 0)) ... (loop (+ i 1)) ...)
+            case ['let', str(name), list(bindings) | tuple(bindings), *body_exps] if _scheme_bindings(bindings):
+                loop_env = Env(outer=env)
+                body = body_exps[0] if len(body_exps) == 1 else ['begin'] + list(body_exps)
+                loop_env[name] = Procedure([b[0] for b in bindings], body, loop_env, name=name)
+                values = [eval_exp(b[1], env) for b in bindings]
+                x = body
+                env = Env([b[0] for b in bindings], values, loop_env)
                 continue
 
             # 13b. (dotimes [var count] body...)
@@ -1182,7 +1318,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
             # 13c. (while test body...)
             case ['while', test_exp, *body_exps]:
                 result = None
-                while eval_exp(test_exp, env):
+                while is_true(eval_exp(test_exp, env)):
                     for b in body_exps:
                         result = eval_exp(b, env)
                 return result
@@ -1356,6 +1492,8 @@ def _unescape_string(raw: str) -> str:
 
     return re.sub(r'\\(?:x[0-9a-fA-F]+;?|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', replace_match, raw)
 
+FRACTION_RE = re.compile(r'[+-]?\d+/\d*[1-9]\d*')   # 7/2 or -1/3; never a division by 0
+
 def atom(token: str) -> Atom:
     """Numbers become numbers, "strings" become String, #\\c become Char, others are symbols."""
     if token == '#t':
@@ -1389,6 +1527,8 @@ def atom(token: str) -> Atom:
             except ValueError:
                 pass
         return Char(token[2:])
+    if FRACTION_RE.fullmatch(token):
+        return normalize(Fraction(token))
     try:
         return int(token)
     except ValueError:
@@ -1478,6 +1618,10 @@ def lisp_str(exp: Any) -> str:
         if exp.value in reverse_char_map:
             return reverse_char_map[exp.value]
         return f"#\\{exp.value}"
+    elif isinstance(exp, Vector):
+        return '[' + ' '.join(map(lisp_str, exp)) + ']'
+    elif isinstance(exp, Pair):
+        return '(' + ' '.join(map(lisp_str, exp.items)) + ' . ' + lisp_str(exp.tail) + ')'
     elif isinstance(exp, list):
         return '(' + ' '.join(map(lisp_str, exp)) + ')'
     elif isinstance(exp, tuple):

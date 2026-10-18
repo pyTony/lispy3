@@ -54,6 +54,8 @@ Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do 
     lispy3> (* 6 7)
     42
     lispy3> (/ 7 2)
+    7/2
+    lispy3> (/ 7.0 2)
     3.5
     lispy3> (floor (/ 7 2))
     3
@@ -120,7 +122,7 @@ Tests and conversions:
     lispy3> (gcd 12 18)
     6
 
-`/` always gives a decimal, `(/ 6 3)` is `2.0`; use `div` when you want a whole number.
+`/` on whole numbers gives an exact **fraction**, as in Scheme: `(/ 7 2)` is `7/2`, `(/ 6 3)` is `2`, and you can type fractions too, `(+ 1/3 1/6)` is `1/2`. A decimal anywhere gives a decimal: `(/ 7.0 2)` is `3.5`, and `(exact->inexact 7/2)` turns a fraction into one. Use `div` when you want a whole number.
 
 ## Strings and characters
 
@@ -309,10 +311,12 @@ True is written `#t` and false `#f`, as in Scheme. Comparisons give one of them.
     lispy3> (if #f "yes" "no")
     "no"
 
-In a test, `#f`, `0`, `0.0` and the empty list `()` count as false; everything else, **even the empty string `""`**, counts as true.
+In a test, only `#f` and the empty list `()` count as false; everything else, **even `0` and the empty string `""`**, counts as true.
 
     lispy3> (if '() "yes" "no")
     "no"
+    lispy3> (if 0 "yes" "no")
+    "yes"
     lispy3> (if "" "yes" "no")
     "yes"
 
@@ -335,14 +339,14 @@ In a test, `#f`, `0`, `0.0` and the empty list `()` count as false; everything e
 
 | | true / false written as | printed as | false in a test | "no value" |
 |---|---|---|---|---|
-| **Lispy** | `#t` / `#f` | `#t` / `#f` | `#f`, `0`, `()` | `None`, not printed |
+| **Lispy** | `#t` / `#f` | `#t` / `#f` | `#f`, `()` | `None`, not printed |
 | Norvig's `lis.py` | (none) | `True` / `False` | `False`, `0`, `()` (Python rules) | `None` |
 | Norvig's `lispy.py` | `#t` / `#f` | `#t` / `#f` | `False`, `0`, `()` (Python rules) | `None` |
 | Scheme (R7RS, Racket, Guile) | `#t` / `#f` | `#t` / `#f` | **only** `#f` | unspecified |
 | Common Lisp | `t` / `nil` | `T` / `NIL` | **only** `nil`, which is also `()` | `nil` |
 | Clojure | `true` / `false` | `true` / `false` | `false` and `nil` | `nil` |
 
-So Lispy does what Norvig's second interpreter, [`lispy.py`](https://norvig.com/lispy2.html), does: Scheme's `#t` / `#f` for writing and printing, with Python's truth rules underneath (a copy is in [fluentpython/lispy](https://github.com/fluentpython/lispy) under `original/norvig/lispy.py`). The one difference from real Scheme to remember: there `0` and `()` are true, and only `#f` is false.
+So Lispy writes and prints Scheme's `#t` / `#f`, and, like Common Lisp and Clojure's `nil`, also treats the empty list as false. Unlike Norvig's interpreters, which use Python's truth rules, `0` is true, as in every Lisp. The one difference from real Scheme to remember: there `()` is true too, and only `#f` is false.
 
 ## Choosing: if
 
@@ -372,10 +376,19 @@ So Lispy does what Norvig's second interpreter, [`lispy.py`](https://norvig.com/
     lispy3> (list 1 "two" #\3 'four)
     (1 "two" #\3 four)
 
-`'(...)` is a quoted list: its items are not evaluated. `[...]` is a vector; its items **are** evaluated, and it becomes a list:
+`'(...)` is a quoted list: its items are not evaluated. `[...]` is a vector; its items **are** evaluated:
 
     lispy3> [1 (+ 1 1) 3]
-    (1 2 3)
+    [1 2 3]
+    lispy3> (vector? [1 2])
+    #t
+
+A dot makes a pair whose tail is not a list, as in Scheme:
+
+    lispy3> (cons 1 2)
+    (1 . 2)
+    lispy3> (cdr '(1 . 2))
+    2
 
 `car`/`first` give the **head**, `cdr`/`rest` give the **tail**. The head of an empty list is `()`.
 
@@ -510,7 +523,7 @@ Fibonacci, loop style, with local variables:
     lispy3> (define v (make-vector 3 0))
     lispy3> (vector-set! v 0 42)
     lispy3> v
-    (42 0 0)
+    [42 0 0]
     lispy3> (vector-ref v 0)
     42
 
@@ -632,7 +645,7 @@ A new control form can also be a function that takes its body as a lambda with n
 
 - `+ - * /` take exactly two arguments.
 - `if` needs an else part, and a lambda body is one expression (use `begin`).
-- `""` counts as true in a test; `0` and `()` count as false.
+- `""` and `0` count as true in a test; `#f` and `()` count as false.
 - `(str 12)` makes text that prints like a string, but `(= (str 12) "12")` is `#f`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.
 - Recursion stops after about 200 nested calls; use `map`, `filter` or `while` for big jobs.
 - **TO BE IMPLEMENTED:** catching errors inside a program (`try` / `error`).

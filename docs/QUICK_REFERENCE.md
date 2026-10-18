@@ -15,7 +15,9 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `name` | variable |
 | `:key` | keyword, stands for itself |
 | `'(1 2 3)` | quoted list, items not evaluated |
-| `[1 (+ 1 1)]` | vector, items evaluated, becomes the list `(1 2)` |
+| `[1 (+ 1 1)]` | vector, items evaluated: `[1 2]` |
+| `7/2` | an exact fraction |
+| `'(1 . 2)` | a pair whose tail is not a list |
 | `{:a 1 :b 2}` | map |
 | `; text` | comment to the end of the line |
 
@@ -28,7 +30,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(lambda [a b] body)` | a function; one body expression |
 | `(if test then else)` | choose; else is required |
 | `(begin e1 e2 ...)` | run in order, return the last |
-| `(let [a 1 b 2] body)` | local names for one body |
+| `(let [a 1 b 2] body)` | local names for one body; Scheme's `(let ((a 1) (b 2)) body)` and named `(let loop ((i 0)) ...)` work too |
 | `(while test body...)` | loop while test is true |
 | `(quote x)` / `'x` | `x` itself, unevaluated |
 | `(:key map)` | look `:key` up in `map` |
@@ -58,7 +60,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 
 | Function | Result |
 |----------|--------|
-| `(+ a b ...)` `(- a b ...)` `(* a b ...)` `(/ a b ...)` | arithmetic, any number of values (`plus` = `+`); `/` gives a decimal |
+| `(+ a b ...)` `(- a b ...)` `(* a b ...)` `(/ a b ...)` | arithmetic, any number of values (`plus` = `+`); `/` gives an exact fraction for whole numbers, `(/ 7 2)` is `7/2` |
 | `(div a b)` `(mod a b)` `(divmod a b)` | whole-number division rounding down, what is left over, both as `(div mod)`; like Python's `//`, `%`, `divmod` |
 | `(quotient a b)` `(remainder a b)` `(modulo a b)` | Scheme's: round toward zero, left over with the sign of `a`; `modulo` = `mod` |
 | `(expt a b)` | power, exact for whole numbers |
@@ -67,14 +69,14 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(number->string 255 16)` `(string->number "ff" 16)` | `"ff"` and `255`, any base from 2 to 36 |
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
 | `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
-| `(not x)` | true when `x` is false, `0` or `()` |
+| `(not x)` | true when `x` is `#f` or `()` |
 | `(abs x)` `(round x)` | absolute value, nearest whole number |
 | `(min a b ...)` `(max a b ...)` | smallest, largest |
 | `(number? x)` `(symbol? x)` | type tests |
 | `sqrt floor ceil fmod pow log exp sin cos tan gcd lcm isqrt factorial comb ...` | everything in Python's `math` |
 | `pi` `e` `inf` | constants from `math` |
 
-True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything else is true, including `""`. Tests return `#t`/`#f`; `define`, `set!`, `while` and `display` return nothing; a missing value is `()`. How this compares with Scheme, Common Lisp and Clojure: [True and false](LISPY_BY_EXAMPLE.md#true-and-false).
+True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is true, including `0` and `""`. Tests return `#t`/`#f`; `define`, `set!`, `while` and `display` return nothing; a missing value is `()`. How this compares with Scheme, Common Lisp and Clojure: [True and false](LISPY_BY_EXAMPLE.md#true-and-false).
 
 ## Vectors, time and output
 
@@ -83,6 +85,8 @@ True is `#t`, false is `#f`. False in a test: `#f`, `0`, `0.0`, `()`. Everything
 | `(make-vector n fill)` | `n` items of `fill` (default 0) |
 | `(vector-ref v i)` | item `i`, counting from 0 |
 | `(vector-set! v i x)` | store `x` at `i` |
+| `(vector 1 2)` `(vector? v)` `(vector-length v)` | make a vector, test for one, its length |
+| `(vector->list v)` `(list->vector lst)` | convert between vectors and lists |
 | `(clock)` | seconds since Lispy started, for timing |
 | `(clock->string)` / `(clock->string t)` | date and time now, or of a `(clock)` value `t`, like `"2026-10-17 21:53:20"`; add a format such as `"%H:%M"` |
 | `(get-universal-time)` | seconds since 1900-01-01 GMT, as in Common Lisp |
