@@ -5,13 +5,16 @@ is tested here, not the window.
 
 Run:  python -m unittest discover tests
 """
+import contextlib
 import importlib.machinery
+import io
 import importlib.util
 import os
 import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 from support import REPO_DIR
 
@@ -49,6 +52,19 @@ def _load_machine():
 
 
 machine = _load_machine()
+
+
+class Version(unittest.TestCase):
+    def test_version_option_prints_and_does_not_open_the_editor(self):
+        for option in ("--version", "-V"):
+            with mock.patch.object(sys, "argv", ["lispy_machine.pyw", option]), \
+                    mock.patch.object(machine, "LispMachine") as app, \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                machine.main()
+            app.assert_not_called()
+            self.assertEqual(out.getvalue().strip(), machine.version_text())
+            self.assertIn(f"Lispy3 Machine {machine.__version__}", out.getvalue())
+            self.assertIn(f"lispy3 {machine.L.__version__}", out.getvalue())
 
 
 class ReadFileArg(unittest.TestCase):
