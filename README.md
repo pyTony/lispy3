@@ -77,7 +77,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
-| `lisp/mini-basic.lisp` | Structured BBC BASIC (`PRINT`, `IF ... ELSE`, `FOR`, `REPEAT`, `WHILE`, `CASE`, `DEF-PROC`, `DEF-FN`) as macros that expand into lispy3 code; see the comment at its top. |
+| `lisp/mini-basic.lisp` | Structured BBC BASIC: `(bbc-run """...""")` or `(bbc-load "prog.bas")` reads BBC BASIC text into macros (`PRINT`, `IF ... ELSE`, `FOR`, `REPEAT`, `WHILE`, `CASE`, `DEF-PROC`, `DEF-FN`) that expand into lispy3 code; see the comments in the file. |
 | `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |

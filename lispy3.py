@@ -272,6 +272,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
         ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
         ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
     ],
@@ -427,6 +428,15 @@ def lisp_file_for_load(filename: str) -> str:
             and os.path.exists(in_lisp_dir):
         return in_lisp_dir
     return real_filename
+
+def slurp(filename: Any) -> String:
+    """(slurp "file") - the whole text file as one string; a relative name not found here is looked up in lisp/."""
+    name = _unwrap_str(filename)
+    in_lisp_dir = os.path.join(LISP_DIR, name)
+    if not os.path.exists(name) and not os.path.isabs(name) and os.path.exists(in_lisp_dir):
+        name = in_lisp_dir
+    with open(name, encoding='utf-8') as f:
+        return String(f.read())
 
 def lisp_file_for_save(filename: str) -> str:
     """The file (save "name") writes: a bare name goes to lisp/, a path is used as given."""
@@ -998,6 +1008,7 @@ def standard_env() -> Env:
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
+        'slurp': slurp,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],

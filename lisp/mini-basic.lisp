@@ -1,5 +1,8 @@
 ;;; mini-basic.lisp - structured BBC BASIC statements as lispy3 macros
 ;;;
+;;; Run BBC BASIC text with (bbc-run """...""") or (bbc-load "prog.bas"); the
+;;; reader at the end of this file turns the text into the statements below.
+;;;
 ;;; Each BBC statement is an UPPERCASE macro that expands into plain lispy3 code,
 ;;; so a BASIC program written as Lisp forms runs at Lisp speed:
 ;;;
@@ -317,3 +320,570 @@
        (set! bbc-col 0)
        ,(if (bbc-uses? '(END) stmts) (bbc-catch "bbc:end" run #f) run)
        #f)))
+
+;;; ===================================================================
+;;; --- Reader: BBC BASIC text to the statements above ---
+;;;
+;;;   (bbc-run """
+;;;   DEF FNfact(n) IF n<2 THEN =1 ELSE =n*FNfact(n-1)
+;;;   FOR i=1 TO 6 : PRINT "fact(";i;") = ";FNfact(i) : NEXT
+;;;   """)
+;;;   (bbc-load "fact.bas")              ; the same, from a text file
+;;;   (pretty-print (bbc-expand text))   ; the (bbc-program ...) the text becomes
+;;;
+;;; Keywords are UPPERCASE only, as in BBC BASIC. Line numbers are read and
+;;; ignored; GOTO, GOSUB, DATA and arrays come later.
+
+;;; --- Run-time support for expressions ---
+
+(define (bbc-and a b) (let [x (trunc a)] (x/__and__ (trunc b))))
+(define (bbc-or a b) (let [x (trunc a)] (x/__or__ (trunc b))))
+(define (bbc-eor a b) (let [x (trunc a)] (x/__xor__ (trunc b))))
+(define (bbc-not a) (let [x (trunc a)] (x/__invert__)))
+
+(define (bbc-sgn x) (cond ((> x 0) 1) ((< x 0) -1) (else 0)))
+
+(define (bbc-val s)
+  (let [n (string->number s)] (if n n 0)))
+
+(define bbc-char-format "{:c}")
+(define (bbc-chr n) (bbc-char-format/format (trunc n)))
+
+(define (bbc-asc s)
+  (if (= (length s) 0)
+      -1
+      (let [b (s/encode "utf-8")] (b/__getitem__ 0))))
+
+(define (bbc-left s n) (substring s 0 (max 0 (min (trunc n) (length s)))))
+
+(define (bbc-right s n)
+  (let [l (length s)] (substring s (max 0 (- l (trunc n))) l)))
+
+(define (bbc-mid s p & n)
+  (let [l (length s)
+        start (max 0 (min l (- (trunc p) 1)))
+        end (if (null? n) l (max start (min l (+ start (trunc (car n))))))]
+    (substring s start end)))
+
+(define (bbc-instr s target & start)
+  (+ 1 (s/find target (if (null? start) 0 (max 0 (- (trunc (car start)) 1))))))
+
+;;; --- Tokenizer ---
+
+(define (bbc-push! lst x)
+  ;; Add x to the end of a growing list; (lst/append x) would turn a string into a symbol
+  (lst/extend (list x)))
+
+;; Tokens are (kind value line): kind is :num :str :id :kw :proc :fn :op :colon :eol or :eof
+(define bbc-keywords
+  '("PRINT" "LET" "IF" "THEN" "ELSE" "ENDIF" "FOR" "TO" "STEP" "NEXT" "REPEAT" "UNTIL"
+    "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
+    "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
+    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT"
+    "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
+    "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
+
+(define bbc-hex-digits "0123456789ABCDEFabcdef")
+(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-="))
+(define bbc-one-char-ops "+-*/^(),;'=<>~#")
+
+(define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
+
+(define (bbc-tokenize text)
+  (let [toks (list)
+        n (length text)
+        i 0
+        line 1
+        line-start #t]
+    (define (emit kind value) (bbc-push! toks (list kind value line)))
+    (define (char-at j) (if (< j n) (string-ref text j) #\nul))
+    (define (scan-while j ok?) (while (and (< j n) (ok? (string-ref text j))) (set! j (+ j 1))) j)
+    (while (< i n)
+      (let [c (string-ref text i)]
+        (cond
+          ((eq? c #\newline)
+           (emit :eol #f)
+           (set! line (+ line 1))
+           (set! line-start #t)
+           (set! i (+ i 1)))
+          ((or (eq? c #\space) (eq? c #\tab) (eq? c #\return))
+           (set! i (+ i 1)))
+          ((and line-start (c/isdigit))
+           (let [j (scan-while i (lambda (d) (d/isdigit)))]
+             (emit :line (string->number (substring text i j)))
+             (set! line-start #f)
+             (set! i j)))
+          ((eq? c #\")
+           (let [parts (list) j (+ i 1) done #f]
+             (while (not done)
+               (let [close (text/find "\"" j)]
+                 (if (< close 0) (error (str "BBC syntax error at line " line ": missing closing quote")))
+                 (bbc-push! parts (substring text j close))
+                 (if (eq? (char-at (+ close 1)) #\")
+                     (begin (bbc-push! parts "\"") (set! j (+ close 2)))
+                     (begin (set! done #t) (set! j (+ close 1))))))
+             (emit :str (str/join parts))
+             (set! line-start #f)
+             (set! i j)))
+          ((or (c/isdigit) (and (eq? c #\.) ((char-at (+ i 1))/isdigit)))
+           (let [j (scan-while i (lambda (d) (or (d/isdigit) (eq? d #\.))))]
+             (if (and (eq? (char-at j) #\E)
+                      (or ((char-at (+ j 1))/isdigit)
+                          (and (member (char-at (+ j 1)) (list #\+ #\-)) ((char-at (+ j 2))/isdigit))))
+                 (set! j (scan-while (+ j 2) (lambda (d) (d/isdigit)))))
+             (emit :num (string->number (substring text i j)))
+             (set! line-start #f)
+             (set! i j)))
+          ((eq? c #\&)
+           (let [j (scan-while (+ i 1) (lambda (d) (>= (bbc-hex-digits/find (str d)) 0)))]
+             (emit :num (string->number (substring text (+ i 1) j) 16))
+             (set! line-start #f)
+             (set! i j)))
+          ((or (c/isalpha) (eq? c #\_))
+           (let [j (scan-while i bbc-name-char?)]
+             (if (member (char-at j) (list #\$ #\%)) (set! j (+ j 1)))
+             (let [name (substring text i j)]
+               (cond ((equal? name "REM")
+                      (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
+                     ((member name bbc-keywords) (emit :kw name))
+                     ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
+                      (emit :proc (substring name 4)))
+                     ((and (> (length name) 2) (equal? (substring name 0 2) "FN"))
+                      (emit :fn (substring name 2)))
+                     (else (emit :id name))))
+             (set! line-start #f)
+             (set! i j)))
+          ((eq? c #\:)
+           (emit :colon #f)
+           (set! i (+ i 1)))
+          ((member (substring text i (min n (+ i 2))) bbc-two-char-ops)
+           (emit :op (substring text i (+ i 2)))
+           (set! line-start #f)
+           (set! i (+ i 2)))
+          ((>= (bbc-one-char-ops/find (str c)) 0)
+           (emit :op (str c))
+           (set! line-start #f)
+           (set! i (+ i 1)))
+          (else
+           (error (str "BBC syntax error at line " line ": unexpected character " c))))))
+    (emit :eol #f)
+    (emit :eof #f)
+    (emit :eof #f)
+    toks))
+
+;;; --- Parser helpers ---
+
+(define bbc-toks (list))
+(define bbc-pos 0)
+
+(define (bbc-peek) (nth bbc-toks bbc-pos))
+
+(define (bbc-advance!)
+  (let [tok (bbc-peek)]
+    (if (not (eq? (car tok) :eof)) (set! bbc-pos (+ bbc-pos 1)))
+    tok))
+
+(define (bbc-tok? tok kind value)
+  (and (eq? (car tok) kind) (or (not value) (equal? (nth tok 1) value))))
+
+(define (bbc-at? kind value) (bbc-tok? (bbc-peek) kind value))
+
+(define (bbc-accept! kind value)
+  (if (bbc-at? kind value) (begin (bbc-advance!) #t) #f))
+
+(define (bbc-fail what)
+  (let [tok (bbc-peek)]
+    (error (str "BBC syntax error at line " (nth tok 2) ": " what
+                (if (nth tok 1) (str " (at " (nth tok 1) ")") "")))))
+
+(define (bbc-expect! kind value what)
+  (if (bbc-at? kind value) (bbc-advance!) (bbc-fail (str "expected " what))))
+
+(define (bbc-at-line-end?) (or (bbc-at? :eol #f) (bbc-at? :eof #f)))
+
+(define (bbc-at-stmt-end?)
+  (or (bbc-at-line-end?) (bbc-at? :colon #f) (bbc-at? :kw "ELSE")))
+
+(define (bbc-skip-separators)
+  (while (or (bbc-at? :eol #f) (bbc-at? :colon #f) (bbc-at? :line #f))
+    (bbc-advance!)))
+
+;; BBC variables are lispy3 globals: a name lispy3 already uses gets a v- prefix
+(define bbc-special-names
+  '("quote" "quasiquote" "if" "cond" "and" "or" "define" "define-macro" "set!" "lambda"
+    "begin" "let" "dotimes" "while" "try" "catch" "save" "load" "else" "t" "nil"))
+(define bbc-own-vars (list))
+
+(define (bbc-bound? sym)
+  (try (begin (eval sym) #t) (catch e #f)))
+
+(define (bbc-var name)
+  (let [sym (string->symbol name)]
+    (cond ((member sym bbc-own-vars) sym)
+          ((or (member name bbc-special-names) (bbc-bound? sym))
+           (string->symbol (str "v-" name)))
+          (else (bbc-push! bbc-own-vars sym) sym))))
+
+(define (bbc-string-name? name)
+  (equal? (string-ref name (- (length name) 1)) #\$))
+
+;;; --- Expressions ---
+
+;; An expression is (form type): type :num, :str or :bool (a Lisp comparison)
+(define (bbc-e form type) (list form type))
+(define (bbc-type e) (nth e 1))
+
+(define (bbc-value e)
+  ;; A BBC value: a comparison becomes -1 or 0
+  (if (eq? (bbc-type e) :bool) (list 'if (car e) -1 0) (car e)))
+
+(define (bbc-cond e)
+  ;; A test: comparisons stay #t / #f, numbers are checked by the statement macros
+  (car e))
+
+(define (bbc-num form) (bbc-e form :num))
+
+(define (bbc-p-expr) (bbc-p-or))
+
+(define (bbc-logic op a b)
+  (if (and (eq? (bbc-type a) :bool) (eq? (bbc-type b) :bool))
+      (bbc-e (cond ((eq? op 'and) (list 'and (car a) (car b)))
+                   ((eq? op 'or) (list 'or (car a) (car b)))
+                   (else (list 'not (list 'eq? (car a) (car b)))))
+             :bool)
+      (bbc-num (list (cond ((eq? op 'and) 'bbc-and) ((eq? op 'or) 'bbc-or) (else 'bbc-eor))
+                     (bbc-value a) (bbc-value b)))))
+
+(define (bbc-p-or)
+  (let loop ((left (bbc-p-and)))
+    (cond ((bbc-accept! :kw "OR") (loop (bbc-logic 'or left (bbc-p-and))))
+          ((bbc-accept! :kw "EOR") (loop (bbc-logic 'eor left (bbc-p-and))))
+          (else left))))
+
+(define (bbc-p-and)
+  (let loop ((left (bbc-p-compare)))
+    (if (bbc-accept! :kw "AND")
+        (loop (bbc-logic 'and left (bbc-p-compare)))
+        left)))
+
+(define bbc-compare-ops '("=" "<>" "<" ">" "<=" ">="))
+
+(define (bbc-compare op a b)
+  (let [x (bbc-value a) y (bbc-value b)]
+    (bbc-e (cond ((equal? op "=") (list '= x y))
+                 ((equal? op "<>") (list 'not (list '= x y)))
+                 (else (list (string->symbol op) x y)))
+           :bool)))
+
+(define (bbc-p-compare)
+  (let loop ((left (bbc-p-add)))
+    (let [tok (bbc-peek)]
+      (if (and (eq? (car tok) :op) (member (nth tok 1) bbc-compare-ops))
+          (begin (bbc-advance!) (loop (bbc-compare (nth tok 1) left (bbc-p-add))))
+          left))))
+
+(define (bbc-plus a b)
+  (if (or (eq? (bbc-type a) :str) (eq? (bbc-type b) :str))
+      (bbc-e (list 'string-append (bbc-value a) (bbc-value b)) :str)
+      (bbc-num (list '+ (bbc-value a) (bbc-value b)))))
+
+(define (bbc-p-add)
+  (let loop ((left (bbc-p-mul)))
+    (cond ((bbc-accept! :op "+") (loop (bbc-plus left (bbc-p-mul))))
+          ((bbc-accept! :op "-") (loop (bbc-num (list '- (bbc-value left) (bbc-value (bbc-p-mul))))))
+          (else left))))
+
+(define (bbc-p-mul)
+  (let loop ((left (bbc-p-power)))
+    (cond ((bbc-accept! :op "*")
+           (loop (bbc-num (list '* (bbc-value left) (bbc-value (bbc-p-power))))))
+          ((bbc-accept! :op "/")
+           (loop (bbc-num (list '/ (list 'float (bbc-value left)) (bbc-value (bbc-p-power))))))
+          ((bbc-accept! :kw "DIV")
+           (loop (bbc-num (list 'quotient (list 'trunc (bbc-value left)) (list 'trunc (bbc-value (bbc-p-power)))))))
+          ((bbc-accept! :kw "MOD")
+           (loop (bbc-num (list 'remainder (list 'trunc (bbc-value left)) (list 'trunc (bbc-value (bbc-p-power)))))))
+          (else left))))
+
+(define (bbc-p-power)
+  (let loop ((left (bbc-p-unary)))
+    (if (bbc-accept! :op "^")
+        (loop (bbc-num (list 'expt (bbc-value left) (bbc-value (bbc-p-unary)))))
+        left)))
+
+(define (bbc-p-unary)
+  (cond ((bbc-accept! :op "-")
+         (let [e (bbc-p-unary)]
+           (if (number? (car e)) (bbc-num (- (car e))) (bbc-num (list '- (bbc-value e))))))
+        ((bbc-accept! :op "+") (bbc-p-unary))
+        ((bbc-accept! :kw "NOT")
+         (let [e (bbc-p-unary)]
+           (if (eq? (bbc-type e) :bool)
+               (bbc-e (list 'not (car e)) :bool)
+               (bbc-num (list 'bbc-not (bbc-value e))))))
+        (else (bbc-p-primary))))
+
+;; BBC function: (name lisp-function min-args max-args type)
+(define bbc-functions
+  '(("ABS" abs 1 1 :num) ("INT" floor 1 1 :num) ("SQR" sqrt 1 1 :num)
+    ("SIN" sin 1 1 :num) ("COS" cos 1 1 :num) ("TAN" tan 1 1 :num) ("ATN" atan 1 1 :num)
+    ("LN" log 1 1 :num) ("LOG" log10 1 1 :num) ("EXP" exp 1 1 :num) ("SGN" bbc-sgn 1 1 :num)
+    ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
+    ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
+    ("LEFT$" bbc-left 2 2 :str) ("RIGHT$" bbc-right 2 2 :str) ("MID$" bbc-mid 2 3 :str)
+    ("INSTR" bbc-instr 2 3 :num)))
+
+(define (bbc-lookup name table)
+  (cond ((null? table) #f)
+        ((equal? (car (car table)) name) (car table))
+        (else (bbc-lookup name (cdr table)))))
+
+(define (bbc-p-args)
+  ;; (a, b, ...) as BBC values; no brackets, no arguments
+  (if (bbc-accept! :op "(")
+      (let [args (list (bbc-value (bbc-p-expr)))]
+        (while (bbc-accept! :op ",") (bbc-push! args (bbc-value (bbc-p-expr))))
+        (bbc-expect! :op ")" ")")
+        args)
+      (list)))
+
+(define (bbc-p-function entry)
+  (let [lisp-name (nth entry 1)
+        args (if (= (nth entry 3) 1) (list (bbc-value (bbc-p-unary))) (bbc-p-args))]
+    (if (or (< (length args) (nth entry 2)) (> (length args) (nth entry 3)))
+        (bbc-fail (str (car entry) " needs " (nth entry 2) " to " (nth entry 3) " arguments")))
+    (bbc-e (cons lisp-name args) (nth entry 4))))
+
+(define (bbc-p-primary)
+  (let [tok (bbc-peek)
+        kind (car tok)
+        value (nth tok 1)]
+    (cond ((eq? kind :num) (bbc-advance!) (bbc-num value))
+          ((eq? kind :str) (bbc-advance!) (bbc-e value :str))
+          ((bbc-accept! :op "(")
+           (let [e (bbc-p-expr)]
+             (bbc-expect! :op ")" ")")
+             e))
+          ((eq? kind :id)
+           (bbc-advance!)
+           (if (bbc-at? :op "(") (bbc-fail "arrays are not supported yet"))
+           (bbc-e (bbc-var value) (if (bbc-string-name? value) :str :num)))
+          ((eq? kind :fn)
+           (bbc-advance!)
+           (bbc-e (append (list 'FN (string->symbol value)) (bbc-p-args))
+                  (if (bbc-string-name? value) :str :num)))
+          ((bbc-accept! :kw "TRUE") (bbc-num -1))
+          ((bbc-accept! :kw "FALSE") (bbc-num 0))
+          ((bbc-accept! :kw "PI") (bbc-num 'pi))
+          ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
+           (bbc-advance!)
+           (bbc-p-function (bbc-lookup value bbc-functions)))
+          (else (bbc-fail "expected an expression")))))
+
+;;; --- Statements ---
+
+(define (bbc-p-value-list)
+  (let [vals (list (bbc-value (bbc-p-expr)))]
+    (while (bbc-accept! :op ",") (bbc-push! vals (bbc-value (bbc-p-expr))))
+    vals))
+
+(define (bbc-p-variable)
+  (let [tok (bbc-expect! :id #f "a variable")]
+    (if (bbc-at? :op "(") (bbc-fail "arrays are not supported yet"))
+    (nth tok 1)))
+
+(define (bbc-p-assign)
+  (let [name (bbc-p-variable)
+        var (bbc-var name)]
+    (cond ((bbc-accept! :op "=") (list 'LET var (bbc-value (bbc-p-expr))))
+          ((bbc-accept! :op "+=")
+           (list 'LET var (list (if (bbc-string-name? name) 'string-append '+) var (bbc-value (bbc-p-expr)))))
+          ((bbc-accept! :op "-=") (list 'LET var (list '- var (bbc-value (bbc-p-expr)))))
+          (else (bbc-fail "expected = after the variable")))))
+
+(define (bbc-p-print)
+  (let [items (list)]
+    (while (not (bbc-at-stmt-end?))
+      (cond ((bbc-accept! :op ";") (bbc-push! items :semi))
+            ((bbc-accept! :op ",") (bbc-push! items :comma))
+            ((bbc-accept! :op "'") (bbc-push! items :nl))
+            ((bbc-accept! :kw "TAB")
+             (bbc-expect! :op "(" "( after TAB")
+             (let [x (bbc-value (bbc-p-expr))]
+               (if (bbc-accept! :op ",")
+                   (let [y (bbc-value (bbc-p-expr))]
+                     (bbc-push! items (list 'TAB x y)))
+                   (bbc-push! items (list 'TAB x)))
+               (bbc-expect! :op ")" ")")))
+            ((bbc-accept! :kw "SPC") (bbc-push! items (list 'SPC (bbc-value (bbc-p-unary)))))
+            (else (bbc-push! items (bbc-value (bbc-p-expr))))))
+    (cons 'PRINT items)))
+
+(define (bbc-returns? stmt)
+  ;; Does the statement always leave an FN with a value?
+  (and (pair? stmt) (list? stmt)
+       (cond ((eq? (car stmt) 'FN=) #t)
+             ((eq? (car stmt) 'IF)
+              (let [parts (bbc-split (cdr (cdr stmt)) 'ELSE)]
+                (and (bbc-second parts)
+                     (not (null? (car parts)))
+                     (not (null? (bbc-second parts)))
+                     (bbc-returns? (last (car parts)))
+                     (bbc-returns? (last (bbc-second parts))))))
+             (else #f))))
+
+(define (bbc-p-block terminators fn-body)
+  ;; Statements up to a keyword in terminators, which is left for the caller.
+  ;; An FN body ends after a statement that always returns.
+  (let [stmts (list) done #f]
+    (while (not done)
+      (bbc-skip-separators)
+      (let [tok (bbc-peek)]
+        (if (or (eq? (car tok) :eof)
+                (and (eq? (car tok) :kw) (member (nth tok 1) terminators)))
+            (set! done #t)
+            (let [stmt (bbc-p-statement)]
+              (bbc-push! stmts stmt)
+              (if (and fn-body (bbc-returns? stmt)) (set! done #t))
+              (if (not (or (bbc-at-stmt-end?) (bbc-at? :kw #f)))
+                  (bbc-fail "unexpected text after the statement"))))))
+    stmts))
+
+(define (bbc-p-line-stmts)
+  ;; The statements of a single-line IF, up to the end of the line or ELSE
+  (let [stmts (list)]
+    (while (not (or (bbc-at-line-end?) (bbc-at? :kw "ELSE")))
+      (if (not (bbc-accept! :colon #f))
+          (bbc-push! stmts (bbc-p-statement))))
+    stmts))
+
+(define (bbc-p-if)
+  (let [test (bbc-cond (bbc-p-expr))]
+    (bbc-accept! :kw "THEN")
+    (if (bbc-at-line-end?)
+        (let [then-part (bbc-p-block '("ELSE" "ENDIF") #f)]
+          (if (bbc-accept! :kw "ELSE")
+              (let [else-part (bbc-p-block '("ENDIF") #f)]
+                (bbc-expect! :kw "ENDIF" "ENDIF")
+                (append (list 'IF test) then-part (list 'ELSE) else-part))
+              (begin
+                (bbc-expect! :kw "ENDIF" "ENDIF")
+                (append (list 'IF test) then-part))))
+        (let [then-part (bbc-p-line-stmts)]
+          (if (bbc-accept! :kw "ELSE")
+              (append (list 'IF test) then-part (list 'ELSE) (bbc-p-line-stmts))
+              (append (list 'IF test) then-part))))))
+
+(define (bbc-p-for)
+  (let [var (bbc-var (bbc-p-variable))]
+    (bbc-expect! :op "=" "= after the FOR variable")
+    (let [from (bbc-value (bbc-p-expr))]
+      (bbc-expect! :kw "TO" "TO")
+      (let [to (bbc-value (bbc-p-expr))
+            step (if (bbc-accept! :kw "STEP") (list 'STEP (bbc-value (bbc-p-expr))) (list))
+            body (bbc-p-block '("NEXT") #f)]
+        (bbc-expect! :kw "NEXT" "NEXT")
+        (if (bbc-at? :id #f) (bbc-advance!))
+        (append (list 'FOR var from to) step body)))))
+
+(define (bbc-p-case)
+  (let [subject (bbc-value (bbc-p-expr))
+        clauses (list)
+        ends '("WHEN" "OTHERWISE" "ENDCASE")]
+    (bbc-expect! :kw "OF" "OF")
+    (bbc-skip-separators)
+    (while (not (bbc-accept! :kw "ENDCASE"))
+      (cond ((bbc-accept! :kw "WHEN")
+             (let [vals (bbc-p-value-list)]
+               (bbc-push! clauses (append (list 'WHEN vals) (bbc-p-block ends #f)))))
+            ((bbc-accept! :kw "OTHERWISE")
+             (bbc-push! clauses (cons 'OTHERWISE (bbc-p-block ends #f))))
+            (else (bbc-fail "expected WHEN, OTHERWISE or ENDCASE")))
+      (bbc-skip-separators))
+    (append (list 'CASE subject) clauses)))
+
+(define (bbc-p-parms)
+  (let [parms (list)]
+    (if (bbc-accept! :op "(")
+        (begin
+          (bbc-push! parms (bbc-var (bbc-p-variable)))
+          (while (bbc-accept! :op ",") (bbc-push! parms (bbc-var (bbc-p-variable))))
+          (bbc-expect! :op ")" ")")))
+    parms))
+
+(define (bbc-p-def)
+  (let [tok (bbc-advance!)
+        kind (car tok)]
+    (if (not (or (eq? kind :proc) (eq? kind :fn)))
+        (bbc-fail "expected PROC or FN after DEF"))
+    (let [head (cons (string->symbol (nth tok 1)) (bbc-p-parms))]
+      (if (eq? kind :proc)
+          (let [body (bbc-p-block '("ENDPROC") #f)]
+            (bbc-expect! :kw "ENDPROC" "ENDPROC")
+            (append (list 'DEF-PROC head) body))
+          (append (list 'DEF-FN head) (bbc-p-block '() #t))))))
+
+(define (bbc-p-statement)
+  (let [tok (bbc-peek)
+        kind (car tok)
+        value (nth tok 1)]
+    (cond ((eq? kind :id) (bbc-p-assign))
+          ((eq? kind :proc)
+           (bbc-advance!)
+           (append (list 'PROC (string->symbol value)) (bbc-p-args)))
+          ((bbc-accept! :op "=") (list 'FN= (bbc-value (bbc-p-expr))))
+          ((not (eq? kind :kw)) (bbc-fail "expected a statement"))
+          ((equal? value "PRINT") (bbc-advance!) (bbc-p-print))
+          ((equal? value "LET") (bbc-advance!) (bbc-p-assign))
+          ((equal? value "IF") (bbc-advance!) (bbc-p-if))
+          ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
+          ((equal? value "REPEAT")
+           (bbc-advance!)
+           (let [body (bbc-p-block '("UNTIL") #f)]
+             (bbc-expect! :kw "UNTIL" "UNTIL")
+             (append (list 'REPEAT) body (list 'UNTIL (bbc-cond (bbc-p-expr))))))
+          ((equal? value "WHILE")
+           (bbc-advance!)
+           (let [test (bbc-cond (bbc-p-expr))
+                 body (bbc-p-block '("ENDWHILE") #f)]
+             (bbc-expect! :kw "ENDWHILE" "ENDWHILE")
+             (append (list 'WHILE test) body)))
+          ((equal? value "CASE") (bbc-advance!) (bbc-p-case))
+          ((equal? value "DEF") (bbc-advance!) (bbc-p-def))
+          ((equal? value "LOCAL")
+           (bbc-advance!)
+           (let [vars (list (bbc-var (bbc-p-variable)))]
+             (while (bbc-accept! :op ",") (bbc-push! vars (bbc-var (bbc-p-variable))))
+             (cons 'LOCAL vars)))
+          ((or (equal? value "END") (equal? value "STOP")) (bbc-advance!) (list 'END))
+          ((equal? value "ENDPROC") (bbc-advance!) (list 'ENDPROC))
+          ((equal? value "EXIT")
+           (bbc-advance!)
+           (let [what (bbc-advance!)]
+             (cond ((bbc-tok? what :kw "FOR") (if (bbc-at? :id #f) (bbc-advance!)) (list 'EXIT-FOR))
+                   ((bbc-tok? what :kw "REPEAT") (list 'EXIT-REPEAT))
+                   ((bbc-tok? what :kw "WHILE") (list 'EXIT-WHILE))
+                   (else (bbc-fail "expected FOR, REPEAT or WHILE after EXIT")))))
+          ((member value '("GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT"))
+           (bbc-fail (str value " is not supported yet")))
+          (else (bbc-fail "expected a statement")))))
+
+;;; --- Entry points ---
+
+(define (bbc-expand text)
+  ;; The (bbc-program ...) form for BBC BASIC source text
+  (set! bbc-toks (bbc-tokenize text))
+  (set! bbc-pos 0)
+  (let [stmts (bbc-p-block '() #f)]
+    (if (not (bbc-at? :eof #f)) (bbc-fail "unexpected statement"))
+    (cons 'bbc-program stmts)))
+
+(define (bbc-source x)
+  ;; A macro argument as text: a string as written, anything else evaluated
+  (if (string? x) x (eval x)))
+
+(define-macro (bbc-run source)
+  (bbc-expand (bbc-source source)))
+
+(define-macro (bbc-load filename)
+  (bbc-expand (slurp (bbc-source filename))))

@@ -31,8 +31,21 @@ What the comparison shows:
   (`bbc-tail` / `tail`), even at the end of `IF` and `CASE` branches.
 - **Clojure's vars need a binding before `set!` works.** So `bbc-program` binds
   every variable once around the whole run.
-- **lispy3 is the only one without packages or namespaces.** The text reader of
-  the next step has to rename any BBC variable that clashes with a built-in.
+- **lispy3 is the only one without packages or namespaces.** So its text reader
+  renames a BBC variable that clashes with a lispy3 name: `list` becomes `v-list`.
+
+## BBC BASIC text
+
+[`basic/`](basic) holds BBC BASIC programs as text, read by the reader in
+`lisp/mini-basic.lisp` (lispy3 only for now) with `(bbc-load "compare/basic/structure.bas")`.
+`(pretty-print (bbc-expand (slurp "compare/basic/fact.bas")))` shows the macro
+forms a program becomes. Their `.out` files were checked against
+`python -m mini_basic -d bbc`. `structure.bas` matches exactly. Three things
+differ in mini_basic and follow BBC BASIC here:
+
+- `DEF FNfact(n) IF n<2 THEN =1 ELSE =n*FNfact(n-1)`: mini_basic reports a DEF FN header error.
+- `PRINT INSTR(c$,"World"), INSTR(c$,"x")`: mini_basic does not right-justify the numbers when a string literal appears inside a function's brackets.
+- `PRINT ;1;2;3`: mini_basic still pads to the 10-column field; BBC BASIC prints `123`.
 
 ## Running
 

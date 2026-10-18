@@ -102,6 +102,7 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(help)` / `(help 'name)` | list built-ins / explain one |
 | `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
 | `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
+| `(slurp "file.txt")` | the whole text file as one string; looks in `lisp/` if not found here |
 
 Only in `python lispy3-numpy.py` (NumPy optional):
 

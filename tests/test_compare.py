@@ -16,10 +16,11 @@ from support import REPO_DIR, LispyTestCase, lispy3
 
 COMPARE_DIR = os.path.join(REPO_DIR, 'compare')
 PROGRAMS = sorted(glob.glob(os.path.join(COMPARE_DIR, 'programs', '*.lisp')))
+BASIC_PROGRAMS = sorted(glob.glob(os.path.join(COMPARE_DIR, 'basic', '*.bas')))
 
 
 def expected_output(program: str) -> str:
-    with open(program[:-len('.lisp')] + '.out', encoding='utf-8') as f:
+    with open(os.path.splitext(program)[0] + '.out', encoding='utf-8') as f:
         return f.read()
 
 
@@ -53,6 +54,18 @@ class LispyCompareTest(LispyTestCase):
                 lispy3.load_workspace('mini-basic')
                 with contextlib.redirect_stdout(io.StringIO()) as out:
                     lispy3.load_workspace(program)
+                self.assertEqual(out.getvalue(), expected_output(program))
+
+    def test_basic_programs(self):
+        # BBC BASIC text read by the reader in lisp/mini-basic.lisp
+        self.assertGreater(len(BASIC_PROGRAMS), 0)
+        for program in BASIC_PROGRAMS:
+            with self.subTest(program=os.path.basename(program)):
+                lispy3.global_env.clear()
+                lispy3.global_env.update(lispy3.standard_env())
+                lispy3.load_workspace('mini-basic')
+                with contextlib.redirect_stdout(io.StringIO()) as out:
+                    self.ev(f'(bbc-load "{program}")')
                 self.assertEqual(out.getvalue(), expected_output(program))
 
 
