@@ -28,7 +28,7 @@ class NDOpArray:
             self.data = np.array(cleaned, dtype=dtype)
 
     def __repr__(self) -> str:
-        return f"#a({lp.lisp_str(self.data.tolist())})"
+        return f"#a{lp.lisp_str(self.data.tolist())}"
 
     def __getitem__(self, idx):
         if type(idx) is int:
@@ -101,7 +101,7 @@ def _sum_fn(arr: Any, axis: Any = None) -> Any:
 _orig_lisp_str = lp.lisp_str
 def _patched_lisp_str(exp: Any) -> str:
     if HAS_NUMPY and isinstance(exp, NDOpArray):
-        return f"#a({_orig_lisp_str(exp.data.tolist())})"
+        return f"#a{_orig_lisp_str(exp.data.tolist())}"
     return _orig_lisp_str(exp)
 
 lp.lisp_str = _patched_lisp_str
@@ -148,9 +148,6 @@ if HAS_NUMPY:
         'shape': lambda arr: list(arr.data.shape) if isinstance(arr, NDOpArray) else [],
     })
 
-for _key, _fn in extra_primitives.items():
-    lp.global_env[_key] = lp.Procedure(parms=['*args'], body=None, env=lp.global_env, native_fn=_fn, name=_key)
-
 
 # --- 2. Fast Primitives & Evaluator Loop ---
 def _fast_add(*args: Any) -> Any:
@@ -183,8 +180,22 @@ def _fast_eq(*args: Any) -> bool:
         return lp._lisp_eq(a, b)
     return all(lp._lisp_eq(args[i], args[i + 1]) for i in range(len(args) - 1))
 
-for _k, _fn in [('+', _fast_add), ('-', _fast_sub), ('<=', _fast_le), ('<', _fast_lt), ('=', _fast_eq)]:
-    lp.global_env[_k].native_fn = _fn
+FAST_NATIVES = {'+': _fast_add, '-': _fast_sub, '<=': _fast_le, '<': _fast_lt, '=': _fast_eq}
+
+# Add the extras through standard_env, so they count as built-ins everywhere it is
+# used: (save ...) leaves them out, the editor's Inspector does not list them, and
+# an environment rebuilt from standard_env() still has them.
+_orig_standard_env = lp.standard_env
+def _standard_env() -> lp.Env:
+    env = _orig_standard_env()
+    for key, fn in extra_primitives.items():
+        env[key] = lp.Procedure(parms=['*args'], body=None, env=env, native_fn=fn, name=key)
+    for key, fn in FAST_NATIVES.items():
+        env[key].native_fn = fn
+    return env
+
+lp.standard_env = _standard_env
+lp.global_env.update(_standard_env())
 
 _orig_eval_exp = lp.eval_exp
 SPECIAL_FORMS = lp.SPECIAL_FORMS
@@ -251,22 +262,6 @@ def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
                         x = macro_table[proc_exp](*x[1:])
                         continue
 
-                    nargs = len(x) - 1
-                    if nargs == 2:
-                        if proc_exp == '+':
-                            return fast_eval_exp(x[1], env) + fast_eval_exp(x[2], env)
-                        if proc_exp == '-':
-                            return fast_eval_exp(x[1], env) - fast_eval_exp(x[2], env)
-                        if proc_exp == '<=':
-                            return fast_eval_exp(x[1], env) <= fast_eval_exp(x[2], env)
-                        if proc_exp == '=':
-                            return fast_eval_exp(x[1], env) == fast_eval_exp(x[2], env)
-                        if proc_exp == 'vector-ref':
-                            return fast_eval_exp(x[1], env)[fast_eval_exp(x[2], env)]
-                    elif nargs == 3 and proc_exp == 'vector-set!':
-                        fast_eval_exp(x[1], env)[fast_eval_exp(x[2], env)] = fast_eval_exp(x[3], env)
-                        return None
-
                     curr = env
                     proc = None
                     while curr is not None:
@@ -276,6 +271,26 @@ def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
                         curr = curr.outer
                     if proc is None:
                         raise NameError(f"Undefined symbol: {proc_exp}")
+
+                    # Inline the hot built-ins, but only while the name still means the
+                    # built-in: a parameter or define called + or vector-ref wins.
+                    if type(proc) is Procedure and proc.native_fn is not None:
+                        name = proc.name
+                        nargs = len(x) - 1
+                        if nargs == 2:
+                            if name == '+':
+                                return _fast_add(fast_eval_exp(x[1], env), fast_eval_exp(x[2], env))
+                            if name == '-':
+                                return _fast_sub(fast_eval_exp(x[1], env), fast_eval_exp(x[2], env))
+                            if name == '<=':
+                                return _fast_le(fast_eval_exp(x[1], env), fast_eval_exp(x[2], env))
+                            if name == '=':
+                                return _fast_eq(fast_eval_exp(x[1], env), fast_eval_exp(x[2], env))
+                            if name == 'vector-ref':
+                                return fast_eval_exp(x[1], env)[fast_eval_exp(x[2], env)]
+                        elif nargs == 3 and name == 'vector-set!':
+                            fast_eval_exp(x[1], env)[fast_eval_exp(x[2], env)] = fast_eval_exp(x[3], env)
+                            return None
 
                     args = [fast_eval_exp(arg, env) for arg in x[1:]]
                     if type(proc) is Procedure:

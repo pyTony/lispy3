@@ -13,9 +13,10 @@
         ;; 1. Vectorized reset: replaces first 8192-iteration while loop
         (vector-fill! flags 1 1 stop)
         (set! j 1)
-        ;; In sieve-optimized.lisp, since (sum flags) counts the primes at the end,
-        ;; you only need to strike out multiples up to j = 63 (where prime = 129, 129^2 > 16387):
-        (while (<= j 63)
+        ;; 2. Vectorized strike-out: one slice assignment per prime instead of an inner loop.
+        ;; j runs all the way, like the original: item 0 (the number 3) is never sieved, so
+        ;; odd multiples of 3 are only struck out by their larger prime factors.
+        (while (<= j sieve-size)
           (if (= (vector-ref flags j) 1)
               (begin
                 (set! prime (+ (+ j j) 3))
