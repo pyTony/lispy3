@@ -1924,6 +1924,9 @@ class LispMachine(tk.Tk):
 
             try:
                 with contextlib.redirect_stdout(writer):
+                    # Expand each form just before it runs, as the REPL does, so
+                    # defun, quasiquote and macros defined earlier in the buffer work.
+                    form = L.expand(form, toplevel=True)
                     val = L.eval_exp(form, L.global_env)
             except Exception as e:                   # noqa: BLE001
                 self.listener_write(f"Error: {e}\n", "error")
