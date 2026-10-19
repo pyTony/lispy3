@@ -205,12 +205,14 @@ class TodoItemsTest(LispyTestCase):
             self.assertEqual(lispy3.lisp_str(value), expected)
 
     def test_every_ticked_item_has_examples(self):
+        """Every item ticked in TODO.md has examples in this file."""
         for item in ticked_items():
             with self.subTest(item):
                 self.assertTrue(any(item.startswith(key) for key in TODO_EXAMPLES),
                                 "ticked in TODO.md but no examples in tests/test_todo.py")
 
     def test_examples(self):
+        """Each TODO example gives its expected result, starting from a clean Lispy."""
         for item, examples in TODO_EXAMPLES.items():
             for source, expected in examples:
                 with self.subTest(item=item, source=source):

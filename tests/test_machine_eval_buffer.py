@@ -7,6 +7,7 @@ Run:  python -m unittest discover tests
 """
 import unittest
 
+import turtle_stub
 from support import fresh_global_env
 from test_machine_args import machine
 
@@ -25,6 +26,23 @@ class _FakeMachine:
     """Just enough of LispMachine for eval_buffer."""
     _parse_top_level_forms = machine.LispMachine._parse_top_level_forms
     _defined_name = staticmethod(machine.LispMachine._defined_name)
+    _eval_with_turtle = machine.LispMachine._eval_with_turtle
+    _eval_forms = machine.LispMachine._eval_forms
+    _echo_form = machine.LispMachine._echo_form
+    _report_form = machine.LispMachine._report_form
+    _report_form_error = machine.LispMachine._report_form_error
+    _ui_post = machine.LispMachine._ui_post
+
+    def _busy(self):
+        return False
+
+    def _start(self, work, on_done=None):
+        """Run the work here and now, as the Lisp thread would."""
+        work()
+        return True
+
+    def _ui(self, fn, *args):
+        return fn(*args)
 
     def __init__(self, content):
         self.tab = _Tab(content)
@@ -59,6 +77,7 @@ class EvalBufferTest(unittest.TestCase):
         fresh_global_env()
 
     def test_defun_in_a_buffer(self):
+        """F6 runs a buffer with defun and reports the function as defined."""
         out = _FakeMachine("(defun factorial (n) (cond ((= n 0) 1) (t (* n (factorial (- n 1))))))\n"
                            "(factorial 5)\n").run()
         self.assertNotIn("Error", out)
@@ -66,10 +85,28 @@ class EvalBufferTest(unittest.TestCase):
         self.assertIn("120", out)
 
     def test_macro_defined_earlier_in_the_buffer(self):
+        """F6 expands a macro defined earlier in the same buffer."""
         out = _FakeMachine("(define-macro (unless c body) `(if ,c #f ,body))\n"
                            "(unless #f 42)\n").run()
         self.assertNotIn("Error", out)
         self.assertIn("42", out)
+
+    def test_runs_again_after_the_turtle_window_was_closed(self):
+        """Closing the window leaves turtle's running flag off; F6 turns it back on."""
+        turtle_stub.TurtleScreen._RUNNING = False
+        out = _FakeMachine("(fd 10)\n").run()
+        self.assertNotIn("Error", out)
+        self.assertTrue(turtle_stub.TurtleScreen._RUNNING)
+
+    def test_a_closed_window_is_named_in_the_error(self):
+        """A turtle Terminator, which has no message, is reported in words."""
+        import lispy3
+
+        def closed(*args):
+            raise turtle_stub.Terminator()
+        lispy3.global_env['closed'] = closed
+        out = _FakeMachine("(closed)\n").run()
+        self.assertIn("Error: Turtle window was closed", out)
 
 
 if __name__ == "__main__":

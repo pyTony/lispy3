@@ -20,28 +20,34 @@ def colours(lang, text, **kw):
 
 class LispColours(unittest.TestCase):
     def test_files_load(self):
+        """The Lisp and Python syntax files load without errors."""
         self.assertEqual(ERRORS, [])
         self.assertEqual((LISP.name, PYTHON.name), ("Lisp", "Python"))
         self.assertEqual(LISP.line_comment, ";")
 
     def test_semicolon_in_string_is_not_a_comment(self):
+        """A ; inside a string is coloured as string, the real comment as comment."""
         self.assertEqual(colours(LISP, '(display "a; b") ; note "x"'), [
             ("string", '"a; b"'), ("comment", '; note "x"')])
 
     def test_escaped_quote_and_raw_string(self):
+        """Escaped quotes and triple-quoted raw strings stay one string each."""
         text = '"say \\"hi\\" ; ok" """raw "q" ; no\nline 2"""'
         self.assertEqual([t for t, _ in colours(LISP, text)], ["string", "string"])
 
     def test_unterminated_string_runs_to_the_end(self):
+        """An unclosed string is coloured to the end of the text."""
         self.assertEqual(colours(LISP, '"open ; (x)\n(y)'), [("string", '"open ; (x)\n(y)')])
 
     def test_atoms(self):
+        """Special forms, constants, characters, keywords, numbers, built-ins and variables."""
         text = "(if #t #\; :key -1.5e3 1+ x-1 #f)"
         self.assertEqual(colours(LISP, text, builtins={"1+"}, variables={"x-1"}), [
             ("special", "if"), ("constant", "#t"), ("char", "#\;"), ("keyword", ":key"),
             ("number", "-1.5e3"), ("builtin", "1+"), ("variable", "x-1"), ("constant", "#f")])
 
     def test_brackets_inside_strings_are_masked(self):
+        """Brackets inside strings and comments are not used for bracket matching."""
         text = '(f "(") ; )'
         mask = SH.code_mask(LISP.spans(text), len(text))
         self.assertEqual([i for i, c in enumerate(text) if c in "()" and not mask[i]], [0, 6])
@@ -49,6 +55,7 @@ class LispColours(unittest.TestCase):
 
 class PythonColours(unittest.TestCase):
     def test_python(self):
+        """Python keywords, function names, comments, strings and decorators."""
         text = 'def f(self):  # c "q"\n    return f"a#b" is None\n@deco\nclass A: pass'
         self.assertEqual(colours(PYTHON, text), [
             ("keyword", "def"), ("function", "f"), ("variable", "self"),
@@ -57,6 +64,7 @@ class PythonColours(unittest.TestCase):
             ("keyword", "class"), ("function", "A"), ("keyword", "pass")])
 
     def test_extension_picks_language(self):
+        """The file extension picks the language, in any case."""
         self.assertIs(SH.language_for("tool.PYW", LANGS), PYTHON)
         self.assertIsNone(SH.language_for("notes.txt", LANGS))
 

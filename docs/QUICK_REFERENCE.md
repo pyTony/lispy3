@@ -68,7 +68,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(quotient a b)` `(remainder a b)` `(modulo a b)` | Scheme's: round toward zero, left over with the sign of `a`; `modulo` = `mod` |
 | `(expt a b)` | power, exact for whole numbers |
 | `(even? n)` `(odd? n)` `(zero? x)` `(positive? x)` `(negative? x)` `(integer? x)` | number tests |
-| `(exact 3.0)` `(inexact 3)` | `3` and `3.0` |
+| `(exact 3.0)` `(inexact 3)` | `3` and `3.0`; `(exact 0.1)` is `1/10` |
 | `(number->string 255 16)` `(string->number "ff" 16)` | `"ff"` and `255`, any base from 2 to 36 |
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
 | `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
@@ -117,7 +117,7 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 | `(vector-fill! v x [start] [stop])` | set a range of items to `x` |
 | `(vector-slice-set! v start stop step x)` | set every `step`th item from `start` below `stop` to `x` |
 | `(sum v)` | total of the items |
-| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |
+| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(a-dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |
 
 ## Turtle graphics
 
@@ -126,6 +126,7 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 | `fd bk lt rt pu pd goto setheading circle color ...` | everything in Python's `turtle` |
 | `(push-pose)` / `(pop-pose)` | remember / return to position and heading |
 | `(clear-poses)` | forget remembered poses |
+| `(onscroll f)` / `(onscroll #f)` | call `(f x y step)` on each mouse wheel turn, step 1 away from you, -1 towards; stop |
 | `(reinit-turtle)` / `(reset)` | reopen a closed turtle window |
 
 ## Limits to remember

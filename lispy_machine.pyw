@@ -10,6 +10,8 @@ Features
   * F6 / Ctrl+Shift+Enter : evaluate whole buffer
   * F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
+  * Code runs in the background, so the window stays live; the Stop button
+    (or Ctrl+Break) ends a long or endless run
   * View > Plain lispy3 REPL: the Listener behaves like `python lispy3.py`
     (lispy3> prompt, multi-line input, Tab completion)
   * Paren matching, auto-indent, symbol completion (Ctrl+Space)
@@ -25,13 +27,17 @@ Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
 """
 import io
 import contextlib
+import ctypes
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
 import sys
 import threading
+import time
+import turtle
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter import font as tkfont
@@ -235,6 +241,37 @@ def listener_to_code(log: str) -> str:
             out.append(";; " + line)
     return "\n".join(out) + "\n" if out else ""
 
+def context_menu_items(has_selection: bool, editable: bool) -> list[tuple[str, str, bool]]:
+    """The right-click menu: [(label, virtual event, enabled), ...]."""
+    return [("Cut",        "<<Cut>>",       has_selection and editable),
+            ("Copy",       "<<Copy>>",      has_selection),
+            ("Paste",      "<<Paste>>",     editable),
+            ("Select all", "<<SelectAll>>", True)]
+
+def add_context_menu(widget, read_only: bool = False):
+    """Right-click (and Ctrl+click on macOS) on a Text or Entry opens Cut / Copy / Paste.
+
+    A disabled widget, or one marked read_only, offers only Copy and Select all."""
+    menu = tk.Menu(widget, tearoff=0)
+
+    def popup(event):
+        widget.focus_set()
+        if isinstance(widget, tk.Entry):
+            has_sel = widget.selection_present()
+        else:
+            has_sel = bool(widget.tag_ranges("sel"))
+        menu.delete(0, "end")
+        for label, virtual, enabled in context_menu_items(has_sel, not read_only and str(widget.cget("state")) != "disabled"):
+            menu.add_command(label=label, state="normal" if enabled else "disabled",
+                             command=lambda v=virtual: widget.event_generate(v))
+        menu.tk_popup(event.x_root, event.y_root)
+        return "break"
+
+    widget.bind("<Button-3>", popup, add="+")
+    if sys.platform == "darwin":
+        widget.bind("<Button-2>", popup, add="+")
+        widget.bind("<Control-Button-1>", popup, add="+")
+
 def preview(val, limit: int = 40) -> str:
     """A value on one short line for the Inspector's list."""
     try:
@@ -414,7 +451,7 @@ class _ListenerWriter(io.TextIOBase):
 
     def write(self, s):                       # noqa: D401
         if s:
-            self.app.listener_write(s, "result")
+            self.app._ui_post(self.app.listener_write, s, "result")
         return len(s)
 
     def writable(self):
@@ -423,6 +460,51 @@ class _ListenerWriter(io.TextIOBase):
     def flush(self):
         pass
         
+# =============================================================================
+# Running Lisp off the Tk thread
+# =============================================================================
+# Lisp code runs on its own thread so the window stays live and a Stop button
+# can end an endless loop. Tk (and so turtle) may only be used from the main
+# thread, so these built-ins are handed over to it and waited for.
+GUI_BUILTINS = frozenset(turtle.__all__) | {
+    'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help', 'onscroll'}
+
+
+class Stopped(BaseException):
+    """Raised in the evaluation thread by Stop. Not an Exception, so (try ...) cannot catch it."""
+
+
+def stop_thread(thread: threading.Thread) -> bool:
+    """Raise Stopped inside `thread` at its next Python step."""
+    if thread.ident is None or not thread.is_alive():
+        return False
+    ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(thread.ident), ctypes.py_object(Stopped))
+    return True
+
+
+class _OnMainThread:
+    """A turtle object (Turtle, Screen ...) used from Lisp: its methods run on the Tk thread."""
+    def __init__(self, app, obj):
+        object.__setattr__(self, "_app", app)
+        object.__setattr__(self, "_obj", obj)
+
+    def __getattr__(self, name):
+        value = self._app._ui(getattr, self._obj, name)
+        if callable(value):
+            return lambda *args: self._app._gui_call(value, *args)
+        return value
+
+    def __setattr__(self, name, value):
+        self._app._ui(setattr, self._obj, name, value)
+
+    def __repr__(self):
+        return repr(self._obj)
+
+
+def _is_gui_object(value) -> bool:
+    return type(value).__module__ in ("turtle", "tkinter")
+
+
 # =============================================================================
 # Editor tab
 # =============================================================================
@@ -487,9 +569,10 @@ class EditorTab(tk.Frame):
         t.bind("<<Paste>>", self._schedule_highlight)
         t.bind("<<Cut>>",   self._schedule_highlight)
 
-        # X11 middle-click paste and Windows right-click paste
+        # X11 middle-click paste; right-click opens Cut / Copy / Paste
         t.bind("<ButtonRelease-2>", self._on_key)
         t.bind("<ButtonRelease-3>", self._on_key)
+        add_context_menu(t)
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -1070,6 +1153,7 @@ class GuideWindow(tk.Toplevel):
                                  spacing1=1, spacing3=2, cursor="arrow")
         pane.add(self.text, minsize=300, stretch="always")
         self._setup_tags()
+        add_context_menu(self.text, read_only=True)
         # Read-only, but text can still be selected and copied
         self.text.bind("<Key>", lambda e: None if (e.state & 0x4 and e.keysym.lower() in ("c", "a"))
                        or e.keysym in ("Up", "Down", "Prior", "Next", "Home", "End") else "break")
@@ -1292,7 +1376,11 @@ class LispMachine(tk.Tk):
         self.console_ready = False  # the plain REPL prompt is showing, waiting for input
         self.update_pending = False # Help > Update pulled a new version, not running yet
         self.guide_window = None    # the Help window, made the first time it is opened
+        self._job = None            # the thread running Lisp code, while it runs
+        self._calls = queue.Queue() # what that thread hands to the Tk thread: (fn, args, box, done)
         L.global_env['help'] = self.lisp_help
+        L.global_env['sleep'] = self._sleep
+        self._gui_builtins_on_main()
 
         self._setup_style()
         self._build_menu()
@@ -1315,6 +1403,7 @@ class LispMachine(tk.Tk):
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
+        self.listener_write(";; Stop (Ctrl+Break) ends code that runs too long.\n", "info")
         self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n", "info")
         self.listener_write(";; View > Plain lispy3 REPL switches the Listener to the lispy3 prompt.\n\n", "info")
         for err in SYNTAX_ERRORS:
@@ -1405,12 +1494,13 @@ class LispMachine(tk.Tk):
         edit_m.add_command(label="Complete symbol",  accelerator="Ctrl+Space", command=lambda: self._call_editor("_complete"))
         bar.add_cascade(label="Edit", menu=edit_m)
 
-        eval_m = tk.Menu(bar, tearoff=0)
+        self.eval_menu = eval_m = tk.Menu(bar, tearoff=0)
         eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
         eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
+        eval_m.add_command(label="Stop", accelerator="Ctrl+Break", command=self.stop, state="disabled")
         eval_m.add_separator()
         eval_m.add_command(label="Listener to buffer",  command=self.listener_to_buffer)
         eval_m.add_command(label="Clear listener",      accelerator="Ctrl+L", command=self.clear_listener)
@@ -1588,6 +1678,7 @@ class LispMachine(tk.Tk):
         setup_code_tags(self.inspector)
         self.inspector.insert("1.0", "(no value yet)")
         self.inspector.configure(state="disabled")
+        add_context_menu(self.inspector)
 
         # ---- right-hand area: search bar (hidden) + editor notebook ----
         right_area = tk.Frame(hpane, bg=COLORS["bg"])
@@ -1607,6 +1698,12 @@ class LispMachine(tk.Tk):
         hdr.pack(fill="x")
         tk.Label(hdr, text="LISTENER", bg=COLORS["listener_bg"], fg="#888",
                  font=FONT_UI_BOLD, anchor="w", padx=8, pady=2).pack(side="left")
+        # Stop is live only while Lisp code runs (see _set_running)
+        self.stop_button = tk.Button(hdr, text="■ Stop", bg=COLORS["side_bg"], fg="#ddd",
+                                     activebackground=COLORS["error"], disabledforeground="#666",
+                                     font=FONT_UI, borderwidth=0, padx=8, state="disabled",
+                                     command=self.stop)
+        self.stop_button.pack(side="right", padx=4, pady=2)
         tk.Button(hdr, text="Clear", bg=COLORS["side_bg"], fg="#ddd",
                   font=FONT_UI, borderwidth=0, padx=8,
                   command=self.clear_listener).pack(side="right", padx=4, pady=2)
@@ -1621,6 +1718,7 @@ class LispMachine(tk.Tk):
             borderwidth=0, highlightthickness=0, padx=8, pady=4)
         self.listener_text.pack(fill="both", expand=True)
         self.listener_text.configure(state="disabled")
+        add_context_menu(self.listener_text)
         self.listener_text.tag_configure("prompt", foreground=COLORS["prompt"], font=FONT_MONO_BOLD)
         self.listener_text.tag_configure("result", foreground=COLORS["result"])
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
@@ -1656,6 +1754,7 @@ class LispMachine(tk.Tk):
             highlightthickness=1, highlightbackground="#333",
             highlightcolor=COLORS["prompt"])
         self.listener_input.pack(side="left", fill="x", expand=True, ipady=4)
+        add_context_menu(self.listener_input)
         self.listener_input.bind("<Return>",  lambda e: (self._listener_submit(), "break")[1])
         self.listener_input.bind("<Control-space>", self._listener_complete)
         self.listener_input.bind("<Control-Key-space>", self._listener_complete)
@@ -1669,6 +1768,9 @@ class LispMachine(tk.Tk):
     def _bind_global(self):
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
         self.bind_all("<F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
+        # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
+        self.bind_all("<Control-Cancel>", self.stop)
+        self.bind_all("<Control-Break>", self.stop)
         self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
         self.bind_all("<Control-o>", lambda e: self.open_file())
         self.bind_all("<Control-s>", lambda e: self.save_current())
@@ -1812,31 +1914,164 @@ class LispMachine(tk.Tk):
     # =========================================================================
     # Evaluation
     # =========================================================================
+    def _gui_builtins_on_main(self, env=None):
+        """Make the turtle and window built-ins run on the Tk thread, whichever thread calls them."""
+        env = L.global_env if env is None else env
+        for name in GUI_BUILTINS & set(env):
+            value = env[name]
+            if isinstance(value, L.Procedure) and value.native_fn is not None:
+                if not getattr(value.native_fn, "on_main", False):
+                    value.native_fn = self._on_main_fn(value.native_fn)
+            elif callable(value) and not getattr(value, "on_main", False):
+                env[name] = self._on_main_fn(value)
+
+    def _on_main_fn(self, fn):
+        def call(*args):
+            return self._gui_call(fn, *args)
+        call.on_main = True
+        return call
+
+    def _gui_call(self, fn, *args):
+        """fn(*args) on the Tk thread; turtle objects it returns are wrapped to do the same."""
+        args = [a._obj if isinstance(a, _OnMainThread) else a for a in args]
+        result = self._ui(fn, *args)
+        return _OnMainThread(self, result) if _is_gui_object(result) else result
+
+    def _ui(self, fn, *args):
+        """Call fn(*args) on the Tk thread and return its result. From the Lisp thread this waits."""
+        if threading.current_thread() is threading.main_thread():
+            return fn(*args)
+        box, done = {}, threading.Event()
+        self._calls.put((fn, args, box, done))
+        while not done.wait(0.05):          # short waits let Stop's exception in
+            pass
+        if "error" in box:
+            raise box["error"]
+        return box.get("value")
+
+    def _ui_post(self, fn, *args):
+        """Call fn(*args) on the Tk thread without waiting for it (Listener output)."""
+        if threading.current_thread() is threading.main_thread():
+            fn(*args)
+        else:
+            self._calls.put((fn, args, None, None))
+
+    def _sleep(self, seconds):
+        """(sleep seconds) that Stop can cut short."""
+        end = time.monotonic() + float(seconds)
+        while (left := end - time.monotonic()) > 0:
+            time.sleep(min(left, 0.05))
+
+    def _busy(self) -> bool:
+        """True, and say so, while Lisp code is still running."""
+        if self._job is None:
+            return False
+        self.listener_write(";; Still running. Press Stop (Ctrl+Break) to end it.\n", "error")
+        return True
+
+    def _start(self, work, on_done=None) -> bool:
+        """Run work() on the Lisp thread; then on_done(result, stopped) on the Tk thread.
+
+        Returns False, and runs nothing, while earlier code is still running.
+        """
+        if self._busy():
+            return False
+
+        def body():
+            try:
+                result, stopped = work(), False
+            except Stopped:
+                result, stopped = None, True
+            while True:                      # a late Stop must not lose the hand-back
+                try:
+                    self._calls.put((self._finish, (result, stopped, on_done), None, None))
+                    return
+                except Stopped:
+                    stopped = True
+
+        # Deep (non-tail) recursion needs more stack than a thread gets by default.
+        old_size = threading.stack_size(64 * 1024 * 1024)
+        try:
+            self._job = threading.Thread(target=body, name="lispy-eval", daemon=True)
+        finally:
+            threading.stack_size(old_size)
+        self._set_running(True)
+        self._job.start()
+        self.after(1, self._pump)
+        return True
+
+    def _pump(self):
+        """Do what the Lisp thread asks of the Tk thread, then give the window a turn."""
+        deadline = time.monotonic() + 0.03
+        while self._job is not None and time.monotonic() < deadline:
+            try:
+                fn, args, box, done = self._calls.get(timeout=max(0.0, deadline - time.monotonic()))
+            except queue.Empty:
+                break
+            try:
+                value = fn(*args)
+                if box is not None:
+                    box["value"] = value
+            except BaseException as e:      # noqa: BLE001 - handed back to the Lisp thread
+                if box is not None:
+                    box["error"] = e
+            finally:
+                if done is not None:
+                    done.set()
+        if self._job is not None:
+            try:
+                self.after(1, self._pump)
+            except tk.TclError:              # the window is gone
+                pass
+
+    def _finish(self, result, stopped, on_done):
+        self._job = None
+        self._set_running(False)
+        if stopped:
+            self.listener_write(";; Stopped.\n", "error")
+            self.set_inspector("Stopped")
+        if on_done is not None:
+            on_done(result, stopped)
+
+    def stop(self, event=None):
+        """Stop button / Ctrl+Break: end the Lisp code that is running."""
+        if self._job is not None and stop_thread(self._job):
+            self.status_right.configure(text="Stopping...")
+        return "break"
+
+    def _set_running(self, running: bool):
+        self.stop_button.configure(state="normal" if running else "disabled",
+                                   bg=COLORS["error"] if running else COLORS["side_bg"])
+        self.status_right.configure(text="Running..." if running else "Ready")
+        try:
+            self.eval_menu.entryconfigure("Stop", state="normal" if running else "disabled")
+        except tk.TclError:
+            pass
+
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
+        return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
+
+    def _eval_with_turtle(self, evaluate):
+        """Call `evaluate()` with stdout streamed to the Listener. Returns (value, error)."""
         import turtle as _turtle
 
         # The turtle Screen is a process-wide singleton whose _RUNNING flag
         # can be flipped to False by transient WM events when a second Tk
-        # root (the editor) exists in the same process. Force it back on
-        # before every evaluation.
+        # root (the editor) exists in the same process, and closing the
+        # window leaves it False. Force it back on before every evaluation,
+        # so the next drawing command opens a fresh window.
         _turtle.TurtleScreen._RUNNING = True
 
-        writer = _ListenerWriter(self)
         try:
-            with contextlib.redirect_stdout(writer):
-                ast = L.parse(code)
-                val = L.eval_exp(ast, L.global_env)
-            return val, None
+            with contextlib.redirect_stdout(_ListenerWriter(self)):
+                return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                writer = _ListenerWriter(self)
-                with contextlib.redirect_stdout(writer):
-                    ast = L.parse(code)
-                    val = L.eval_exp(ast, L.global_env)
-                return val, None
+                with contextlib.redirect_stdout(_ListenerWriter(self)):
+                    return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
                 return None, RuntimeError(
@@ -1846,7 +2081,7 @@ class LispMachine(tk.Tk):
         
     def eval_form_at_cursor(self):
         tab = self.current_tab()
-        if not tab:
+        if not tab or self._busy():
             return
         t = tab.text
         content = t.get("1.0", "end-1c")
@@ -1869,8 +2104,8 @@ class LispMachine(tk.Tk):
         form = content[start:end]
         self.listener_write("USER> ", "prompt")
         self.listener_write(f"{form.strip()}\n", "code")
-        val, err = self._run(form)
-        self._report_eval(val, err, code=form)
+        self._start(lambda: self._run(form),
+                    lambda result, stopped: stopped or self._report_eval(*result, code=form))
 
     def _write_closers(self, tab, content: str, closers: str) -> str:
         """Put the missing `closers` at the end of the last code line and say so."""
@@ -1891,7 +2126,7 @@ class LispMachine(tk.Tk):
 
     def eval_buffer(self):
         tab = self.current_tab()
-        if not tab:
+        if not tab or self._busy():
             return
         content = tab.get_content()
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
@@ -1911,49 +2146,61 @@ class LispMachine(tk.Tk):
             self.listener_write(";; --- done ---\n", "info")
             return
 
-        writer = _ListenerWriter(self)
+        self._start(lambda: self._eval_forms(forms))
+
+    def _eval_forms(self, forms):
+        """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread."""
         for form in forms:
-            try:
-                form_str = L.lisp_str(form)
-            except Exception:
-                form_str = repr(form)
-            if len(form_str) > 120:
-                form_str = form_str[:117] + "..."
-            self.listener_write("USER> ", "prompt")
-            self.listener_write(f"{form_str}\n", "code")
+            self._ui(self._echo_form, form)
 
-            try:
-                with contextlib.redirect_stdout(writer):
-                    # Expand each form just before it runs, as the REPL does, so
-                    # defun, quasiquote and macros defined earlier in the buffer work.
-                    form = L.expand(form, toplevel=True)
-                    val = L.eval_exp(form, L.global_env)
-            except Exception as e:                   # noqa: BLE001
-                self.listener_write(f"Error: {e}\n", "error")
-                self.set_inspector(f"Error: {e}")
-                self.listener_write(";; --- aborted ---\n", "info")
+            def run_form(form=form):
+                # Expand each form just before it runs, as the REPL does, so
+                # defun, quasiquote and macros defined earlier in the buffer work.
+                form = L.expand(form, toplevel=True)
+                return form, L.eval_exp(form, L.global_env)
+
+            result, err = self._eval_with_turtle(run_form)
+            if err is not None:
+                self._ui(self._report_form_error, err)
                 return
+            self._ui(self._report_form, *result)
+        self._ui(self.listener_write, ";; --- done ---\n", "info")
 
-            if val is None:
-                name = self._defined_name(form)
-                if name:
-                    self.listener_write(f";; {name} defined\n", "info")
-                    self.inspect_symbol(name)
-                else:
-                    self.listener_write(";; ok\n", "info")
-                    self.set_inspector("(none)")
+    def _echo_form(self, form):
+        try:
+            form_str = L.lisp_str(form)
+        except Exception:
+            form_str = repr(form)
+        if len(form_str) > 120:
+            form_str = form_str[:117] + "..."
+        self.listener_write("USER> ", "prompt")
+        self.listener_write(f"{form_str}\n", "code")
+
+    def _report_form_error(self, e):
+        msg = L.RECURSION_HINT if isinstance(e, RecursionError) else (str(e) or type(e).__name__)
+        self.listener_write(f"Error: {msg}\n", "error")
+        self.set_inspector(f"Error: {msg}")
+        self.listener_write(";; --- aborted ---\n", "info")
+
+    def _report_form(self, form, val):
+        if val is None:
+            name = self._defined_name(form)
+            if name:
+                self.listener_write(f";; {name} defined\n", "info")
+                self.inspect_symbol(name)
             else:
-                try:
-                    val_str = L.lisp_str(val)
-                except Exception:
-                    val_str = repr(val)
-                self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
-                try:
-                    self.set_inspector(L.pretty_print(val, width=self._inspector_cols()))
-                except Exception:
-                    self.set_inspector(val_str)
-
-        self.listener_write(";; --- done ---\n", "info")
+                self.listener_write(";; ok\n", "info")
+                self.set_inspector("(none)")
+        else:
+            try:
+                val_str = L.lisp_str(val)
+            except Exception:
+                val_str = repr(val)
+            self.listener_write(self._fmt_result(val, val_str) + "\n", "code")
+            try:
+                self.set_inspector(L.pretty_print(val, width=self._inspector_cols()))
+            except Exception:
+                self.set_inspector(val_str)
 
     @staticmethod
     def _defined_name(code):
@@ -2059,7 +2306,9 @@ class LispMachine(tk.Tk):
         self.set_inspector(pretty)
 
     def _run_silent(self, code: str):
-        val, err = self._run(code)
+        self._start(lambda: self._run(code), lambda result, stopped: stopped or self._show_silent(*result))
+
+    def _show_silent(self, val, err):
         if err is not None:
             self.listener_write(f"Error: {err}\n", "error")
         elif val is not None:
@@ -2076,9 +2325,9 @@ class LispMachine(tk.Tk):
             self._console_return()
             return
         code = self.listener_input.get()
-        self.listener_input.delete(0, "end")
-        if not code.strip():
+        if not code.strip() or self._busy():
             return
+        self.listener_input.delete(0, "end")
         pos = L.close_position(code)
         code, closers = L.auto_close(code)   # show the brackets the reader adds
         self.listener_history.append(code)
@@ -2094,8 +2343,8 @@ class LispMachine(tk.Tk):
         if code.strip().lower() == "exit":
             self._on_close()
             return
-        val, err = self._run(code)
-        self._report_eval(val, err, code=code)
+        self._start(lambda: self._run(code),
+                    lambda result, stopped: stopped or self._report_eval(*result, code=code))
 
     # ---------- plain lispy3 REPL mode ----------
     # The Listener text itself becomes the console: the prompt and what you type
@@ -2174,39 +2423,54 @@ class LispMachine(tk.Tk):
         line = self._console_input()
         t.insert("end", "\n")
         self.console_ready = False
-        for one_line in line.split("\n"):   # pasted lines are read one by one, as in a terminal
-            if not self._plain_submit(one_line):
-                break
-        try:
-            if self.plain_repl.get():
-                self._show_prompt()
-        except tk.TclError:                  # `exit` closed the window
-            pass
+        self._plain_feed(line.split("\n"))   # pasted lines are read one by one, as in a terminal
         return "break"
 
-    def _plain_submit(self, line: str) -> bool:
-        """One line typed at the plain REPL: evaluate once the form is complete, as lispy3.repl does.
+    def _plain_feed(self, lines: list[str]):
+        """Give the plain REPL its lines; a complete form runs in the background, then the rest follow."""
+        while lines:
+            line = lines.pop(0)
+            if not self.repl_pending and line.strip().lower() == "exit":
+                self._on_close()
+                try:
+                    if self.plain_repl.get():    # quitting was cancelled
+                        self._show_prompt()
+                except tk.TclError:              # the window is closed
+                    pass
+                return
+            code = self._plain_submit(line)
+            if code is not None:
+                def done(result, stopped, code=code):
+                    if stopped:
+                        lines.clear()
+                    else:
+                        self._report_eval(*result, code=code, plain=True)
+                    self._plain_feed(lines)
+                self._start(lambda: self._run(code), done)
+                return
+        if self.plain_repl.get():
+            self._show_prompt()
 
-        Returns False after `exit`.
+    def _plain_submit(self, line: str):
+        """One line typed at the plain REPL, as lispy3.repl reads it.
+
+        Returns the code to evaluate once the form is complete, else None.
         """
         if not self.repl_pending and not line.strip():
-            return True
-        if not self.repl_pending and line.strip().lower() == "exit":
-            self._on_close()
-            return False
+            return None
         self.listener_history.append(line)
         self.listener_hist_idx = len(self.listener_history)
         code = f"{self.repl_pending}\n{line}" if self.repl_pending else line
         if L.count_balance(code) > 0:
             self.repl_pending = code
-            return True
+            return None
         self.repl_pending = ""
-        val, err = self._run(code)
-        self._report_eval(val, err, code=code, plain=True)
-        return True
+        return code
 
     def _cancel_pending(self, event=None):
-        """Esc: drop what is typed and any unfinished form."""
+        """Esc: drop what is typed and any unfinished form, or stop the code that is running."""
+        if self._job is not None:
+            return self.stop()
         if not self.console_ready:
             return "break"
         if self.repl_pending or self._console_input():
@@ -2552,11 +2816,16 @@ class LispMachine(tk.Tk):
             "F6  eval whole buffer\n"
             "F7  inspect symbol at cursor\n"
             "F9  eval listener input\n"
+            "Ctrl+Break  stop the running code\n"
             "Ctrl+Space  complete symbol\n"
             "Ctrl+/      toggle comment\n"
         )
 
     def _on_close(self):
+        if self._job is not None:
+            if not messagebox.askyesno("Code is running", "Lisp code is still running. Stop it and quit?"):
+                return
+            stop_thread(self._job)
         dirty = [t for t in self.tabs.values() if t.dirty]
         if dirty:
             if not messagebox.askyesno(

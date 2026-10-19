@@ -34,9 +34,11 @@ class PiDigitsTest(LispyTestCase):
         self.printed = out.getvalue().strip()
 
     def test_program_prints_100_decimals(self):
+        """lisp/pi-digits.lisp prints the first 100 decimals of pi correctly."""
         self.assertEqual(self.printed, python_pi(100))
 
     def test_other_lengths(self):
+        """pi-digits is right for 1, 5, 31 and 50 decimals too."""
         for decimals in (1, 5, 31, 50):
             with self.subTest(decimals=decimals):
                 self.assertEqual(self.ev(f'(pi-digits {decimals})').value, python_pi(decimals))
