@@ -531,7 +531,7 @@
   (or (bbc-at-line-end?) (bbc-at? :colon #f) (bbc-at? :kw "ELSE")))
 
 (define (bbc-skip-separators)
-  (while (or (bbc-at? :eol #f) (bbc-at? :colon #f) (bbc-at? :line #f))
+  (while (or (bbc-at? :eol #f) (bbc-at? :colon #f))
     (bbc-advance!)))
 
 ;; BBC variables are lispy3 globals: a name lispy3 already uses gets a v- prefix
@@ -849,51 +849,56 @@
             (append (list 'DEF-PROC head) body))
           (append (list 'DEF-FN head) (bbc-p-block '() #t))))))
 
-(define (bbc-p-statement)
-  (let [tok (bbc-peek)
-        kind (car tok)
-        value (nth tok 1)]
-    (cond ((eq? kind :id) (bbc-p-assign))
-          ((eq? kind :proc)
-           (bbc-advance!)
-           (append (list 'PROC (string->symbol value)) (bbc-p-args)))
-          ((bbc-accept! :op "=") (list 'FN= (bbc-value (bbc-p-expr))))
-          ((not (eq? kind :kw)) (bbc-fail "expected a statement"))
-          ((equal? value "PRINT") (bbc-advance!) (bbc-p-print))
-          ((equal? value "LET") (bbc-advance!) (bbc-p-assign))
-          ((equal? value "IF") (bbc-advance!) (bbc-p-if))
-          ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
-          ((equal? value "REPEAT")
-           (bbc-advance!)
-           (let [body (bbc-p-block '("UNTIL") #f)]
-             (bbc-expect! :kw "UNTIL" "UNTIL")
-             (append (list 'REPEAT) body (list 'UNTIL (bbc-cond (bbc-p-expr))))))
-          ((equal? value "WHILE")
-           (bbc-advance!)
-           (let [test (bbc-cond (bbc-p-expr))
-                 body (bbc-p-block '("ENDWHILE") #f)]
-             (bbc-expect! :kw "ENDWHILE" "ENDWHILE")
-             (append (list 'WHILE test) body)))
-          ((equal? value "CASE") (bbc-advance!) (bbc-p-case))
-          ((equal? value "DEF") (bbc-advance!) (bbc-p-def))
-          ((equal? value "LOCAL")
-           (bbc-advance!)
-           (let [vars (list (bbc-var (bbc-p-variable)))]
-             (while (bbc-accept! :op ",") (bbc-push! vars (bbc-var (bbc-p-variable))))
-             (cons 'LOCAL vars)))
-          ((or (equal? value "END") (equal? value "STOP")) (bbc-advance!) (list 'END))
-          ((equal? value "ENDPROC") (bbc-advance!) (list 'ENDPROC))
-          ((equal? value "EXIT")
-           (bbc-advance!)
-           (let [what (bbc-advance!)]
-             (cond ((bbc-tok? what :kw "FOR") (if (bbc-at? :id #f) (bbc-advance!)) (list 'EXIT-FOR))
-                   ((bbc-tok? what :kw "REPEAT") (list 'EXIT-REPEAT))
-                   ((bbc-tok? what :kw "WHILE") (list 'EXIT-WHILE))
-                   (else (bbc-fail "expected FOR, REPEAT or WHILE after EXIT")))))
-          ((member value '("GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT"))
-           (bbc-fail (str value " is not supported yet")))
-          (else (bbc-fail "expected a statement")))))
+;; Hook for mini-basic-ext.lisp to handle labels, DATA, DIM, GOTO, etc.
+(define (bbc-ext-statement) #f)
 
+(define (bbc-p-statement)
+  (let [ext (bbc-ext-statement)]
+    (if ext
+        ext
+        (let [tok (bbc-peek)
+              kind (car tok)
+              value (nth tok 1)]
+          (cond ((eq? kind :id) (bbc-p-assign))
+                ((eq? kind :proc)
+                 (bbc-advance!)
+                 (append (list 'PROC (string->symbol value)) (bbc-p-args)))
+                ((bbc-accept! :op "=") (list 'FN= (bbc-value (bbc-p-expr))))
+                ((not (eq? kind :kw)) (bbc-fail "expected a statement"))
+                ((equal? value "PRINT") (bbc-advance!) (bbc-p-print))
+                ((equal? value "LET") (bbc-advance!) (bbc-p-assign))
+                ((equal? value "IF") (bbc-advance!) (bbc-p-if))
+                ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
+                ((equal? value "REPEAT")
+                 (bbc-advance!)
+                 (let [body (bbc-p-block '("UNTIL") #f)]
+                   (bbc-expect! :kw "UNTIL" "UNTIL")
+                   (append (list 'REPEAT) body (list 'UNTIL (bbc-cond (bbc-p-expr))))))
+                ((equal? value "WHILE")
+                 (bbc-advance!)
+                 (let [test (bbc-cond (bbc-p-expr))
+                       body (bbc-p-block '("ENDWHILE") #f)]
+                   (bbc-expect! :kw "ENDWHILE" "ENDWHILE")
+                   (append (list 'WHILE test) body)))
+                ((equal? value "CASE") (bbc-advance!) (bbc-p-case))
+                ((equal? value "DEF") (bbc-advance!) (bbc-p-def))
+                ((equal? value "LOCAL")
+                 (bbc-advance!)
+                 (let [vars (list (bbc-var (bbc-p-variable)))]
+                   (while (bbc-accept! :op ",") (bbc-push! vars (bbc-var (bbc-p-variable))))
+                   (cons 'LOCAL vars)))
+                ((or (equal? value "END") (equal? value "STOP")) (bbc-advance!) (list 'END))
+                ((equal? value "ENDPROC") (bbc-advance!) (list 'ENDPROC))
+                ((equal? value "EXIT")
+                 (bbc-advance!)
+                 (let [what (bbc-advance!)]
+                   (cond ((bbc-tok? what :kw "FOR") (if (bbc-at? :id #f) (bbc-advance!)) (list 'EXIT-FOR))
+                         ((bbc-tok? what :kw "REPEAT") (list 'EXIT-REPEAT))
+                         ((bbc-tok? what :kw "WHILE") (list 'EXIT-WHILE))
+                         (else (bbc-fail "expected FOR, REPEAT or WHILE after EXIT")))))
+                ((member value '("GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT"))
+                 (bbc-fail (str value " is not supported yet")))
+                (else (bbc-fail "expected a statement")))))))
 ;;; --- Entry points ---
 
 (define (bbc-expand text)
@@ -993,3 +998,4 @@
 (define (run-clojure text)
   (run-program "clojure" (list "-M" (bbc-compare-file "clojure/run.clj"))
                (bbc-foreign-text (bbc-expand text) :clojure)))
+(load "mini-basic-ext")
