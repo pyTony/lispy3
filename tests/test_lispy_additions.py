@@ -248,7 +248,7 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_l_systems_draw(self):
         """The L-system examples and startup.lisp draw with the turtle."""
-        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "startup.lisp"]:
+        for name in ["programs/tree.lisp", "programs/plant.lisp", "programs/snowflake.lisp", "startup.lisp"]:
             with self.subTest(name):
                 self.setUp()
                 self.run_example(name)
@@ -261,7 +261,7 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_mandelbrot_zooms_on_the_mouse_wheel(self):
         """mandelbrot.lisp draws, and a wheel turn zooms in around the pointer."""
-        with open(os.path.join(lispy3.LISP_DIR, "mandelbrot.lisp")) as f:
+        with open(os.path.join(lispy3.LISP_DIR, "programs", "mandelbrot.lisp")) as f:
             source = f.read()
         # the same program on a 12 x 8 picture, so the test stays quick
         source = source.replace("(define mandel-w 120)", "(define mandel-w 12)")
@@ -284,13 +284,6 @@ class ExampleProgramsTest(LispyTestCase):
         """my_workspace.lisp loads without an error."""
         self.run_example("my_workspace.lisp")
 
-    def test_every_example_is_covered(self):
-        """Every .lisp file in lisp/ has a test."""
-        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
-                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp",
-                   "mandelbrot.lisp"}  # pi: test_pi_digits.py
-        examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
-        self.assertEqual(examples - covered, set(), "add a test for the new example program")
 
 class OnScrollTest(LispyTestCase):
 

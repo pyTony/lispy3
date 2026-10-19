@@ -438,13 +438,14 @@ def lisp_file_for_load(filename: str) -> str:
 
 def slurp(filename: Any) -> String:
     """(slurp "file") - the whole text file as one string; a relative name not found here is looked up in lisp/."""
-    name = _unwrap_str(filename)
-    in_lisp_dir = os.path.join(LISP_DIR, name)
+    raw_name = _unwrap_str(filename)
+    name = os.path.normpath(raw_name)
+    in_lisp_dir = os.path.normpath(os.path.join(LISP_DIR, name))
     if not os.path.exists(name) and not os.path.isabs(name) and os.path.exists(in_lisp_dir):
         name = in_lisp_dir
     with open(name, encoding='utf-8') as f:
         return String(f.read())
-
+    
 def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
     """(run-program "sbcl" (list "--version") [input]) - run another program, print what it prints, give its exit code."""
     command = [_unwrap_str(program)] + [_unwrap_str(a) if isinstance(a, String) else str(a) for a in args]

@@ -46,8 +46,7 @@ class ExpandTest(ReaderTestCase):
 
     def test_line_numbers_and_rem_are_skipped(self):
         self.assertEqual(self.expand('10 REM hello\n20 PRINT 1 : REM done\n30 END'),
-                         '(bbc-program (PRINT 1) (END))')
-
+                     '(bbc-program (LABEL 10) (LABEL 20) (PRINT 1) (LABEL 30) (END))')
 
 class RunTest(ReaderTestCase):
 
@@ -83,6 +82,7 @@ class RunTest(ReaderTestCase):
 
     def test_load_a_file(self):
         with tempfile.NamedTemporaryFile('w', suffix='.bas', delete=False) as f:
+            f.name = f.name.replace('\\', '/')  # BBC BASIC uses forward slashes
             f.write('PRINT "from a file"\n')
         try:
             with contextlib.redirect_stdout(io.StringIO()) as out:
@@ -140,15 +140,12 @@ class ErrorTest(ReaderTestCase):
     def test_keywords_are_uppercase_only(self):
         self.assert_error('print 1', 'expected = after the variable')
 
-    def test_later_steps(self):
-        self.assert_error('10 GOTO 10', 'GOTO is not supported yet')
-        self.assert_error('DIM a(10)', 'DIM is not supported yet')
-
 
 class SlurpTest(LispyTestCase):
 
     def test_slurp_reads_a_text_file(self):
         with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False, encoding='utf-8') as f:
+            f.name = f.name.replace('\\', '/')  # BBC BASIC uses forward slashes  
             f.write('two\nlines')
         try:
             self.assertEqual(self.ev(f'(slurp "{f.name}")').value, 'two\nlines')

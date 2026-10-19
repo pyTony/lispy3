@@ -1044,12 +1044,12 @@ def read_file_arg(arg: str):
     """Return (buffer name, content, path) for a file named on the command line.
 
     A bare file name that is not in the current folder means the file in
-    lisp/. A file that does not exist yet gives an empty buffer that saves to
+    lisp/programs. A file that does not exist yet gives an empty buffer that saves to
     that path; any other read error is raised as OSError.
     """
     path = os.path.abspath(arg)
     if not os.path.dirname(arg) and not os.path.exists(path):
-        path = os.path.join(L.LISP_DIR, arg)
+        path = os.path.join(L.LISP_DIR,"programs", arg)
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()

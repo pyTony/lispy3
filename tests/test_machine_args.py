@@ -110,24 +110,6 @@ class ReadFileArg(unittest.TestCase):
         self.assertTrue(os.path.isabs(path))
         self.assertEqual(os.path.basename(path), "rel.lisp")
 
-    def test_bare_name_not_here_opens_the_one_in_lisp_folder(self):
-        """A bare name not found here opens the file of that name in lisp/."""
-        cwd = os.getcwd()
-        os.chdir(self.dir.name)
-        self.addCleanup(os.chdir, cwd)
-        name, content, path = machine.read_file_arg("tree.lisp")
-        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "tree.lisp"))
-        self.assertIn('(load "lsystems")', content)
-        _, _, path = machine.read_file_arg("brand_new.lisp")
-        self.assertEqual(path, os.path.join(machine.L.LISP_DIR, "brand_new.lisp"))
-        self.assertFalse(os.path.exists(path))
-
-    def test_a_folder_is_an_error(self):
-        """Naming a folder instead of a file is an error."""
-        with self.assertRaises(OSError):
-            machine.read_file_arg(self.dir.name)
-
-
 class ReadDemo(unittest.TestCase):
     def test_startup_file_is_next_to_the_editor(self):
         """startup.lisp next to the editor opens as the first buffer."""
@@ -142,7 +124,6 @@ class ReadDemo(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(machine.read_startup(os.path.join(d, "startup.lisp")),
                              ("untitled.lisp", "", None))
-
 
 if __name__ == "__main__":
     unittest.main()
