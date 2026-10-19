@@ -11,6 +11,7 @@ import operator as op
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import turtle
@@ -149,6 +150,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
+        ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
+        ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
         ("if", "(if test then else) - the else part may be left out"),
@@ -272,8 +275,12 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
         ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
         ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
+        ("run-program", "(run-program \"sbcl\" (list \"--version\") [input]) - run another program with input text, print what it prints, give its exit code"),
+        ("lispy-home", "lispy-home - the folder lispy3.py is in"),
+        ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -428,6 +435,42 @@ def lisp_file_for_load(filename: str) -> str:
             and os.path.exists(in_lisp_dir):
         return in_lisp_dir
     return real_filename
+
+def slurp(filename: Any) -> String:
+    """(slurp "file") - the whole text file as one string; a relative name not found here is looked up in lisp/."""
+    name = _unwrap_str(filename)
+    in_lisp_dir = os.path.join(LISP_DIR, name)
+    if not os.path.exists(name) and not os.path.isabs(name) and os.path.exists(in_lisp_dir):
+        name = in_lisp_dir
+    with open(name, encoding='utf-8') as f:
+        return String(f.read())
+
+def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
+    """(run-program "sbcl" (list "--version") [input]) - run another program, print what it prints, give its exit code."""
+    command = [_unwrap_str(program)] + [_unwrap_str(a) if isinstance(a, String) else str(a) for a in args]
+    if shutil.which(command[0]) is None:
+        raise LispyError(f"run-program: {command[0]} is not installed")
+    result = subprocess.run(command, capture_output=True, text=True,
+                            input=None if text_input is None else _unwrap_str(text_input))
+    # Printed through Python, so the output goes where Lispy's own printing goes
+    print(result.stdout, end="")
+    print(result.stderr, end="", file=sys.stderr)
+    return result.returncode
+
+def memoize(proc: Callable) -> Callable:
+    """(memoize f) - f with a cache of its results, as Python's functools.cache.
+
+    Arguments that cannot be dict keys, such as lists, skip the cache."""
+    cache: dict = {}
+    def memo(*args: Any) -> Any:
+        try:
+            return cache[args]
+        except KeyError:
+            value = cache[args] = proc(*args)
+            return value
+        except TypeError:
+            return proc(*args)
+    return memo
 
 def lisp_file_for_save(filename: str) -> str:
     """The file (save "name") writes: a bare name goes to lisp/, a path is used as given."""
@@ -1039,6 +1082,9 @@ def standard_env() -> Env:
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
+        'slurp': slurp,
+        'memoize': memoize,
+        'run-program': run_program,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
@@ -1086,6 +1132,7 @@ def standard_env() -> Env:
     for cl_name, name in CL_ALIASES.items():
         env[cl_name] = env[name]
     env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
+    env['lispy-home'] = String(os.path.dirname(os.path.abspath(__file__)))
 
     # 3. Add turtle graphics support dynamically
     def _call_turtle(k: str, *args: Any) -> Any:
@@ -1181,11 +1228,28 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         macro_table[name] = proc
         return None
 
+    if head == 'time':
+        # (time exp): run exp, print how long it took, give its value
+        if len(x) != 2:
+            raise SyntaxError("time needs one expression: (time (f 30))")
+        t0, value = gensym('t0'), gensym('value')
+        return expand(['let', [[t0, ['get-internal-real-time']]],
+                       ['let', [[value, x[1]]],
+                        ['display', String('Elapsed time: '),
+                         ['/', ['-', ['get-internal-real-time'], t0], 1000.0], String(' s')],
+                        value]], toplevel)
+
     if head == 'defun':
         # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)
         if len(x) < 4 or not isinstance(x[2], (list, tuple)):
             raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
         return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
+
+    if head == 'define-memo':
+        # (define-memo (f x) body...) is (define f (memoize (lambda (x) body...)))
+        if len(x) < 3 or not isinstance(x[1], (list, tuple)) or not x[1]:
+            raise SyntaxError("define-memo needs a name with parameters and a body: (define-memo (f x) ...)")
+        return expand(['define', x[1][0], ['memoize', ['lambda', list(x[1][1:])] + list(x[2:])]], toplevel)
 
     if head == 'define':
         # Support shorthand: (define (f x y) body1 body2...)

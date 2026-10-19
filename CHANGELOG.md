@@ -4,6 +4,29 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- `lisp/mini-basic.lisp`: structured BBC BASIC statements as macros. `PRINT`,
+  `LET`, multi-line `IF ... ELSE`, `FOR ... STEP`, `REPEAT ... UNTIL`, `WHILE`,
+  `CASE ... WHEN ... OTHERWISE`, `DEF-PROC` / `DEF-FN` with `LOCAL`,
+  `ENDPROC`, `FN=`, the `EXIT-` forms and `END` each expand into plain lispy3
+  code inside `(bbc-program ...)`. PROC and FN parameters and LOCAL variables
+  are dynamically scoped as in BBC BASIC.
+- A BBC BASIC reader in `lisp/mini-basic.lisp`: `(bbc-run """...""")`,
+  `(bbc-load "prog.bas")` and `(bbc-expand text)` turn BBC BASIC text, with
+  UPPERCASE keywords, BBC operator precedence, string functions and line
+  numbers, into the statement macros. GOTO, GOSUB, DATA and arrays come later.
+- `(slurp "file")` reads a whole text file into a string.
+- `(run-lispy text)`, `(run-sbcl text)`, `(run-clojure text)` in
+  `lisp/mini-basic.lisp` run one BBC BASIC program with the mini-basic macros
+  of lispy3, SBCL or Clojure: `(run-sbcl (slurp "prog.bas"))`.
+- `(time exp)` runs `exp`, prints how long it took and gives its value.
+- `(run-program "prog" args [input])` runs another program and prints its
+  output; `lispy-home` is the folder `lispy3.py` is in.
+- `(define-memo (f x) ...)` and `(memoize f)`: a function that remembers its
+  results, like Python's `@functools.cache`. The BBC BASIC reader memoizes a
+  pure `DEF FN` (one that reads only its own parameters and `LOCAL`s, prints
+  nothing and calls no PROC or other FN), as mini_basic does.
+- `compare/`: the same mini-basic macros in SBCL and Clojure, side by side,
+  with shared test programs that print the same output in all three Lisps.
 - The Lispy Machine runs Lisp code on its own thread, so the window stays
   live during a long run or an endless loop, and the new **■ Stop** button
   (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on

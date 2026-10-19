@@ -1,0 +1,12 @@
+1 2 3 / i=4
+10 6 2 
+135
+0 0.25 0.5 0.75 1 
+FOR runs once
+REPEAT k=4
+WHILE k=10
+WHILE k=3
+EXIT-FOR i=3
+EXIT-REPEAT k=2
+EXIT-WHILE k=5
+1 12 123 
