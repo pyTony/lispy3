@@ -12,6 +12,9 @@
 ;;;     (FOR i 1 5
 ;;;       (PRINT "fact(" :semi i :semi ") = " :semi (FN fact i))))
 ;;;
+;;; Terminal: (CLS), (COLOUR n)/(COLOR n), (VDU byte ...),
+;;; (ANSI byte-or-string ...), (ANSI-RESET); see docs/MINI_BASIC.md for limits.
+;;;
 ;;; Statements:
 ;;;   (LET var exp)                    assignment; var% keeps whole numbers, var$ is a string
 ;;;   (PRINT item ...)                 items, with separators :semi (;) :comma (,) :nl (')
@@ -90,9 +93,87 @@
   (if (> bbc-col n) (bbc-newline))
   (bbc-spaces (- n bbc-col)))
 
+;; Emit terminal controls without advancing the printable output column.
+(define (bbc-ansi control)
+  (format #t "~a" (str (bbc-chr 27) "[" control)))
+
+(define (bbc-cls)
+  (bbc-ansi "2J")
+  (bbc-ansi "H")
+  (set! bbc-col 0))
+
+(define (bbc-colour value)
+  (let [n (bbc-int value)]
+    (if (not (or (and (>= n 0) (<= n 15))
+                 (and (>= n 128) (<= n 143))))
+        (error "COLOUR: expected 0..15 or 128..143"))
+    (let [background (>= n 128)
+          colour (if (>= n 128) (- n 128) n)]
+      (bbc-ansi (str (+ (if background 40 30)
+                       (if (>= colour 8) 60 0)
+                       (modulo colour 8)) "m")))))
+
 (define (bbc-tab-xy x y)
-  ;; Without a screen, TAB(x,y) can only move along the line
-  (bbc-tab x))
+  (let [column (bbc-int x) row (bbc-int y)]
+    (if (or (< column 0) (< row 0))
+        (error "TAB: coordinates must be non-negative"))
+    (bbc-ansi (str (+ row 1) ";" (+ column 1) "H"))
+    (set! bbc-col column)))
+
+(define bbc-vdu-pending '())
+
+;; VDU is a byte stream: parameter bytes can arrive in a later call.
+(define (bbc-vdu bytes)
+  (for-each
+    (lambda (value)
+      (let [byte (modulo (bbc-int value) 256)]
+        (if (not (null? bbc-vdu-pending))
+            (begin
+              (set! bbc-vdu-pending (append bbc-vdu-pending (list byte)))
+              (let [code (car bbc-vdu-pending)]
+                (cond
+                  ((and (= code 17) (= (length bbc-vdu-pending) 2))
+                   (set! bbc-vdu-pending '())
+                   (bbc-colour byte))
+                  ((and (= code 31) (= (length bbc-vdu-pending) 3))
+                   (let [column (nth bbc-vdu-pending 1)]
+                     (set! bbc-vdu-pending '())
+                     (bbc-tab-xy column byte))))))
+            (cond
+              ((or (= byte 17) (= byte 31))
+               (set! bbc-vdu-pending (list byte)))
+              ((= byte 0) #f)
+              ((= byte 7) (format #t "~a" (bbc-chr 7)))
+              ((= byte 8)
+               (format #t "~a" (bbc-chr 8))
+               (set! bbc-col (max 0 (- bbc-col 1))))
+              ((= byte 10) (bbc-ansi "1B"))
+              ((= byte 12) (bbc-cls))
+              ((= byte 13)
+               (format #t "~a" (bbc-chr 13)) (set! bbc-col 0))
+              ((= byte 30) (bbc-ansi "H") (set! bbc-col 0))
+              ((or (< byte 32) (= byte 127))
+               (error (str "VDU: unsupported control " byte)))
+              (else (bbc-write (bbc-chr byte)))))))
+    bytes))
+
+;; Explicit raw ANSI channel; these bytes never enter the BBC VDU decoder.
+;; Treat contents as controls, not printable cells. Cursor changes are opaque.
+(define (bbc-ansi-bytes items)
+  (for-each (lambda (item)
+              (format #t "~a" (if (string? item) item
+                                  (bbc-chr (modulo (bbc-int item) 256)))))
+            items))
+
+(define-macro (ANSI & items) `(bbc-ansi-bytes (list ,@items)))
+
+(define-macro (VDU & bytes) `(bbc-vdu (list ,@bytes)))
+
+(define-macro (CLS) '(bbc-cls))
+(define-macro (COLOUR value) `(bbc-colour ,value))
+(define-macro (COLOR value) `(bbc-colour ,value))
+;; Lisp-only convenience: restore terminal default attributes.
+(define-macro (ANSI-RESET) '(bbc-ansi "0m"))
 
 (define bbc-g9 "{:.9G}")
 
@@ -350,7 +431,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN bbc-time-read bbc-time-set!) body))
+         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set!) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -428,7 +509,7 @@
   '("PRINT" "LET" "IF" "THEN" "ELSE" "ENDIF" "FOR" "TO" "STEP" "NEXT" "REPEAT" "UNTIL"
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
-    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME"
+    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
 
@@ -914,6 +995,12 @@
                  (bbc-advance!)
                  (if (bbc-at? :kw "TIME") (bbc-p-time-assign) (bbc-p-assign)))
                 ((equal? value "TIME") (bbc-p-time-assign))
+                ((equal? value "CLS") (bbc-advance!) (list 'CLS))
+                ((or (equal? value "VDU") (equal? value "ANSI"))
+                 (bbc-advance!)
+                 (cons (if (equal? value "VDU") 'VDU 'ANSI) (bbc-p-value-list)))
+                ((or (equal? value "COLOUR") (equal? value "COLOR"))
+                 (bbc-advance!) (list 'COLOUR (bbc-value (bbc-p-expr))))
                 ((equal? value "IF") (bbc-advance!) (bbc-p-if))
                 ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
                 ((equal? value "REPEAT")

@@ -232,3 +232,17 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 - [x] Tests for the Gemini Argon additions and the features restored after it (`tests/test_gemini_features.py`)
 - [x] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs) (`tests/test_lispy_additions.py`)
 - [x] Every ticked item above has examples in `tests/test_todo.py`; ticking a box without adding them fails the tests
+
+### mini-basic user documentation
+
+- [x] Start `docs/MINI_BASIC.md`: loading, supported subset, control-flow limits,
+  TIME, external terminal Mandelbrot and existing ANSI escape output.
+- [x] Add tested terminal macros and BASIC reader syntax: CLS, COLOUR/COLOR,
+  TAB(x,y), a bounded VDU text decoder and separate raw ANSI output.
+  Fifteen tests cover exact bytes, columns, split VDU parameters, errors and
+  non-memoized terminal effects. Raw ANSI cursor changes remain untracked;
+  full VDU/viewport emulation and semicolon word syntax remain pending.
+
+ANSI/VDU validation: 15 targeted tests and 5 subtests passed; full suite
+403 passed, 4 skipped, 324 subtests passed. Desktop rendering remains a manual
+terminal check; tests verify exact emitted controls and column behavior.
