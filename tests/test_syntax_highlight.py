@@ -41,9 +41,9 @@ class LispColours(unittest.TestCase):
 
     def test_atoms(self):
         """Special forms, constants, characters, keywords, numbers, built-ins and variables."""
-        text = "(if #t #\; :key -1.5e3 1+ x-1 #f)"
+        text = "(if #t #\\; :key -1.5e3 1+ x-1 #f)"
         self.assertEqual(colours(LISP, text, builtins={"1+"}, variables={"x-1"}), [
-            ("special", "if"), ("constant", "#t"), ("char", "#\;"), ("keyword", ":key"),
+            ("special", "if"), ("constant", "#t"), ("char", "#\\;"), ("keyword", ":key"),
             ("number", "-1.5e3"), ("builtin", "1+"), ("variable", "x-1"), ("constant", "#f")])
 
     def test_brackets_inside_strings_are_masked(self):
