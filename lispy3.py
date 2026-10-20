@@ -1993,6 +1993,9 @@ def setup_completion() -> bool:
         readline.parse_and_bind("bind ^I rl_complete")   # macOS
     else:
         readline.parse_and_bind("tab: complete")
+        if sys.platform != "win32":
+            # Keep a terminal paste together instead of submitting each newline.
+            readline.parse_and_bind("set enable-bracketed-paste on")
     return True
 
 def repl_str(val: Any, width: int | None = None) -> str:
@@ -2043,12 +2046,18 @@ def repl(prompt: str = "lispy3> ") -> None:
             if count_balance(buffer) > 0:
                 continue
                 
-            ast = parse(buffer)
+            # input() can return an entire bracketed paste, including newlines.
+            # Read all syntax first: malformed trailing input must not be ignored.
+            tokens = tokenize(buffer)
+            forms = []
+            while tokens:
+                forms.append(read_from_tokens(tokens))
             buffer = ""
-            val = eval_exp(ast, env)
-            
-            if val is not None:
-                print(f"{COLOR_RESULT}{repl_str(val)}{COLOR_RESET}")
+            for form in forms:
+                # Earlier definitions/imports must exist when later macros expand.
+                val = eval_exp(expand(form, toplevel=True), env)
+                if val is not None:
+                    print(f"{COLOR_RESULT}{repl_str(val)}{COLOR_RESET}")
         except turtle.Terminator:
             buffer = ""
             print(f"{COLOR_ERROR}Error: Turtle window was closed. Call (reinit-turtle) to reopen.{COLOR_RESET}")

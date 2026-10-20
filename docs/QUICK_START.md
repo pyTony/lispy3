@@ -8,6 +8,13 @@ Five minutes from nothing to your own functions. For more, read [Lispy by Exampl
     python lispy_machine.pyw      the editor, with a Listener at the bottom
     python lispy3.py prog.lisp    run a program file
 
+In the terminal REPL, paste only the code from an example, without Markdown
+code-fence lines. GNU readline uses bracketed paste to keep a multiline paste
+together; press Enter to submit it. Every complete top-level form in the block
+is evaluated in order, so definitions can be followed by calls in one paste.
+Typed multiline expressions still use the continuation prompt. Other readline
+backends keep their native input handling.
+
 In the editor, the **■ Stop** button above the Listener (or `Ctrl+Break`) ends a program that runs too long.
 
 Type `(help)` at the prompt to list every built-in, and `(help 'name)` to explain one:

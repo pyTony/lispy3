@@ -233,6 +233,16 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 - [x] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs) (`tests/test_lispy_additions.py`)
 - [x] Every ticked item above has examples in `tests/test_todo.py`; ticking a box without adding them fails the tests
 
+### Terminal paste input
+
+- [x] Reproduce multi-form input loss and GNU paste configuration with failing
+  regressions (five failed, two passed before implementation).
+- [x] Enable GNU readline bracketed paste and evaluate all submitted forms in
+  order; reject malformed trailing syntax before any form runs.
+- [x] Seven regressions pass. Real GNU-readline pseudo-terminal check under WSL
+  verified a two-form paste returns 42. Document code-only pasting and Enter.
+
+
 ### mini-basic user documentation
 
 - [x] Start `docs/MINI_BASIC.md`: loading, supported subset, control-flow limits,
@@ -246,3 +256,4 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 ANSI/VDU validation: 15 targeted tests and 5 subtests passed; full suite
 403 passed, 4 skipped, 324 subtests passed. Desktop rendering remains a manual
 terminal check; tests verify exact emitted controls and column behavior.
+

@@ -10,6 +10,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   documents supported controls, fixed colours and terminal/column limitations.
 
 
+- Terminal REPL: enable GNU readline bracketed paste and evaluate every form in
+  one submitted block instead of silently ignoring forms after the first.
+  Read the whole block's syntax before execution; expand/evaluate forms in order
+  so earlier definitions are available to later macro expansion. Typed
+  continuation and libedit/Windows completion behavior are retained.
+
+
 - mini-basic: make TIME an assignable elapsed clock in centiseconds, including
   LET, += and -=. Clock reads persist across runs and are not memoized in FN.
   The unchanged terminal Mandelbrot demo now reports elapsed time instead of
