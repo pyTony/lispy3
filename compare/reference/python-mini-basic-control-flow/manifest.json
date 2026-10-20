@@ -1,0 +1,303 @@
+{
+  "repository": "D:\\1\\OneDrive - FFWPU-Fin\\mini_basic",
+  "selected": [
+    "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock",
+    "test/test_control_flow.py::TestControlExitCorners",
+    "test/test_control_flow.py::TestControlExitHierarchy",
+    "test/test_control_flow.py::TestNestedForMatching"
+  ],
+  "pytest_exit_code": 0,
+  "runs": [
+    {
+      "id": "0001-38d828c013",
+      "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+      "dialect": "bbc",
+      "source": "0001-38d828c013.bas",
+      "stdout": "0001-38d828c013.stdout.txt",
+      "stderr": "0001-38d828c013.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    def test_exit_for_then_unrelated_endif_targets_its_own_line(self):\n        interp = BASICInterpreter(InterpreterConfig(dialect='bbc', display='none'))\n        prog = (\n            '10 IF TRUE THEN\\n'\n            '20 FOR I%=0 TO 3\\n'\n            '30 IF I%=1 THEN\\n'\n            '40 EXIT FOR\\n'\n            '50 ENDIF\\n'\n            '60 NEXT I%\\n'\n            '70 ENDIF\\n'\n            '80 PRINT \"done\"\\n'\n        )\n        for i, line in enumerate(prog.strip('\\n').split('\\n')):\n            num, txt = line.split(' ', 1)\n            interp.set_program_line(int(num), txt)\n        buf = io.StringIO()\n        err = io.StringIO()\n        with redirect_stdout(buf), redirect_stderr(err):\n            interp.run()\n        self.assertEqual(buf.getvalue().split(), ['done'], msg=err.getvalue())\n        self.assertEqual(err.getvalue(), '')\n"
+    },
+    {
+      "id": "0002-e1b142a8f5",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0002-e1b142a8f5.bas",
+      "stdout": "0002-e1b142a8f5.stdout.txt",
+      "stderr": "0002-e1b142a8f5.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n"
+    },
+    {
+      "id": "0003-2d363b94b8",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0003-2d363b94b8.bas",
+      "stdout": "0003-2d363b94b8.stdout.txt",
+      "stderr": "0003-2d363b94b8.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n"
+    },
+    {
+      "id": "0004-a0fe59bf51",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0004-a0fe59bf51.bas",
+      "stdout": "0004-a0fe59bf51.stdout.txt",
+      "stderr": "0004-a0fe59bf51.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n"
+    },
+    {
+      "id": "0005-59908b082e",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0005-59908b082e.bas",
+      "stdout": "0005-59908b082e.stdout.txt",
+      "stderr": "0005-59908b082e.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n"
+    },
+    {
+      "id": "0006-0ba281e236",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0006-0ba281e236.bas",
+      "stdout": "0006-0ba281e236.stdout.txt",
+      "stderr": "0006-0ba281e236.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n"
+    },
+    {
+      "id": "0007-82ed7de9b3",
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "dialect": "mini",
+      "source": "0007-82ed7de9b3.bas",
+      "stdout": "0007-82ed7de9b3.stdout.txt",
+      "stderr": "0007-82ed7de9b3.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_for_from_deep_nesting())\n    @settings(max_examples=4, deadline=None)\n    def test_exit_for_deep(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n"
+    },
+    {
+      "id": "0008-650541a9c3",
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "dialect": "mini",
+      "source": "0008-650541a9c3.bas",
+      "stdout": "0008-650541a9c3.stdout.txt",
+      "stderr": "0008-650541a9c3.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_for_from_deep_nesting())\n    @settings(max_examples=4, deadline=None)\n    def test_exit_for_deep(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n"
+    },
+    {
+      "id": "0009-bdb98b0169",
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "dialect": "mini",
+      "source": "0009-bdb98b0169.bas",
+      "stdout": "0009-bdb98b0169.stdout.txt",
+      "stderr": "0009-bdb98b0169.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_for_from_deep_nesting())\n    @settings(max_examples=4, deadline=None)\n    def test_exit_for_deep(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n"
+    },
+    {
+      "id": "0010-841451b6c0",
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "dialect": "mini",
+      "source": "0010-841451b6c0.bas",
+      "stdout": "0010-841451b6c0.stdout.txt",
+      "stderr": "0010-841451b6c0.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_for_from_deep_nesting())\n    @settings(max_examples=4, deadline=None)\n    def test_exit_for_deep(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n"
+    },
+    {
+      "id": "0011-05576c3a8c",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0011-05576c3a8c.bas",
+      "stdout": "0011-05576c3a8c.stdout.txt",
+      "stderr": "0011-05576c3a8c.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0012-8d828753bb",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0012-8d828753bb.bas",
+      "stdout": "0012-8d828753bb.stdout.txt",
+      "stderr": "0012-8d828753bb.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0013-2b671bd3b6",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0013-2b671bd3b6.bas",
+      "stdout": "0013-2b671bd3b6.stdout.txt",
+      "stderr": "0013-2b671bd3b6.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0014-94c8e2b56c",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0014-94c8e2b56c.bas",
+      "stdout": "0014-94c8e2b56c.stdout.txt",
+      "stderr": "0014-94c8e2b56c.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0015-3394982b60",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0015-3394982b60.bas",
+      "stdout": "0015-3394982b60.stdout.txt",
+      "stderr": "0015-3394982b60.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0016-41a7f95007",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0016-41a7f95007.bas",
+      "stdout": "0016-41a7f95007.stdout.txt",
+      "stderr": "0016-41a7f95007.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0017-df415dbd0f",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0017-df415dbd0f.bas",
+      "stdout": "0017-df415dbd0f.stdout.txt",
+      "stderr": "0017-df415dbd0f.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    },
+    {
+      "id": "0018-90b0590c1a",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "source": "0018-90b0590c1a.bas",
+      "stdout": "0018-90b0590c1a.stdout.txt",
+      "stderr": "0018-90b0590c1a.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=nested_fors_correct_matching())\n    @settings(max_examples=8, deadline=3000)\n    def test_nested_fors_correct_next_vars(self, prog: str):\n        \"\"\"Nested FOR/NEXT matching; vars from safe_var (no to0/for1 stems).\"\"\"\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"bbc\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out, f\"prog:\\n{prog}\\nout:\\n{out}\")\n        # Expect 4 lines of output like \"1 1\\n1 2\\n2 1\\n2 2\\n\" or similar\n        self.assertEqual(len(out.strip().splitlines()), 4, f\"prog:\\n{prog}\\nout:\\n{out}\")\n"
+    }
+  ],
+  "test_reports": [
+    {
+      "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+      "phase": "setup",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+      "phase": "call",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+      "phase": "teardown",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "setup",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "call",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "teardown",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "phase": "setup",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "phase": "call",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "phase": "teardown",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "phase": "setup",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "phase": "call",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "phase": "teardown",
+      "outcome": "passed"
+    }
+  ],
+  "note": "Observed Python output, not independently verified BBCSDL expectations.",
+  "representative_menu": [
+    {
+      "case": 1,
+      "run": "0001-38d828c013",
+      "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+      "dialect": "bbc",
+      "stdout": "0001-38d828c013.stdout.txt"
+    },
+    {
+      "case": 2,
+      "run": "0002-e1b142a8f5",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "stdout": "0002-e1b142a8f5.stdout.txt"
+    },
+    {
+      "case": 3,
+      "run": "0007-82ed7de9b3",
+      "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+      "dialect": "mini",
+      "stdout": "0007-82ed7de9b3.stdout.txt"
+    },
+    {
+      "case": 4,
+      "run": "0011-05576c3a8c",
+      "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+      "dialect": "bbc",
+      "stdout": "0011-05576c3a8c.stdout.txt"
+    }
+  ]
+}

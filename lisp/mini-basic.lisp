@@ -24,6 +24,8 @@
 ;;;   (DEF-PROC (name parm ...) stmt ...)  and (PROC name arg ...) to call it
 ;;;   (DEF-FN (name parm ...) stmt ... (FN= exp))  and (FN name arg ...) to call it
 ;;;   (LOCAL var ...), (ENDPROC), (FN= exp), (EXIT-FOR), (EXIT-REPEAT), (EXIT-WHILE), (END)
+;;;   (GOTO target), (GOSUB target), (RETURN), (LABEL name)
+;;;   (ON-GOTO index (targets ...) (else-statements ...)) and ON-GOSUB
 ;;;
 ;;; As in BBC BASIC, PROC and FN parameters and LOCAL variables are dynamically
 ;;; scoped: the old values are saved on entry and put back on exit. bbc-program
@@ -167,6 +169,10 @@
 (define (bbc-escape stmt tag)
   `(begin ,stmt (error ,tag)))
 
+(define (bbc-nested-body-code stmts)
+  ;; The extension replaces this hook to resolve jumps in active bodies.
+  `(begin #f ,@stmts))
+
 ;;; --- Statements ---
 
 (define-macro (LET var exp)
@@ -201,9 +207,9 @@
 
 (define-macro (IF test & body)
   (let [parts (bbc-split body 'ELSE)
-        then-part `(begin ,@(car parts))]
+        then-part (bbc-nested-body-code (car parts))]
     (if (bbc-second parts)
-        `(if ,(bbc-test test) ,then-part (begin ,@(bbc-second parts)))
+        `(if ,(bbc-test test) ,then-part ,(bbc-nested-body-code (bbc-second parts)))
         `(if ,(bbc-test test) ,then-part))))
 
 (define-macro (FOR var from to & more)
@@ -219,18 +225,18 @@
                     ((< step 0) `(>= ,var ,lim))
                     (else `(<= ,var ,lim)))
         loop `(let ((,lim ,to) (,st ,step))
-                (while (begin ,@body ,next ,more?)))]
+                (while (begin ,(bbc-nested-body-code body) ,next ,more?)))]
     `(begin
        (LET ,var ,from)
        ,(if (bbc-uses? '(EXIT-FOR) body) (bbc-catch "bbc:exit-for" loop #f) loop))))
 
 (define-macro (REPEAT & body)
   (let [parts (bbc-split body 'UNTIL)
-        loop `(while (begin ,@(car parts) (not ,(bbc-test (car (bbc-second parts))))))]
+        loop `(while (begin ,(bbc-nested-body-code (car parts)) (not ,(bbc-test (car (bbc-second parts))))))]
     (if (bbc-uses? '(EXIT-REPEAT) body) (bbc-catch "bbc:exit-repeat" loop #f) loop)))
 
 (define-macro (WHILE test & body)
-  (let [loop `(while ,(bbc-test test) ,@body)]
+  (let [loop `(while ,(bbc-test test) ,(bbc-nested-body-code body))]
     (if (bbc-uses? '(EXIT-WHILE) body) (bbc-catch "bbc:exit-while" loop #f) loop)))
 
 (define-macro (CASE exp & clauses)
@@ -238,9 +244,9 @@
     `(let ((,v ,exp))
        (cond ,@(map (lambda (clause)
                       (if (eq? (car clause) 'OTHERWISE)
-                          `(else #f ,@(cdr clause))
+                          `(else ,(bbc-nested-body-code (cdr clause)))
                           `((or ,@(map (lambda (w) `(= ,v ,w)) (bbc-second clause)))
-                            #f ,@(cdr (cdr clause)))))
+                            ,(bbc-nested-body-code (cdr (cdr clause))))))
                     clauses)))))
 
 (define-macro (EXIT-FOR) '(error "bbc:exit-for"))
@@ -269,7 +275,8 @@
 
 (define (bbc-tail-stmt stmt)
   (cond ((not (and (pair? stmt) (list? stmt))) stmt)
-        ((eq? (car stmt) 'FN=) (bbc-second stmt))
+        ;; A bare returned variable must not become a tagbody label.
+        ((eq? (car stmt) 'FN=) (list 'begin (bbc-second stmt)))
         ((eq? (car stmt) 'ENDPROC) #f)
         ((eq? (car stmt) 'IF)
          (let [parts (bbc-split (cdr (cdr stmt)) 'ELSE)]
@@ -327,7 +334,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(PRINT PROC END) body))
+         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -358,7 +365,7 @@
 ;;;   (pretty-print (bbc-expand text))   ; the (bbc-program ...) the text becomes
 ;;;
 ;;; Keywords are UPPERCASE only, as in BBC BASIC. Line numbers are read and
-;;; ignored; GOTO, GOSUB, DATA and arrays come later.
+;;; retained as labels; mini-basic-ext.lisp adds jumps, subroutines, DATA and arrays.
 
 ;;; --- Run-time support for expressions ---
 
@@ -815,17 +822,27 @@
 (define (bbc-p-case)
   (let [subject (bbc-value (bbc-p-expr))
         clauses (list)
+        labels (list)
         ends '("WHEN" "OTHERWISE" "ENDCASE")]
     (bbc-expect! :kw "OF" "OF")
     (bbc-skip-separators)
     (while (not (bbc-accept! :kw "ENDCASE"))
-      (cond ((bbc-accept! :kw "WHEN")
+      (cond ((bbc-at? :line #f)
+             ;; Unlike later headers (read by bbc-p-block), the first header
+             ;; has no preceding clause body to consume its line label.
+             (bbc-push! labels (list 'LABEL (nth (bbc-advance!) 1))))
+            ((bbc-accept! :kw "WHEN")
              (let [vals (bbc-p-value-list)]
-               (bbc-push! clauses (append (list 'WHEN vals) (bbc-p-block ends #f)))))
+               (bbc-push! clauses (append (list 'WHEN vals) labels (bbc-p-block ends #f)))
+               (set! labels (list))))
             ((bbc-accept! :kw "OTHERWISE")
-             (bbc-push! clauses (cons 'OTHERWISE (bbc-p-block ends #f))))
+             (bbc-push! clauses (append (list 'OTHERWISE) labels (bbc-p-block ends #f)))
+             (set! labels (list)))
             (else (bbc-fail "expected WHEN, OTHERWISE or ENDCASE")))
       (bbc-skip-separators))
+    ;; Retain a numbered ENDCASE even for an empty CASE with no clause body.
+    (if (not (null? labels))
+        (bbc-push! clauses (cons 'OTHERWISE labels)))
     (append (list 'CASE subject) clauses)))
 
 (define (bbc-p-parms)

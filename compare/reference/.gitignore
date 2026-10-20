@@ -1,0 +1,7 @@
+# Reproducible instrumented copies; retain logs and results.json as evidence.
+runs/**/case-*.bbc
+runs/smoke-*/
+python-mini-basic-*/hypothesis/
+python-mini-basic-*/*.bbc
+!python-mini-basic-control-flow/representative-menu.bbc
+runs/**/hypothesis/

@@ -1,0 +1,5 @@
+100 FOR c680qfms8sq=1 TO 2
+110 FOR n4yzk=1 TO 2
+120 PRINT c680qfms8sq; n4yzk
+130 NEXT n4yzk
+140 NEXT c680qfms8sq

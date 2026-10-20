@@ -1,0 +1,54 @@
+[
+  {
+    "case": 1,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-01.txt",
+    "output": "1 0001-38d828c013 dialect=bbc\n2 0002-e1b142a8f5 dialect=mini\n3 0007-82ed7de9b3 dialect=mini\n4 0011-05576c3a8c dialect=bbc\ndone\n",
+    "test": "test/test_control_flow.py::TestExitLeavesUnclosedIfBlock::test_exit_for_then_unrelated_endif_targets_its_own_line",
+    "dialect": "bbc",
+    "fixture_sha256": "dd54f564654ff300bc47f9694d29dca6a2e2305634674201cfe66d814bf0cd57",
+    "actual_stdout": "done\n",
+    "python_stdout": "done\n",
+    "comparison": "matches"
+  },
+  {
+    "case": 2,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-02.txt",
+    "output": "1 0001-38d828c013 dialect=bbc\n2 0002-e1b142a8f5 dialect=mini\n3 0007-82ed7de9b3 dialect=mini\n4 0011-05576c3a8c dialect=bbc\n         1\n",
+    "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+    "dialect": "mini",
+    "fixture_sha256": "dd54f564654ff300bc47f9694d29dca6a2e2305634674201cfe66d814bf0cd57",
+    "actual_stdout": "         1\n",
+    "python_stdout": "1\n",
+    "comparison": "differs"
+  },
+  {
+    "case": 3,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-03.txt",
+    "output": "1 0001-38d828c013 dialect=bbc\n2 0002-e1b142a8f5 dialect=mini\n3 0007-82ed7de9b3 dialect=mini\n4 0011-05576c3a8c dialect=bbc\n         3\n",
+    "test": "test/test_control_flow.py::TestControlExitHierarchy::test_exit_for_deep",
+    "dialect": "mini",
+    "fixture_sha256": "dd54f564654ff300bc47f9694d29dca6a2e2305634674201cfe66d814bf0cd57",
+    "actual_stdout": "         3\n",
+    "python_stdout": "3\n",
+    "comparison": "differs"
+  },
+  {
+    "case": 4,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-04.txt",
+    "output": "1 0001-38d828c013 dialect=bbc\n2 0002-e1b142a8f5 dialect=mini\n3 0007-82ed7de9b3 dialect=mini\n4 0011-05576c3a8c dialect=bbc\n         11\n         12\n         21\n         22\n",
+    "test": "test/test_control_flow.py::TestNestedForMatching::test_nested_fors_correct_next_vars",
+    "dialect": "bbc",
+    "fixture_sha256": "dd54f564654ff300bc47f9694d29dca6a2e2305634674201cfe66d814bf0cd57",
+    "actual_stdout": "         11\n         12\n         21\n         22\n",
+    "python_stdout": "         11\n         12\n         21\n         22\n",
+    "comparison": "matches"
+  }
+]

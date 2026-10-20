@@ -1,0 +1,5 @@
+100 FOR l_8=1 TO 2
+110 FOR w=1 TO 2
+120 PRINT l_8; w
+130 NEXT w
+140 NEXT l_8

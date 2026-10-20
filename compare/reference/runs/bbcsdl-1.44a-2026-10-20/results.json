@@ -1,0 +1,100 @@
+[
+  {
+    "case": 1,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-01.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n1\n2\n3\ndone\n"
+  },
+  {
+    "case": 2,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-02.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n1\n2\ndone\n"
+  },
+  {
+    "case": 3,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-03.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\ninside\nafter\n"
+  },
+  {
+    "case": 4,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-04.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n1\n2\ndone\n"
+  },
+  {
+    "case": 5,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-05.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nout\n"
+  },
+  {
+    "case": 6,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-06.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n3\n"
+  },
+  {
+    "case": 7,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-07.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nelse\nafter\n"
+  },
+  {
+    "case": 8,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-08.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n1\n2\n"
+  },
+  {
+    "case": 9,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-09.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\ncase\nafter\n"
+  },
+  {
+    "case": 10,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-10.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nERROR 41 AT LINE 10020\nNo such line\n"
+  },
+  {
+    "case": 11,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-11.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nsub\nback\n"
+  },
+  {
+    "case": 12,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-12.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nouter\ninner\nouter back\nmain\n"
+  },
+  {
+    "case": 13,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-13.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\n1\n2\ndone\n"
+  },
+  {
+    "case": 14,
+    "timed_out": false,
+    "exit_code": 0,
+    "log": "case-14.txt",
+    "output": "BBCSDL jump checks - record your BBCSDL version\n1 FOR local jump     2 WHILE local jump\n3 IF local jump      4 Jump to enclosing FOR\n5 Jump out of loops  6 Backward WHILE jump\n7 ELSE local jump    8 ON GOTO in REPEAT\n9 CASE local jump   10 Missing target\n11 GOSUB same line  12 Nested GOSUB\n13 GOSUB in FOR     14 ON GOSUB\nsecond\nback\n"
+  }
+]
