@@ -113,7 +113,7 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 
 | Form | Meaning |
 |------|---------|
-| `(make-num-vector n fill)` | like `make-vector`; a NumPy array when NumPy is installed |
+| `(make-num-vector n fill)` | like `make-vector`; a NumPy array when NumPy is installed. `(make-num-vector [1 2 3])` takes the items of a vector or list |
 | `(vector-fill! v x [start] [stop])` | set a range of items to `x` |
 | `(vector-slice-set! v start stop step x)` | set every `step`th item from `start` below `stop` to `x` |
 | `(sum v)` | total of the items |

@@ -172,6 +172,41 @@ def _git(folder, *args):
     return subprocess.run(["git", *args], cwd=folder, env=env, capture_output=True,
                           text=True, timeout=120, creationflags=flags)
 
+def git_branch(folder: str = APP_DIR) -> str:
+    """The git branch `folder` is on, for Help > About.
+
+    A detached HEAD gives "detached at <short commit>"; a folder that is not
+    a git checkout, or a computer without git, gives "not a git checkout".
+    """
+    if not os.path.exists(os.path.join(folder, ".git")):
+        return "not a git checkout"
+    try:
+        branch = _git(folder, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        if branch == "HEAD":
+            commit = _git(folder, "rev-parse", "--short", "HEAD").stdout.strip()
+            return f"detached at {commit}" if commit else "not a git checkout"
+    except (OSError, subprocess.SubprocessError):
+        return "not a git checkout"
+    return branch or "not a git checkout"
+
+def about_text(folder: str = APP_DIR) -> str:
+    """The text of Help > About."""
+    return (
+        "Lispy3 Machine — a Lisp Machine style editor\n"
+        "for the lispy3 interpreter.\n"
+        + version_text() + "\n"
+        "Git branch: " + git_branch(folder) + "\n\n"
+        + ABOUT_CREDITS + "\n\n"
+        "F1  Lispy guide\n"
+        "F5  eval form at cursor\n"
+        "F6  eval whole buffer\n"
+        "F7  inspect symbol at cursor\n"
+        "F9  eval listener input\n"
+        "Ctrl+Break  stop the running code\n"
+        "Ctrl+Space  complete symbol\n"
+        "Ctrl+/      toggle comment"
+    )
+
 def git_pull(folder: str = APP_DIR):
     """Run `git pull --ff-only` in `folder`. Return (result, git's output).
 
@@ -2805,21 +2840,7 @@ class LispMachine(tk.Tk):
         return None
 
     def _about(self):
-        messagebox.showinfo(
-            "About Lispy3 Machine",
-            "Lispy3 Machine — a Lisp Machine style editor\n"
-            "for the lispy3 interpreter.\n"
-            + version_text() + "\n\n"
-            + ABOUT_CREDITS + "\n\n"
-            "F1  Lispy guide\n"
-            "F5  eval form at cursor\n"
-            "F6  eval whole buffer\n"
-            "F7  inspect symbol at cursor\n"
-            "F9  eval listener input\n"
-            "Ctrl+Break  stop the running code\n"
-            "Ctrl+Space  complete symbol\n"
-            "Ctrl+/      toggle comment\n"
-        )
+        messagebox.showinfo("About Lispy3 Machine", about_text() + "\n")
 
     def _on_close(self):
         if self._job is not None:

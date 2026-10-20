@@ -1958,7 +1958,7 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 
 def completion_candidates(env: 'Env' = global_env) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
-    names = set(SPECIAL_FORMS) | {'exit'}
+    names = set(SPECIAL_FORMS) | {'defun', 'exit'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
