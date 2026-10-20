@@ -9,8 +9,35 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 - Tab completion offers `defun`.
 - `(make-num-vector [1 2 3])` makes a num vector from a vector or list, and
   `(help 'make-num-vector)` and the other `lispy3-numpy.py` extras have help.
+- `lisp/mini-basic.lisp`: structured BBC BASIC statements as macros. `PRINT`,
+  `LET`, multi-line `IF ... ELSE`, `FOR ... STEP`, `REPEAT ... UNTIL`, `WHILE`,
+  `CASE ... WHEN ... OTHERWISE`, `DEF-PROC` / `DEF-FN` with `LOCAL`,
+  `ENDPROC`, `FN=`, the `EXIT-` forms and `END` each expand into plain lispy3
+  code inside `(bbc-program ...)`. PROC and FN parameters and LOCAL variables
+  are dynamically scoped as in BBC BASIC.
+- A BBC BASIC reader in `lisp/mini-basic.lisp`: `(bbc-run """...""")`,
+  `(bbc-load "prog.bas")` and `(bbc-expand text)` turn BBC BASIC text, with
+  UPPERCASE keywords, BBC operator precedence, string functions and line
+  numbers, into the statement macros. GOTO, GOSUB, DATA and arrays come later.
+- `(slurp "file")` reads a whole text file into a string.
+- `(run-lispy text)`, `(run-sbcl text)`, `(run-clojure text)` in
+  `lisp/mini-basic.lisp` run one BBC BASIC program with the mini-basic macros
+  of lispy3, SBCL or Clojure: `(run-sbcl (slurp "prog.bas"))`.
+- `(time exp)` runs `exp`, prints how long it took and gives its value.
+- `(run-program "prog" args [input])` runs another program and prints its
+  output; `lispy-home` is the folder `lispy3.py` is in.
+- `(define-memo (f x) ...)` and `(memoize f)`: a function that remembers its
+  results, like Python's `@functools.cache`. The BBC BASIC reader memoizes a
+  pure `DEF FN` (one that reads only its own parameters and `LOCAL`s, prints
+  nothing and calls no PROC or other FN), as mini_basic does.
+- `compare/`: the same mini-basic macros in SBCL and Clojure, side by side,
+  with shared test programs that print the same output in all three Lisps.
+- The Lispy Machine runs Lisp code on its own thread, so the window stays
+  live during a long run or an endless loop, and the new **■ Stop** button
+  (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on
+  the window's thread.
 - `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the turtle
-  window, and `lisp/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
+  window, and `lisp/programs/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
   around the pointer.
 - Eval whole buffer (F6) in the Lispy Machine draws again after the turtle
   window was closed, instead of stopping with an empty `Error:`.
@@ -18,6 +45,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   Listener, Inspector and Guide. Before, right-click did nothing.
 - Fraction results are simplified everywhere: `(mod 3/2 1/2)` is `0`, not `0/1`,
   `remainder` and `quotient` stay exact on fractions, and `(exact 0.1)` is `1/10`.
+- Complex numbers: literals such as `3+4i`, `-i` and `#C(3 4)`;
+  arithmetic, equality, complex-aware mathematical functions, and
+  rectangular/polar constructors, part accessors and predicates. Finite
+  values print as infix `3.0+4.0i` while non-finite values use `#C(...)`.
+  Bare `i` and `j` remain symbols. Regression checks are in
+  `run_complex_checks.py`.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.

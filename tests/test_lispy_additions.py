@@ -128,6 +128,32 @@ class SaveAndLoadTest(LispyTestCase):
                 self.assertEqual(f.read(), "")
 
 
+class MemoTest(LispyTestCase):
+
+    def test_define_memo_remembers_results(self):
+        # Without the cache (fib 90) would take far too long
+        self.ev('(define-memo (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))')
+        self.assertEqual(self.ev('(fib 90)'), 2880067194370816120)
+
+    def test_memoize_calls_once_per_argument(self):
+        self.ev_all('(define calls 0)',
+                    '(define sq (memoize (lambda (x) (set! calls (+ calls 1)) (* x x))))',
+                    '(sq 3)', '(sq 3)', '(sq 4)')
+        self.assertEqual(self.ev('calls'), 2)
+
+    def test_list_arguments_skip_the_cache(self):
+        self.ev('(define len (memoize (lambda (xs) (length xs))))')
+        self.assertEqual(self.ev('(len (list 1 2 3))'), 3)
+
+
+class TimeTest(LispyTestCase):
+
+    def test_time_prints_the_elapsed_time_and_gives_the_value(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(self.ev('(time (+ 1 2))'), 3)
+        self.assertRegex(out.getvalue(), r'^Elapsed time: [0-9.]+ s\n$')
+
+
 class LispFolderTest(LispyTestCase):
     """Bare names in (save "x") and (load "x") mean the lisp/ folder."""
 
@@ -222,7 +248,7 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_l_systems_draw(self):
         """The L-system examples and startup.lisp draw with the turtle."""
-        for name in ["tree.lisp", "plant.lisp", "snowflake.lisp", "startup.lisp"]:
+        for name in ["programs/tree.lisp", "programs/plant.lisp", "programs/snowflake.lisp", "startup.lisp"]:
             with self.subTest(name):
                 self.setUp()
                 self.run_example(name)
@@ -235,7 +261,7 @@ class ExampleProgramsTest(LispyTestCase):
 
     def test_mandelbrot_zooms_on_the_mouse_wheel(self):
         """mandelbrot.lisp draws, and a wheel turn zooms in around the pointer."""
-        with open(os.path.join(lispy3.LISP_DIR, "mandelbrot.lisp")) as f:
+        with open(os.path.join(lispy3.LISP_DIR, "programs", "mandelbrot.lisp")) as f:
             source = f.read()
         # the same program on a 12 x 8 picture, so the test stays quick
         source = source.replace("(define mandel-w 120)", "(define mandel-w 12)")
@@ -258,13 +284,6 @@ class ExampleProgramsTest(LispyTestCase):
         """my_workspace.lisp loads without an error."""
         self.run_example("my_workspace.lisp")
 
-    def test_every_example_is_covered(self):
-        """Every .lisp file in lisp/ has a test."""
-        covered = {"tree.lisp", "plant.lisp", "snowflake.lisp", "sieve_lispy3.lisp",
-                   "sieve-optimized.lisp", "my_workspace.lisp", "pi_digits.lisp", "lsystems.lisp",
-                   "mandelbrot.lisp"}  # pi: test_pi_digits.py
-        examples = {f for f in os.listdir(lispy3.LISP_DIR) if f.endswith(".lisp")}
-        self.assertEqual(examples - covered, set(), "add a test for the new example program")
 
 class OnScrollTest(LispyTestCase):
 

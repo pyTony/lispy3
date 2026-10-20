@@ -8,6 +8,8 @@ Five minutes from nothing to your own functions. For more, read [Lispy by Exampl
     python lispy_machine.pyw      the editor, with a Listener at the bottom
     python lispy3.py prog.lisp    run a program file
 
+In the editor, the **■ Stop** button above the Listener (or `Ctrl+Break`) ends a program that runs too long.
+
 Type `(help)` at the prompt to list every built-in, and `(help 'name)` to explain one:
 
     lispy3> (help 'length)

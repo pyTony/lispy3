@@ -2,6 +2,7 @@ from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
 from fractions import Fraction
 import calendar
+import cmath
 import datetime
 import functools
 import inspect
@@ -11,13 +12,15 @@ import operator as op
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import turtle
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
-Number: TypeAlias = int | float | Fraction
+Real: TypeAlias = int | float | Fraction          # real numbers (no complex)
+Number: TypeAlias = Real | complex                # any number, incl. complex
 Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char']
 List: TypeAlias = list['Exp']
 Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
@@ -149,6 +152,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
+        ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
+        ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
         ("if", "(if test then else) - the else part may be left out"),
@@ -272,8 +277,12 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
         ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
         ("read", "(read \"(+ 1 2)\") - turn text into code (data) for eval"),
+        ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
+        ("run-program", "(run-program \"sbcl\" (list \"--version\") [input]) - run another program with input text, print what it prints, give its exit code"),
+        ("lispy-home", "lispy-home - the folder lispy3.py is in"),
+        ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -429,6 +438,43 @@ def lisp_file_for_load(filename: str) -> str:
         return in_lisp_dir
     return real_filename
 
+def slurp(filename: Any) -> String:
+    """(slurp "file") - the whole text file as one string; a relative name not found here is looked up in lisp/."""
+    raw_name = _unwrap_str(filename)
+    name = os.path.normpath(raw_name)
+    in_lisp_dir = os.path.normpath(os.path.join(LISP_DIR, name))
+    if not os.path.exists(name) and not os.path.isabs(name) and os.path.exists(in_lisp_dir):
+        name = in_lisp_dir
+    with open(name, encoding='utf-8') as f:
+        return String(f.read())
+    
+def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
+    """(run-program "sbcl" (list "--version") [input]) - run another program, print what it prints, give its exit code."""
+    command = [_unwrap_str(program)] + [_unwrap_str(a) if isinstance(a, String) else str(a) for a in args]
+    if shutil.which(command[0]) is None:
+        raise LispyError(f"run-program: {command[0]} is not installed")
+    result = subprocess.run(command, capture_output=True, text=True,
+                            input=None if text_input is None else _unwrap_str(text_input))
+    # Printed through Python, so the output goes where Lispy's own printing goes
+    print(result.stdout, end="")
+    print(result.stderr, end="", file=sys.stderr)
+    return result.returncode
+
+def memoize(proc: Callable) -> Callable:
+    """(memoize f) - f with a cache of its results, as Python's functools.cache.
+
+    Arguments that cannot be dict keys, such as lists, skip the cache."""
+    cache: dict = {}
+    def memo(*args: Any) -> Any:
+        try:
+            return cache[args]
+        except KeyError:
+            value = cache[args] = proc(*args)
+            return value
+        except TypeError:
+            return proc(*args)
+    return memo
+
 def lisp_file_for_save(filename: str) -> str:
     """The file (save "name") writes: a bare name goes to lisp/, a path is used as given."""
     real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
@@ -581,6 +627,23 @@ def _div2(a: Number, b: Number) -> Number:
         return normalize(Fraction(a) / b)
     return a / b
 
+def _compute_epsilon() -> float:
+    """Machine epsilon by halving: the smallest power of two that still changes 1.0 when added."""
+    eps = 1.0
+    while 1.0 + eps / 2 != 1.0:
+        eps /= 2
+    return eps
+
+MACHINE_EPSILON = _compute_epsilon()
+
+def _clean_complex(z: complex) -> complex:
+    """Zero a part that is only rounding noise next to the larger part (within 4 epsilon of it).
+    Never zeroes both parts, so 1e-300+1e-300i is left alone."""
+    tol = 4 * MACHINE_EPSILON * max(abs(z.real), abs(z.imag))
+    re = 0.0 if abs(z.real) <= tol else z.real
+    im = 0.0 if abs(z.imag) <= tol else z.imag
+    return complex(re, im)
+
 def _expt(a: Number, b: Number) -> Number:
     """(expt 2 -1) is 1/2, exact like Scheme; decimals stay decimal."""
     if isinstance(a, (int, Fraction)) and type(b) is int and b < 0:
@@ -599,7 +662,7 @@ def _lisp_eq(a: Any, b: Any) -> bool:
         return type(a) is type(b) and a.value == b.value
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+    if isinstance(a, (int, float, complex)) and isinstance(b, (int, float, complex)):
         return a == b
     return a == b
 
@@ -723,7 +786,7 @@ def _universal_time_to_string(ut: Any = None, fmt: Any = None) -> String:
 def _number_to_string(n: Number, base: int = 10) -> String:
     """(number->string n) or (number->string n base) for a whole number in base 2 to 36."""
     if base == 10:
-        return String(str(n))
+        return String(lisp_str(n) if isinstance(n, complex) else str(n))
     if not 2 <= base <= 36:
         raise ValueError("number->string: base must be from 2 to 36")
     m = _whole(n, 'number->string')
@@ -795,6 +858,10 @@ def _string_to_number(s: Any, base: int = 10) -> Any:
     raw = _unwrap_str(s).strip()
     if base == 10 and FRACTION_RE.fullmatch(raw):
         return normalize(Fraction(raw))
+    if base == 10:
+        c = _try_parse_complex(raw)
+        if c is not None:
+            return c
     try:
         return int(raw, base)
     except ValueError:
@@ -958,6 +1025,16 @@ def standard_env() -> Env:
         'float': float,
         'exact->inexact': float,
         'inexact->exact': _exact,
+        # Complex numbers (Common Lisp compatible)
+        'complex':           lambda re, im=0: complex(re, im),
+        'make-rectangular':  lambda re, im:   complex(re, im),
+        'make-polar':        lambda mag, ang: cmath.rect(mag, ang),
+        'real-part':         lambda x: x.real if type(x) is complex else x,
+        'imag-part':         lambda x: x.imag if type(x) is complex else 0,
+        'magnitude':         abs,
+        'angle':             lambda x: cmath.phase(x) if type(x) is complex
+                                      else (0.0 if x >= 0 else math.pi),
+        'conjugate':         lambda x: x.conjugate() if type(x) is complex else x,
         'expt': _expt,
         'abs': abs,
         'min': lambda first, *rest: min(first, *rest) if rest else first,
@@ -975,7 +1052,10 @@ def standard_env() -> Env:
         # Type & Equality Predicates
         'null?': lambda x: type(x) is list and not x,
         'empty?': lambda x: len(_unwrap_str(x) if isinstance(x, String) else x) == 0 if isinstance(x, (list, tuple, dict, str, String)) else False,
-        'number?': lambda x: isinstance(x, (int, float, Fraction)) and not isinstance(x, bool),
+        'number?': lambda x: isinstance(x, (int, float, Fraction, complex)) and not isinstance(x, bool),
+        'complex?': lambda x: type(x) is complex,
+        'real?': lambda x: (isinstance(x, (int, float, Fraction)) and not isinstance(x, bool))
+                           or (type(x) is complex and x.imag == 0),
         'symbol?': lambda x: isinstance(x, str),
         'string?': lambda x: isinstance(x, String),
         'char?': lambda x: isinstance(x, Char),
@@ -985,7 +1065,7 @@ def standard_env() -> Env:
         'map?': lambda x: isinstance(x, dict) and not isinstance(x, Env),
         'procedure?': lambda x: isinstance(x, Procedure) or callable(x),
         'boolean?': lambda x: isinstance(x, bool),
-        'eq?': lambda a, b: _lisp_eq(a, b) if isinstance(a, (int, float, str, String, Char, bool)) else (a is b),
+        'eq?': lambda a, b: _lisp_eq(a, b) if isinstance(a, (int, float, complex, str, String, Char, bool)) else (a is b),
         'equal?': _lisp_eq,
 
         # Lists & Sequences
@@ -1039,6 +1119,9 @@ def standard_env() -> Env:
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
+        'slurp': slurp,
+        'memoize': memoize,
+        'run-program': run_program,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
@@ -1076,6 +1159,33 @@ def standard_env() -> Env:
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
 
     # Boolean and Lisp constants
+    # Complex-aware sqrt / log, installed last so they win over the math ones.
+    def _sqrt(x):
+        if isinstance(x, complex) or (isinstance(x, (int, float, Fraction)) and x < 0):
+            return cmath.sqrt(x)
+        return math.sqrt(x)
+
+    def _log(x, base=None):
+        if base is not None:
+            return _log(x) / _log(base)
+        if isinstance(x, complex) or (isinstance(x, (int, float, Fraction)) and x < 0):
+            return cmath.log(x)
+        if x == 0:
+            raise ValueError('math domain error')
+        return math.log(x)
+
+    env['sqrt'] = Procedure(parms=['*args'], body=None, env=env, native_fn=_sqrt, name='sqrt')
+
+    def _complex_aware(real_fn, complex_fn):
+        return lambda x: complex_fn(x) if isinstance(x, complex) else real_fn(x)
+
+    for _name in ('exp', 'sin', 'cos', 'tan', 'sinh', 'cosh', 'tanh'):
+        env[_name] = Procedure(parms=['*args'], body=None, env=env, name=_name,
+                               native_fn=_complex_aware(getattr(math, _name), getattr(cmath, _name)))
+    env['log']  = Procedure(parms=['*args'], body=None, env=env, native_fn=_log,  name='log')
+
+    env['epsilon'] = MACHINE_EPSILON
+
     env['#t'] = True
     env['#f'] = False
     env['true'] = True
@@ -1086,6 +1196,7 @@ def standard_env() -> Env:
     for cl_name, name in CL_ALIASES.items():
         env[cl_name] = env[name]
     env['internal-time-units-per-second'] = INTERNAL_TIME_UNITS_PER_SECOND
+    env['lispy-home'] = String(os.path.dirname(os.path.abspath(__file__)))
 
     # 3. Add turtle graphics support dynamically
     def _call_turtle(k: str, *args: Any) -> Any:
@@ -1181,11 +1292,28 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         macro_table[name] = proc
         return None
 
+    if head == 'time':
+        # (time exp): run exp, print how long it took, give its value
+        if len(x) != 2:
+            raise SyntaxError("time needs one expression: (time (f 30))")
+        t0, value = gensym('t0'), gensym('value')
+        return expand(['let', [[t0, ['get-internal-real-time']]],
+                       ['let', [[value, x[1]]],
+                        ['display', String('Elapsed time: '),
+                         ['/', ['-', ['get-internal-real-time'], t0], 1000.0], String(' s')],
+                        value]], toplevel)
+
     if head == 'defun':
         # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)
         if len(x) < 4 or not isinstance(x[2], (list, tuple)):
             raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
         return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
+
+    if head == 'define-memo':
+        # (define-memo (f x) body...) is (define f (memoize (lambda (x) body...)))
+        if len(x) < 3 or not isinstance(x[1], (list, tuple)) or not x[1]:
+            raise SyntaxError("define-memo needs a name with parameters and a body: (define-memo (f x) ...)")
+        return expand(['define', x[1][0], ['memoize', ['lambda', list(x[1][1:])] + list(x[2:])]], toplevel)
 
     if head == 'define':
         # Support shorthand: (define (f x y) body1 body2...)
@@ -1248,7 +1376,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         kind = type(x)
         if kind is str:
             return x if x.startswith(':') else env.find(x)[x]
-        if kind is int or kind is float or kind is Fraction:
+        if kind is int or kind is float or kind is Fraction or kind is complex:
             return x
         # (proc args...): function application, unless the head is a special form,
         # a :keyword lookup or an obj/method call. TCO: a Lisp procedure's body
@@ -1295,7 +1423,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 return env.find(symbol)[symbol]
                 
             # 3. Constant numeric literal
-            case int() | float() | Fraction():
+            case int() | float() | Fraction() | complex():
                 return x
                 
             # 4. Pure string literals (dataclass String) and Characters (dataclass Char)
@@ -1581,7 +1709,17 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         if tokens and tokens[0] == ')':
             tokens.pop(0)
         return L
-        
+
+    elif token in ('#C', '#c'):
+        # Common Lisp literal: #C(real imag), read at parse time.
+        args = read_from_tokens(tokens)
+        if not isinstance(args, list) or len(args) != 2:
+            raise SyntaxError("#C requires two numbers: #C(real imag)")
+        try:
+            return complex(args[0], args[1])
+        except (TypeError, ValueError) as e:
+            raise SyntaxError(f"#C needs two real numbers: {e}")
+
     elif token == '[':
         L = []
         while tokens and tokens[0] != ']':
@@ -1640,6 +1778,29 @@ def _unescape_string(raw: str) -> str:
 
 FRACTION_RE = re.compile(r'[+-]?\d+/\d*[1-9]\d*')   # 7/2 or -1/3; never a division by 0
 
+
+def _try_parse_complex(token: str) -> complex | None:
+    """Parse 3+4i, 3-4i, 4i, -4i, +i, -i (and j variants); None if it isn't one.
+
+    Bare `i` / `j` are *not* parsed, so `(define i 5)` and `(let [i 0] ...)` keep
+    working. Symbols that happen to end in i - pi, phi, loci, taxi - survive
+    because `complex("pj")` and `complex("locij")` raise ValueError.
+    """
+    if len(token) < 2 or token[-1] not in 'ij':
+        return None
+    body = token[:-1]
+    if body in ('+', '-'):
+        return complex(0, 1 if body == '+' else -1)
+    # Python's complex() also accepts 'nanj', 'infj', 'infinityj' and '1_0j'; those
+    # would swallow symbols like nani / infi, so allow plain numeric characters only.
+    if not re.fullmatch(r'[0-9+\-.eE]+', body):
+        return None
+    try:
+        return complex(body + 'j')
+    except ValueError:
+        return None
+
+
 def atom(token: str) -> Atom:
     """Numbers become numbers, "strings" become String, #\\c become Char, others are symbols."""
     if token == '#t':
@@ -1673,6 +1834,10 @@ def atom(token: str) -> Atom:
             except ValueError:
                 pass
         return Char(token[2:])
+    if len(token) > 1 and token[-1] in 'ij':
+        complex_val = _try_parse_complex(token)
+        if complex_val is not None:
+            return complex_val
     if FRACTION_RE.fullmatch(token):
         return normalize(Fraction(token))
     try:
@@ -1764,6 +1929,13 @@ def lisp_str(exp: Any) -> str:
         if exp.value in reverse_char_map:
             return reverse_char_map[exp.value]
         return f"#\\{exp.value}"
+    elif type_name == 'complex':
+        # Common Lisp spelling: #C(real imag). Round-trips through #C(...).
+        if math.isfinite(exp.real) and math.isfinite(exp.imag):
+            exp = _clean_complex(exp)
+            im = lisp_str(exp.imag)
+            return f"{lisp_str(exp.real)}{im if im.startswith('-') else '+' + im}i"
+        return f"#C({lisp_str(exp.real)} {lisp_str(exp.imag)})"   # nan/inf can't be infix
     elif isinstance(exp, Vector):
         return '[' + ' '.join(map(lisp_str, exp)) + ']'
     elif isinstance(exp, Pair):

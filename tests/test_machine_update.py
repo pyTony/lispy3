@@ -84,6 +84,7 @@ class GitPull(unittest.TestCase):
         git(self.clone, "checkout", "-q", "-b", "my-feature")
         self.assertEqual(machine.git_branch(self.clone), "my-feature")
         self.assertIn("Git branch: my-feature", machine.about_text(self.clone))
+        self.assertIn("Ctrl+Break  stop the running code", machine.about_text(self.clone))
 
     def test_detached_head_names_the_commit(self):
         """A detached checkout shows the short commit instead of a branch."""

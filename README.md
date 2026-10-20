@@ -22,6 +22,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - [REPL example usage](#repl-example-usage)
 - [Running programs](#running-programs)
 - [Loops, vectors and timing](#loops-vectors-and-timing)
+- [Complex numbers](#complex-numbers)
 - [L-systems with turtle graphics](#l-systems-with-turtle-graphics)
   - [How the files fit together](#how-the-files-fit-together)
   - [Your own L-system](#your-own-l-system)
@@ -51,6 +52,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
   - `{}` for associative Maps/Dictionaries (Python dicts).
 - **Clojure Keywords & Property Lists**: Keywords starting with `:` evaluate to themselves. If a keyword is called as a function (e.g. `(:name user)`), it performs a direct dictionary lookup.
 - **Full String Literals Support**: Differentiates between Lisp symbols (variable names) and raw string values using Python `dataclasses`.
+- **Complex Numbers**: `3+4i`, `-i`, `2.5j` and `#C(3 4)` are complex literals. Arithmetic, transcendental functions, polar/rectangular construction, parts and conjugation are supported. Finite values print as `3.0+4.0i`; non-finite components use `#C(real imag)`.
 - **Workspace State Management**: Built-in environment persistence via `(save "filename")` and `(load "filename")`, which serialize/deserialize user functions and variables as valid, human-readable Lisp source code.
 - **Turtle Graphics**: Every `turtle.*` name is available as a Lisp procedure; `push-pose` / `pop-pose` / `clear-poses` implement the `[` … `]` branching of L-systems, and `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the window.
 
@@ -60,6 +62,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - **Persistent Listener** with history, coloured prompts/results/errors.
 - **Inspector pane** showing the pretty-printed last value.
 - **Evaluate form at cursor** or the whole buffer without restarting the interpreter.
+- **Stop button**: code runs in the background, so the window stays live during an endless loop, and **■ Stop** (`Ctrl+Break`) ends it.
 - **Search & replace** with case / whole-word / regex options, next/previous, replace-all.
 - **Paren matching**, auto-indent, and **symbol completion** (`Ctrl+Space`).
 - **`display` routed into the Listener** — no more stray terminal output.
@@ -74,11 +77,12 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
 | `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |
 | `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
-| `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
+| `lisp/programs/tree.lisp`, `lisp/programs/plant.lisp`, `lisp/programs/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
-| `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
-| `lisp/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
+| `lisp/mini-basic.lisp` | Structured BBC BASIC: `(bbc-run """...""")` or `(bbc-load "prog.bas")` reads BBC BASIC text into macros (`PRINT`, `IF ... ELSE`, `FOR`, `REPEAT`, `WHILE`, `CASE`, `DEF-PROC`, `DEF-FN`) that expand into lispy3 code; see the comments in the file. |
+| `lisp/programs/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
+| `lisp/programs/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
@@ -110,6 +114,10 @@ Run the interpreter directly using Python 3:
     lispy3> (define square (lambda [x] (* x x)))
     lispy3> (square 9)
     81
+
+    lispy3> (define z 3+4i)
+    lispy3> (magnitude z)
+    5.0
 
     lispy3> (save "my_workspace")
     Workspace saved to .../lisp/my_workspace.lisp
@@ -176,6 +184,41 @@ The Lispy Machine editor uses `lispy3-numpy.py` by itself when NumPy is installe
 
 ---
 
+## Complex numbers
+
+Complex literals accept the suffix `i` or `j`, for example `3+4i`, `1-2i`,
+`4i`, `-i` and `2.5j`. The Common Lisp notation `#C(3 4)` is also accepted.
+Bare `i` and `j` remain ordinary symbols so they can be used as variable names.
+
+Finite complex numbers print in infix notation: `3+4i` prints as
+`3.0+4.0i`. The reader also accepts that printed form. When a component is
+non-finite (`inf` or `nan`), printing uses `#C(real imag)` instead.
+
+| Form | Meaning |
+|------|---------|
+| `(complex re im)`, `(make-rectangular re im)` | Create a complex number from its two parts |
+| `(make-polar mag ang)` | Create one from a magnitude and angle (radians) |
+| `(real-part z)`, `(imag-part z)` | Extract real and imaginary parts |
+| `(magnitude z)`, `(angle z)` | Magnitude and phase angle |
+| `(conjugate z)` | Complex conjugate |
+| `(complex? z)`, `(real? z)` | Numeric type predicates |
+| `(sqrt -1)`, `(log -1)` | Return complex results for negative inputs |
+
+Arithmetic (`+`, `-`, `*`, `/`, `expt`) and numerical equality (`=`, `eq?`,
+`equal?`) support complex numbers. Ordering comparisons (`<`, `>`, `<=`, `>=`)
+do not define an ordering for complex values and raise an error.
+
+Example:
+
+    lispy3> (define z 3+4i)
+    lispy3> (magnitude z)
+    5.0
+    lispy3> (* z (conjugate z))
+    25.0+0.0i
+    lispy3> (sqrt -4)
+    0.0+2.0i
+
+---
 ## L-systems with turtle graphics
 
 ![A tree drawn by tree.lisp](docs/tree.png)
@@ -291,6 +334,7 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
 | `F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
 | `F9` | Evaluate what you typed in the Listener |
+| `Ctrl+Break` | Stop the code that is running (also the Listener's **■ Stop** button, **Eval → Stop**, and `Esc` in the plain REPL) |
 | `Ctrl+F` | Open Find |
 | `Ctrl+H` | Open Find & Replace |
 | `F3` / `Shift+F3` | Next / previous match |
@@ -309,6 +353,8 @@ The Listener is a real REPL backed by the interpreter's `global_env`. Code in th
 **Plain lispy3 REPL.** Tick **View → Plain lispy3 REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener becomes a console like `python lispy3.py`, still sharing the editor's `global_env`: the `USER>` entry line goes away and you type at a `lispy3>` prompt in the Listener itself, so your input and the output scroll together. Enter on an unfinished form continues it on the next line under a `... (1)>` prompt, pasted lines are read one by one, `Tab` completes like readline (the shared start, then the list of choices) and `Ctrl+Space` opens the same pick list as elsewhere, `↑` / `↓` bring back earlier lines, `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`, and a result too long for one line, such as a whole function, indented like in the Inspector). The text above the prompt is read-only: `←` stops at the prompt, and a click in older output puts the cursor back at the prompt (drag to select and copy). The choice is remembered in `~/.lispy3_machine.json`; untick it to get the `USER>` Listener back.
 
 F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
+
+**Running and stopping.** Code runs on its own thread, so the editor stays live while it works: you can scroll, edit, read the guide, and watch `display` output arrive. While it runs the status bar says *Running...* and the **■ Stop** button at the top right of the Listener turns red; press it (or `Ctrl+Break`, or **Eval → Stop**) to end an endless loop or a long `(sleep ...)`. The Listener prints `;; Stopped.` and everything defined so far stays defined. `(try ...)` does not catch a Stop. One evaluation runs at a time: F5, F6 or F9 during a run says *Still running* and does nothing. Turtle commands are still carried out by the window's own thread, as Tk requires, so drawings work as before.
 
 F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely what `python lispy3.py file.lisp` does under the hood, so the results are identical.
 
