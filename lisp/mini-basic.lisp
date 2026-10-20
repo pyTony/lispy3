@@ -167,6 +167,10 @@
 (define (bbc-escape stmt tag)
   `(begin ,stmt (error ,tag)))
 
+(define (bbc-nested-body-code stmts)
+  ;; The extension replaces this hook to resolve jumps in active bodies.
+  `(begin #f ,@stmts))
+
 ;;; --- Statements ---
 
 (define-macro (LET var exp)
@@ -201,9 +205,9 @@
 
 (define-macro (IF test & body)
   (let [parts (bbc-split body 'ELSE)
-        then-part `(begin ,@(car parts))]
+        then-part (bbc-nested-body-code (car parts))]
     (if (bbc-second parts)
-        `(if ,(bbc-test test) ,then-part (begin ,@(bbc-second parts)))
+        `(if ,(bbc-test test) ,then-part ,(bbc-nested-body-code (bbc-second parts)))
         `(if ,(bbc-test test) ,then-part))))
 
 (define-macro (FOR var from to & more)
@@ -219,18 +223,18 @@
                     ((< step 0) `(>= ,var ,lim))
                     (else `(<= ,var ,lim)))
         loop `(let ((,lim ,to) (,st ,step))
-                (while (begin ,@body ,next ,more?)))]
+                (while (begin ,(bbc-nested-body-code body) ,next ,more?)))]
     `(begin
        (LET ,var ,from)
        ,(if (bbc-uses? '(EXIT-FOR) body) (bbc-catch "bbc:exit-for" loop #f) loop))))
 
 (define-macro (REPEAT & body)
   (let [parts (bbc-split body 'UNTIL)
-        loop `(while (begin ,@(car parts) (not ,(bbc-test (car (bbc-second parts))))))]
+        loop `(while (begin ,(bbc-nested-body-code (car parts)) (not ,(bbc-test (car (bbc-second parts))))))]
     (if (bbc-uses? '(EXIT-REPEAT) body) (bbc-catch "bbc:exit-repeat" loop #f) loop)))
 
 (define-macro (WHILE test & body)
-  (let [loop `(while ,(bbc-test test) ,@body)]
+  (let [loop `(while ,(bbc-test test) ,(bbc-nested-body-code body))]
     (if (bbc-uses? '(EXIT-WHILE) body) (bbc-catch "bbc:exit-while" loop #f) loop)))
 
 (define-macro (CASE exp & clauses)
@@ -238,9 +242,9 @@
     `(let ((,v ,exp))
        (cond ,@(map (lambda (clause)
                       (if (eq? (car clause) 'OTHERWISE)
-                          `(else #f ,@(cdr clause))
+                          `(else ,(bbc-nested-body-code (cdr clause)))
                           `((or ,@(map (lambda (w) `(= ,v ,w)) (bbc-second clause)))
-                            #f ,@(cdr (cdr clause)))))
+                            ,(bbc-nested-body-code (cdr (cdr clause))))))
                     clauses)))))
 
 (define-macro (EXIT-FOR) '(error "bbc:exit-for"))
@@ -815,17 +819,27 @@
 (define (bbc-p-case)
   (let [subject (bbc-value (bbc-p-expr))
         clauses (list)
+        labels (list)
         ends '("WHEN" "OTHERWISE" "ENDCASE")]
     (bbc-expect! :kw "OF" "OF")
     (bbc-skip-separators)
     (while (not (bbc-accept! :kw "ENDCASE"))
-      (cond ((bbc-accept! :kw "WHEN")
+      (cond ((bbc-at? :line #f)
+             ;; Unlike later headers (read by bbc-p-block), the first header
+             ;; has no preceding clause body to consume its line label.
+             (bbc-push! labels (list 'LABEL (nth (bbc-advance!) 1))))
+            ((bbc-accept! :kw "WHEN")
              (let [vals (bbc-p-value-list)]
-               (bbc-push! clauses (append (list 'WHEN vals) (bbc-p-block ends #f)))))
+               (bbc-push! clauses (append (list 'WHEN vals) labels (bbc-p-block ends #f)))
+               (set! labels (list))))
             ((bbc-accept! :kw "OTHERWISE")
-             (bbc-push! clauses (cons 'OTHERWISE (bbc-p-block ends #f))))
+             (bbc-push! clauses (append (list 'OTHERWISE) labels (bbc-p-block ends #f)))
+             (set! labels (list)))
             (else (bbc-fail "expected WHEN, OTHERWISE or ENDCASE")))
       (bbc-skip-separators))
+    ;; Retain a numbered ENDCASE even for an empty CASE with no clause body.
+    (if (not (null? labels))
+        (bbc-push! clauses (cons 'OTHERWISE labels)))
     (append (list 'CASE subject) clauses)))
 
 (define (bbc-p-parms)

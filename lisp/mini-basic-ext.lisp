@@ -180,7 +180,7 @@
     (bbc-push! segments (cons 'begin (cons #f cur)))
     (list segments labels)))
 
-(define (bbc-tagbody-code stmts)
+(define (bbc-tagbody-code stmts & nested)
   ;; Compile stmts with labels and GOTOs into a TCO-safe segment loop
   (let [info (bbc-split-tagbody stmts)
         segs (car info)
@@ -203,8 +203,18 @@
                  (let ((,nxt (get ,tbl bbc-goto-target #f)))
                    (if ,nxt
                        (set! ,pc ,nxt)
-                       (error (str "GOTO: unknown label " bbc-goto-target))))
+                       ,(if (null? nested)
+                            '(error (str "GOTO: unknown label " bbc-goto-target))
+                            '(error "bbc:goto"))))
                  (error ,err))))))))
+
+(define (bbc-nested-body-code stmts)
+  ;; Each active structured body resolves its own labels. A jump to an outer
+  ;; body must unwind without losing its target; only the outermost handler
+  ;; reports an unknown label. Jump-free bodies keep their ordinary value.
+  (if (bbc-uses? '(GOTO GO ON-GOTO) stmts)
+      (bbc-tagbody-code stmts #t)
+      `(begin #f ,@stmts)))
 
 (define-macro (tagbody & forms)
   (bbc-tagbody-code forms))
@@ -434,4 +444,3 @@
           ((equal? value "GOTO") (bbc-advance!) (bbc-p-goto))
           ((equal? value "ON") (bbc-advance!) (bbc-p-on))
           (else #f))))
-          
