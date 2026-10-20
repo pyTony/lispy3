@@ -32,7 +32,7 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   (also Eval > Stop and Ctrl+Break) ends it. Turtle commands still run on
   the window's thread.
 - `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the turtle
-  window, and `lisp/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
+  window, and `lisp/programs/mandelbrot.lisp` uses it to zoom into the Mandelbrot set
   around the pointer.
 - Eval whole buffer (F6) in the Lispy Machine draws again after the turtle
   window was closed, instead of stopping with an empty `Error:`.
@@ -40,6 +40,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   Listener, Inspector and Guide. Before, right-click did nothing.
 - Fraction results are simplified everywhere: `(mod 3/2 1/2)` is `0`, not `0/1`,
   `remainder` and `quotient` stay exact on fractions, and `(exact 0.1)` is `1/10`.
+- Complex numbers: literals such as `3+4i`, `-i` and `#C(3 4)`;
+  arithmetic, equality, complex-aware mathematical functions, and
+  rectangular/polar constructors, part accessors and predicates. Finite
+  values print as infix `3.0+4.0i` while non-finite values use `#C(...)`.
+  Bare `i` and `j` remain symbols. Regression checks are in
+  `run_complex_checks.py`.
 - `lispy3-numpy.py`: the interpreter with a faster evaluator, bulk vector
   built-ins (`make-num-vector`, `vector-fill!`, `vector-slice-set!`, `sum`)
   and, when NumPy is installed, NumPy arrays and maths. NumPy stays optional.

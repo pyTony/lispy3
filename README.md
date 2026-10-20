@@ -22,6 +22,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - [REPL example usage](#repl-example-usage)
 - [Running programs](#running-programs)
 - [Loops, vectors and timing](#loops-vectors-and-timing)
+- [Complex numbers](#complex-numbers)
 - [L-systems with turtle graphics](#l-systems-with-turtle-graphics)
   - [How the files fit together](#how-the-files-fit-together)
   - [Your own L-system](#your-own-l-system)
@@ -51,6 +52,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
   - `{}` for associative Maps/Dictionaries (Python dicts).
 - **Clojure Keywords & Property Lists**: Keywords starting with `:` evaluate to themselves. If a keyword is called as a function (e.g. `(:name user)`), it performs a direct dictionary lookup.
 - **Full String Literals Support**: Differentiates between Lisp symbols (variable names) and raw string values using Python `dataclasses`.
+- **Complex Numbers**: `3+4i`, `-i`, `2.5j` and `#C(3 4)` are complex literals. Arithmetic, transcendental functions, polar/rectangular construction, parts and conjugation are supported. Finite values print as `3.0+4.0i`; non-finite components use `#C(real imag)`.
 - **Workspace State Management**: Built-in environment persistence via `(save "filename")` and `(load "filename")`, which serialize/deserialize user functions and variables as valid, human-readable Lisp source code.
 - **Turtle Graphics**: Every `turtle.*` name is available as a Lisp procedure; `push-pose` / `pop-pose` / `clear-poses` implement the `[` … `]` branching of L-systems, and `(onscroll f)` calls `(f x y step)` when the mouse wheel turns over the window.
 
@@ -75,12 +77,12 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
 | `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |
 | `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
-| `lisp/tree.lisp`, `lisp/plant.lisp`, `lisp/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
+| `lisp/programs/tree.lisp`, `lisp/programs/plant.lisp`, `lisp/programs/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
 | `lisp/mini-basic.lisp` | Structured BBC BASIC: `(bbc-run """...""")` or `(bbc-load "prog.bas")` reads BBC BASIC text into macros (`PRINT`, `IF ... ELSE`, `FOR`, `REPEAT`, `WHILE`, `CASE`, `DEF-PROC`, `DEF-FN`) that expand into lispy3 code; see the comments in the file. |
-| `lisp/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
-| `lisp/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
+| `lisp/programs/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
+| `lisp/programs/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
@@ -112,6 +114,10 @@ Run the interpreter directly using Python 3:
     lispy3> (define square (lambda [x] (* x x)))
     lispy3> (square 9)
     81
+
+    lispy3> (define z 3+4i)
+    lispy3> (magnitude z)
+    5.0
 
     lispy3> (save "my_workspace")
     Workspace saved to .../lisp/my_workspace.lisp
@@ -178,6 +184,41 @@ The Lispy Machine editor uses `lispy3-numpy.py` by itself when NumPy is installe
 
 ---
 
+## Complex numbers
+
+Complex literals accept the suffix `i` or `j`, for example `3+4i`, `1-2i`,
+`4i`, `-i` and `2.5j`. The Common Lisp notation `#C(3 4)` is also accepted.
+Bare `i` and `j` remain ordinary symbols so they can be used as variable names.
+
+Finite complex numbers print in infix notation: `3+4i` prints as
+`3.0+4.0i`. The reader also accepts that printed form. When a component is
+non-finite (`inf` or `nan`), printing uses `#C(real imag)` instead.
+
+| Form | Meaning |
+|------|---------|
+| `(complex re im)`, `(make-rectangular re im)` | Create a complex number from its two parts |
+| `(make-polar mag ang)` | Create one from a magnitude and angle (radians) |
+| `(real-part z)`, `(imag-part z)` | Extract real and imaginary parts |
+| `(magnitude z)`, `(angle z)` | Magnitude and phase angle |
+| `(conjugate z)` | Complex conjugate |
+| `(complex? z)`, `(real? z)` | Numeric type predicates |
+| `(sqrt -1)`, `(log -1)` | Return complex results for negative inputs |
+
+Arithmetic (`+`, `-`, `*`, `/`, `expt`) and numerical equality (`=`, `eq?`,
+`equal?`) support complex numbers. Ordering comparisons (`<`, `>`, `<=`, `>=`)
+do not define an ordering for complex values and raise an error.
+
+Example:
+
+    lispy3> (define z 3+4i)
+    lispy3> (magnitude z)
+    5.0
+    lispy3> (* z (conjugate z))
+    25.0+0.0i
+    lispy3> (sqrt -4)
+    0.0+2.0i
+
+---
 ## L-systems with turtle graphics
 
 ![A tree drawn by tree.lisp](docs/tree.png)
