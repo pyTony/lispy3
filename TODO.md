@@ -241,6 +241,7 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
   order; reject malformed trailing syntax before any form runs.
 - [x] Seven regressions pass. Real GNU-readline pseudo-terminal check under WSL
   verified a two-form paste returns 42. Document code-only pasting and Enter.
+  Full suite: 410 passed, 4 skipped, 324 subtests passed.
 
 
 ### mini-basic user documentation
@@ -256,4 +257,3 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 ANSI/VDU validation: 15 targeted tests and 5 subtests passed; full suite
 403 passed, 4 skipped, 324 subtests passed. Desktop rendering remains a manual
 terminal check; tests verify exact emitted controls and column behavior.
-
