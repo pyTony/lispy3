@@ -44,6 +44,22 @@
 (define (bbc-int x)
   (trunc x))
 
+;; BASIC TIME is an assignable elapsed-real-time clock, in centiseconds.
+;; Keep integer host ticks so reads do not accumulate floating-point drift.
+;; It persists between bbc-run/bbc-load calls until assigned or reloaded.
+(define bbc-time-base (get-internal-real-time))
+(define bbc-time-offset 0)
+
+(define (bbc-time-read)
+  (+ bbc-time-offset
+     (quotient (* 100 (- (get-internal-real-time) bbc-time-base))
+               internal-time-units-per-second)))
+
+(define (bbc-time-set! value)
+  (set! bbc-time-offset (bbc-int value))
+  (set! bbc-time-base (get-internal-real-time))
+  #f)
+
 ;; Values passed out of an FN by (FN= exp) before the early return
 (define bbc-fn-value 0)
 
@@ -334,7 +350,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN) body))
+         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN bbc-time-read bbc-time-set!) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -412,7 +428,7 @@
   '("PRINT" "LET" "IF" "THEN" "ELSE" "ENDIF" "FOR" "TO" "STEP" "NEXT" "REPEAT" "UNTIL"
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
-    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT"
+    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
 
@@ -708,6 +724,7 @@
           ((bbc-accept! :kw "TRUE") (bbc-num -1))
           ((bbc-accept! :kw "FALSE") (bbc-num 0))
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
+          ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)
            (bbc-p-function (bbc-lookup value bbc-functions)))
@@ -733,6 +750,16 @@
            (list 'LET var (list (if (bbc-string-name? name) 'string-append '+) var (bbc-value (bbc-p-expr)))))
           ((bbc-accept! :op "-=") (list 'LET var (list '- var (bbc-value (bbc-p-expr)))))
           (else (bbc-fail "expected = after the variable")))))
+
+(define (bbc-p-time-assign)
+  (bbc-expect! :kw "TIME" "TIME")
+  (let [operation (cond ((bbc-accept! :op "=") #f)
+                       ((bbc-accept! :op "+=") '+)
+                       ((bbc-accept! :op "-=") '-)
+                       (else (bbc-fail "expected =, += or -= after TIME")))
+        value (bbc-value (bbc-p-expr))]
+    (list 'bbc-time-set!
+          (if operation (list operation '(bbc-time-read) value) value))))
 
 (define (bbc-p-print)
   (let [items (list)]
@@ -883,7 +910,10 @@
                 ((bbc-accept! :op "=") (list 'FN= (bbc-value (bbc-p-expr))))
                 ((not (eq? kind :kw)) (bbc-fail "expected a statement"))
                 ((equal? value "PRINT") (bbc-advance!) (bbc-p-print))
-                ((equal? value "LET") (bbc-advance!) (bbc-p-assign))
+                ((equal? value "LET")
+                 (bbc-advance!)
+                 (if (bbc-at? :kw "TIME") (bbc-p-time-assign) (bbc-p-assign)))
+                ((equal? value "TIME") (bbc-p-time-assign))
                 ((equal? value "IF") (bbc-advance!) (bbc-p-if))
                 ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
                 ((equal? value "REPEAT")
