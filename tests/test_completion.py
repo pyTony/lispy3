@@ -14,9 +14,9 @@ class CompleteNamesTest(LispyTestCase):
 
     def test_built_ins_and_special_forms(self):
         """Completion offers built-ins and special forms such as define and lambda."""
-        self.assertEqual(lispy3.complete_names("defi"), ["define", "define-macro"])
+        self.assertEqual(lispy3.complete_names("defi"), ["define", "define-library", "define-macro"])
         self.assertIn("lambda", lispy3.complete_names("lam"))
-        self.assertEqual(lispy3.complete_names("def"), ["define", "define-macro", "defun"])
+        self.assertEqual(lispy3.complete_names("def"), ["define", "define-library", "define-macro", "defun"])
         self.assertIn("sqrt", lispy3.complete_names("sq"))
 
     def test_own_definitions(self):
@@ -75,7 +75,7 @@ class MachineOptionsTest(unittest.TestCase):
 
     def test_common_prefix(self):
         """The common start of the completions is what Tab fills in."""
-        self.assertEqual(machine.common_prefix(["define", "define-macro"]), "define")
+        self.assertEqual(machine.common_prefix(["define", "define-library", "define-macro"]), "define")
 
     def test_name_being_typed(self):
         """The name being typed is found before the cursor, keywords and -> included."""

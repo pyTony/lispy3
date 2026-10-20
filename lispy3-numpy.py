@@ -237,7 +237,7 @@ is_true = lp.is_true
 def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
     while True:
         kind = type(x)
-        if kind is str:
+        if isinstance(x, str):
             if x[0] == ':':
                 return x
             curr = env
@@ -252,13 +252,18 @@ def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
 
         if kind is list and x:
             proc_exp = x[0]
-            if type(proc_exp) is str:
+            if isinstance(proc_exp, str):
                 if proc_exp == 'set!':
                     var = x[1]
+                    if isinstance(var, lp.LibraryReference):
+                        var.env[var.name] = fast_eval_exp(x[2], env)
+                        return None
                     val = fast_eval_exp(x[2], env)
                     curr = env
                     while curr is not None:
                         if var in curr:
+                            if isinstance(dict.get(curr, var), lp.LibraryReference):
+                                raise lp.LispyError(f"import binding is read-only: {var}")
                             curr[var] = val
                             return None
                         curr = curr.outer
@@ -289,8 +294,8 @@ def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
                     return result
 
                 if not (proc_exp in SPECIAL_FORMS or proc_exp[0] == ':' or ('/' in proc_exp and proc_exp != '/')):
-                    if proc_exp in macro_table:
-                        x = macro_table[proc_exp](*x[1:])
+                    if (macro := lp.library_system.runtime_macro(proc_exp, env)) is not None:
+                        x = macro(*x[1:])
                         continue
 
                     curr = env
