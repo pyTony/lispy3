@@ -28,7 +28,7 @@ lispy3's Lisp loader.
 | Area | Implemented |
 |------|-------------|
 | Values | Numeric and string variables; `%` integer and `$` string suffixes |
-| Output | PRINT, semicolon/comma separators, SPC, TAB, string functions including CHR$ |
+| Output | PRINT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
 | Jumps | Labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE |
@@ -45,31 +45,94 @@ Graphics, INPUT, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
 feature set; lispy3 support does not establish backend parity.
 
-## Terminal output and ANSI escapes
+## Terminal output: VDU and ANSI
 
-PRINT can emit escape bytes with `CHR$(27)`. An ANSI-capable terminal interprets
-those bytes; mini-basic itself does not provide a terminal emulator.
+These commands target an ANSI-capable terminal. The Lispy Machine's Tk Listener
+captures text but does not emulate a terminal, so control bytes will not produce
+the same screen there. Windows console configuration also affects rendering.
+
+VDU and ANSI are separate languages. **VDU interprets BBC control bytes and
+translates the supported operations; ANSI sends raw bytes/strings unchanged.**
+For example, `VDU 17,1` and `ANSI 27,"[31m"` both select red text, but
+`ANSI 17,1` sends two literal control bytes, not a colour command.
 
 ```basic
-PRINT CHR$(27);"[31mRed text";CHR$(27);"[0m"
+CLS
+COLOUR 1
+PRINT TAB(4,2);"Red at column 4, row 2"
+COLOUR 7
+REM Equivalent BBC byte-stream style:
+VDU 12,17,1,31,4,2
+PRINT "Red at column 4, row 2"
+REM Explicit ANSI style, including restoring terminal defaults:
+ANSI 27,"[31m"
+PRINT "Red text"
+ANSI 27,"[0m"
 ```
 
-`[31m` selects red foreground and `[0m` restores terminal attributes. Always
-restore attributes after an example. Run this in the command-line REPL for a
-terminal display: the Lispy Machine's Tk Listener captures text and does not
-interpret ANSI control sequences as terminal commands.
+Coordinates are zero-based; `TAB(x,y)` emits ANSI row y+1, column x+1 and updates
+the tracked column. `TAB(n)` remains padding to column n, with a newline if
+already past it. Negative cursor coordinates raise an error.
 
-Current limits matter for screen-oriented programs:
+COLOUR (alias COLOR) accepts foreground 0..15 and background 128..143. Colours
+0..7 are black, red, green, yellow, blue, magenta, cyan, white; 8..15 select their
+bright ANSI counterparts. This fixed palette does not emulate BBC MODE-dependent
+palettes. CLS clears and homes the cursor, retaining selected colours.
 
-- CLS, COLOUR and VDU are not implemented as BASIC statements.
-- TAB(n) pads to an output column, starting a new line if necessary.
-- TAB(x,y) currently uses x only; it does not position a screen cursor at y.
-- Escape bytes count toward the formatter's output column, so mixing ANSI escapes
-  with TAB, comma zones or numeric alignment can misalign output.
+### Supported VDU subset
 
-Raw escape output is useful for simple colour text; it does not establish full
-ANSI screen support. Terminal capabilities and Windows console configuration
-also determine what is displayed.
+| Bytes | Operation |
+|-------|-----------|
+| 0 | Ignore |
+| 7 | Terminal bell |
+| 8 | Backspace; tracked column stops at zero |
+| 10 | Move down one row, preserving column |
+| 12 | Clear and home (CLS) |
+| 13 | Carriage return |
+| 17,n | Set colour (COLOUR n) |
+| 30 | Home cursor |
+| 31,x,y | Position cursor (TAB(x,y)) |
+| 32..126, 128..255 | Emit characters using lispy3's character encoding |
+
+VDU truncates numeric expressions and takes the low eight bits. Parameter bytes
+can span VDU statements, including separate runs, until the library is reloaded.
+A parameter is consumed as data, not interpreted as another control. Unsupported
+controls, including 22 (MODE) and 27, raise a clear error. Comma-separated bytes
+are supported; BBC's semicolon word form is not yet supported. Graphics controls,
+text windows, wrapping/scrolling at BBC viewport boundaries and BBC font mappings
+are not emulated. In particular, moving down at the terminal bottom is not a
+BBC-compatible scrolling implementation.
+
+The [BBC VDU reference](https://www.bbcbasic.uk/bbcbasic/manual/vdu.html) describes
+the wider source language; the table above defines the implemented subset.
+
+### Lisp macros and raw ANSI
+
+```lisp
+(bbc-program
+  (CLS)
+  (COLOUR 1)
+  (PRINT (TAB 4 2) "Red text")
+  (VDU 17 7 31 0 4)
+  (ANSI 27 "[32m")
+  (PRINT "Green text")
+  (ANSI-RESET))
+```
+
+`ANSI` also accepts numeric byte lists such as `ANSI 27,91,51,49,109` in BASIC,
+or `(ANSI 27 91 51 49 109)` in Lisp. Numeric items use their low eight bits;
+strings pass through unchanged. Output uses stdout text encoding; numeric values
+128..255 are characters, not a binary-output API. ANSI is a lispy3 extension,
+not a BBC keyword.
+`(ANSI-RESET)` is a Lisp convenience for `ANSI 27,"[0m"`.
+
+ANSI output bypasses the VDU decoder and printable-column accounting. Use it for
+control sequences and PRINT for visible text. Colour sequences leave the tracked
+column correct; raw cursor moves, visible strings or line breaks can make it
+stale because ANSI is not parsed. Prefer TAB(x,y), CLS or VDU for tracked moves.
+Raw `PRINT CHR$(27);"[31m"` still works, but counts escape bytes as text and can
+misalign later TAB, comma zones or numeric alignment. There is no automatic
+terminal reset on END or an error: restore attributes explicitly when finished.
 
 ## TIME and terminal Mandelbrot
 
@@ -102,7 +165,7 @@ Acceptance tests are ordinary tests: unfinished behavior should fail before the
 implementation is added, rather than being hidden by skip/xfail.
 
 ```powershell
-python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py tests/test_mini_basic_time.py -q
+python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py tests/test_mini_basic_time.py tests/test_mini_basic_ansi.py -q
 ```
 
 [TODO.md](../TODO.md) records completed fixes and remaining compatibility work.

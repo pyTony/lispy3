@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: add ANSI terminal macros and reader commands: CLS, COLOUR/COLOR,
+  real TAB(x,y), a bounded BBC VDU text-control decoder, and separate raw ANSI
+  bytes/strings. Terminal effects are not memoized in FN. The mini-basic guide
+  documents supported controls, fixed colours and terminal/column limitations.
+
+
 - mini-basic: make TIME an assignable elapsed clock in centiseconds, including
   LET, += and -=. Clock reads persist across runs and are not memoized in FN.
   The unchanged terminal Mandelbrot demo now reports elapsed time instead of

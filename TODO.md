@@ -237,5 +237,12 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 
 - [x] Start `docs/MINI_BASIC.md`: loading, supported subset, control-flow limits,
   TIME, external terminal Mandelbrot and existing ANSI escape output.
-- [ ] Add terminal commands only with failing acceptance tests first; current
-  TAB(x,y) ignores y and ANSI bytes affect output-column accounting.
+- [x] Add tested terminal macros and BASIC reader syntax: CLS, COLOUR/COLOR,
+  TAB(x,y), a bounded VDU text decoder and separate raw ANSI output.
+  Fifteen tests cover exact bytes, columns, split VDU parameters, errors and
+  non-memoized terminal effects. Raw ANSI cursor changes remain untracked;
+  full VDU/viewport emulation and semicolon word syntax remain pending.
+
+ANSI/VDU validation: 15 targeted tests and 5 subtests passed; full suite
+403 passed, 4 skipped, 324 subtests passed. Desktop rendering remains a manual
+terminal check; tests verify exact emitted controls and column behavior.
