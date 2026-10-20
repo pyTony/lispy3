@@ -1,0 +1,5 @@
+100 FOR x=1 TO 2
+110 FOR p=1 TO 2
+120 PRINT x; p
+130 NEXT p
+140 NEXT x

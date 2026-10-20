@@ -4,6 +4,18 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: accept numbered CASE clause headers, retaining their labels for
+  DATA/RESTORE. Three regressions cover the BBCSDL reference case, nested clauses,
+  and source-label preservation.
+- mini-basic: capture all 14 jump/subroutine reference cases on BBCSDL 1.44a
+  using the supplied tokenised fixture in isolated processes. Raw results and
+  documented stack restrictions are in `compare/reference/`; successful
+  exit-only cases are not treated as proof of compatible stack cleanup.
+- mini-basic: fix GOTO label lookup within active structured bodies, including
+  FOR, WHILE, IF / ELSE, REPEAT and CASE. Jumps preserve the surrounding
+  continuation, and targets in enclosing active bodies remain reachable.
+  Ten regression tests pass; four subroutine acceptance tests remain red
+  for future GOSUB / RETURN work. Progress is tracked in `TODO.md`.
 - `lisp/mini-basic.lisp`: structured BBC BASIC statements as macros. `PRINT`,
   `LET`, multi-line `IF ... ELSE`, `FOR ... STEP`, `REPEAT ... UNTIL`, `WHILE`,
   `CASE ... WHEN ... OTHERWISE`, `DEF-PROC` / `DEF-FN` with `LOCAL`,

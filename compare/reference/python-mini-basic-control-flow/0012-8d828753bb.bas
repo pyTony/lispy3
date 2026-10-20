@@ -1,0 +1,5 @@
+100 FOR hx=1 TO 2
+110 FOR m12u=1 TO 2
+120 PRINT hx; m12u
+130 NEXT m12u
+140 NEXT hx

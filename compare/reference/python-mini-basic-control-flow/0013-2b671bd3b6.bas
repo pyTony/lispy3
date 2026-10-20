@@ -1,0 +1,5 @@
+100 FOR juht8t=1 TO 2
+110 FOR i2j4=1 TO 2
+120 PRINT juht8t; i2j4
+130 NEXT i2j4
+140 NEXT juht8t

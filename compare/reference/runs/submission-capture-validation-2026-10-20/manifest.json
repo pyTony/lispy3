@@ -1,0 +1,101 @@
+{
+  "repository": "D:\\1\\OneDrive - FFWPU-Fin\\mini_basic",
+  "selected": [
+    "test/test_control_flow.py::TestControlExitCorners"
+  ],
+  "pytest_exit_code": 0,
+  "runs": [
+    {
+      "id": "0001-e1b142a8f5",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0001-e1b142a8f5.bas",
+      "stdout": "0001-e1b142a8f5.stdout.txt",
+      "stderr": "0001-e1b142a8f5.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n",
+      "submitted_source": "0001-e1b142a8f5.input.bas",
+      "stored_source_differs_from_submitted": true
+    },
+    {
+      "id": "0002-2d363b94b8",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0002-2d363b94b8.bas",
+      "stdout": "0002-2d363b94b8.stdout.txt",
+      "stderr": "0002-2d363b94b8.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n",
+      "submitted_source": "0002-2d363b94b8.input.bas",
+      "stored_source_differs_from_submitted": true
+    },
+    {
+      "id": "0003-a0fe59bf51",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0003-a0fe59bf51.bas",
+      "stdout": "0003-a0fe59bf51.stdout.txt",
+      "stderr": "0003-a0fe59bf51.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n",
+      "submitted_source": "0003-a0fe59bf51.input.bas",
+      "stored_source_differs_from_submitted": true
+    },
+    {
+      "id": "0004-59908b082e",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0004-59908b082e.bas",
+      "stdout": "0004-59908b082e.stdout.txt",
+      "stderr": "0004-59908b082e.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n",
+      "submitted_source": "0004-59908b082e.input.bas",
+      "stored_source_differs_from_submitted": true
+    },
+    {
+      "id": "0005-0ba281e236",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "source": "0005-0ba281e236.bas",
+      "stdout": "0005-0ba281e236.stdout.txt",
+      "stderr": "0005-0ba281e236.stderr.txt",
+      "run_exception": null,
+      "portability": "unreviewed: check dialect, mocks, input and host state",
+      "python_test_source": "    @given(prog=exit_in_while_and_repeat())\n    @settings(max_examples=5, deadline=5000)\n    def test_exit_while_repeat(self, prog: str):\n        interp = BASICInterpreter(InterpreterConfig(dialect=\"mini\", display=\"none\"))\n        buf = io.StringIO()\n        with redirect_stdout(buf):\n            for i, line in enumerate(prog.splitlines(), 10):\n                interp.set_program_line(i * 10, line)\n            interp.run()\n        out = buf.getvalue()\n        self.assertNotIn(\"?\", out)\n        self.assertTrue(len(out.strip()) > 0)\n        # Should have printed a number >=3 or handled exit\n        self.assertRegex(out.strip(), r'\\d+')\n",
+      "submitted_source": "0005-0ba281e236.input.bas",
+      "stored_source_differs_from_submitted": true
+    }
+  ],
+  "test_reports": [
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "setup",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "call",
+      "outcome": "passed"
+    },
+    {
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "phase": "teardown",
+      "outcome": "passed"
+    }
+  ],
+  "note": "Observed Python output, not independently verified BBCSDL expectations.",
+  "representative_menu": [
+    {
+      "case": 1,
+      "run": "0001-e1b142a8f5",
+      "test": "test/test_control_flow.py::TestControlExitCorners::test_exit_while_repeat",
+      "dialect": "mini",
+      "stdout": "0001-e1b142a8f5.stdout.txt"
+    }
+  ]
+}
