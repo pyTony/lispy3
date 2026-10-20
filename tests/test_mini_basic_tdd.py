@@ -1,13 +1,13 @@
 """Executable acceptance tests for mini-basic extensions.
 
-Pending features deliberately remain ordinary failing tests: do not skip them
-or mark them expected failures. Implement one behavior at a time and keep the
-resulting green test as regression coverage.
+Add ordinary failing tests before future fixes/features: do not skip them or
+mark them expected failures. Keep each resulting green test as regression
+coverage. All currently implemented acceptance tests now pass.
 
 Run: python -m pytest tests/test_mini_basic_tdd.py -q
 
-Priority and progress are tracked in TODO.md. NestedJumpRegressionTest is now
-green; SubroutineAcceptanceTest remains red for the upcoming improvements.
+Priority and progress are tracked in TODO.md. Nested jumps, numbered CASE,
+and the subroutine acceptance tests are now green.
 Numeric-label variants were run on BBCSDL 1.44a; see compare/reference/README.md.
 The immediate-exit case does not establish compatible loop-stack cleanup.
 """
@@ -129,7 +129,7 @@ class NumberedCaseRegressionTest(ReaderTestCase):
 
 
 class SubroutineAcceptanceTest(ReaderTestCase):
-    """Next feature: return to the exact statement following each GOSUB."""
+    """Return to the exact statement following each GOSUB; isolate call state."""
 
     def test_gosub_returns_to_same_line(self):
         self.assertEqual(self.run_bbc(
@@ -154,3 +154,83 @@ class SubroutineAcceptanceTest(ReaderTestCase):
             '10 ON 2 GOSUB 100,200 : PRINT "back" : END\n'
             '100 PRINT "wrong" : RETURN\n200 PRINT "second" : RETURN'),
             'second\nback\n')
+
+    def test_gosub_in_while_and_repeat_preserves_continuation(self):
+        self.assertEqual(self.run_bbc(
+            '10 n=0\n20 WHILE n<2\n30 GOSUB 100 : n+=1\n'
+            '40 ENDWHILE\n50 REPEAT\n60 GOSUB 100 : n+=1\n'
+            '70 UNTIL n=4\n80 PRINT "done" : END\n'
+            '100 PRINT ;n : RETURN'), '0\n1\n2\n3\ndone\n')
+
+    def test_return_without_gosub_reports_error(self):
+        with self.assertRaisesRegex(Exception, 'RETURN without GOSUB'):
+            self.run_bbc('RETURN')
+
+    def test_missing_subroutine_reports_target(self):
+        with self.assertRaisesRegex(Exception, 'GOSUB: unknown label 999'):
+            self.run_bbc('GOSUB 999')
+
+    def test_error_in_subroutine_does_not_leak_call_state(self):
+        with self.assertRaisesRegex(Exception, 'Out of DATA'):
+            self.run_bbc('10 GOSUB 100 : END\n100 READ x : RETURN')
+        self.assertEqual(self.ev('(length bbc-gosub-handlers)'), 0)
+        self.assertEqual(self.ev('bbc-gosub-depth'), 0)
+        with self.assertRaisesRegex(Exception, 'RETURN without GOSUB'):
+            self.run_bbc('RETURN')
+        self.assertEqual(self.run_bbc(
+            '10 GOSUB 100 : PRINT "back" : END\n100 RETURN'), 'back\n')
+
+    def test_end_in_subroutine_terminates_program_and_cleans_call_state(self):
+        self.assertEqual(self.run_bbc(
+            '10 GOSUB 100 : PRINT "wrong" : END\n100 PRINT "stop" : END'),
+            'stop\n')
+        self.assertEqual(self.ev('(length bbc-gosub-handlers)'), 0)
+        self.assertEqual(self.ev('bbc-gosub-depth'), 0)
+        with self.assertRaisesRegex(Exception, 'RETURN without GOSUB'):
+            self.run_bbc('RETURN')
+
+    def test_procedure_cannot_return_from_its_callers_subroutine(self):
+        with self.assertRaisesRegex(Exception, 'RETURN without GOSUB'):
+            self.run_bbc(
+                '10 GOSUB 100 : END\n100 PROCbad : RETURN\n'
+                'DEF PROCbad\nRETURN\nENDPROC')
+
+    def test_function_with_local_subroutine_preserves_final_value(self):
+        self.assertEqual(self.run_bbc(
+            'PRINT ;FNf(4)\nEND\nDEF FNf(x)\nGOSUB 100\nGOTO 200\n'
+            '100 x+=1 : RETURN\n200 =x'), '5\n')
+
+    def test_two_calls_on_one_line_resume_after_each_call(self):
+        self.assertEqual(self.run_bbc(
+            '10 n=0 : GOSUB 100 : GOSUB 100 : PRINT ;n : END\n'
+            '100 n+=1 : RETURN'), '2\n')
+
+    def test_variable_and_symbolic_targets(self):
+        self.assertEqual(self.run_bbc(
+            '10 dest=100 : GOSUB dest : GOSUB sub : PRINT "back" : END\n'
+            '100 PRINT "numeric" : RETURN\n(sub) PRINT "symbolic" : RETURN'),
+            'numeric\nsymbolic\nback\n')
+
+    def test_subroutine_without_return_reports_error_and_cleans_up(self):
+        with self.assertRaisesRegex(Exception, 'GOSUB reached end without RETURN'):
+            self.run_bbc('10 GOSUB 100\n100 PRINT "sub"')
+        self.assertEqual(self.ev('(length bbc-gosub-handlers)'), 0)
+        self.assertEqual(self.ev('bbc-gosub-depth'), 0)
+
+    def test_on_gosub_range_without_else_is_an_error(self):
+        for index in (0, -1, 3):
+            with self.subTest(index=index):
+                with self.assertRaisesRegex(Exception, 'ON range'):
+                    self.run_bbc(
+                        f'10 ON {index} GOSUB 100,200 : PRINT "wrong" : END\n'
+                        '100 RETURN\n200 RETURN')
+
+    def test_on_gosub_range_else_continues_without_calling_a_target(self):
+        self.assertEqual(self.run_bbc(
+            '10 ON 0 GOSUB 100,200 ELSE PRINT "fallback"\n'
+            '20 PRINT "after" : END\n100 PRINT "wrong" : RETURN\n'
+            '200 PRINT "wrong" : RETURN'), 'fallback\nafter\n')
+
+    def test_on_goto_range_without_else_is_an_error(self):
+        with self.assertRaisesRegex(Exception, 'ON range'):
+            self.run_bbc('10 ON 0 GOTO 100\n20 END\n100 PRINT "wrong"')

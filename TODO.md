@@ -121,10 +121,18 @@ Do not skip or mark pending acceptance tests as expected failures.
   programs, not unchanged original inputs or all Python assertions/mocks.
 - [x] Extend future exports to retain original set_program_line submissions as
   `.input.bas` when available, separately from normalised stored source.
-- [ ] **Priority 2 — subroutine improvements, after known errors are fixed.**
+- [x] **Priority 2 — subroutine improvements, after known errors are fixed.**
   Implement `GOSUB` / `RETURN`, including same-line continuation, nested calls,
   and calls within `FOR`, using `SubroutineAcceptanceTest`.
-- [ ] Implement `ON … GOSUB` with one-based selection and return continuation.
+- [x] Implement `ON … GOSUB` with one-based selection and return continuation.
+- [x] Turn all four original subroutine tests green; extend coverage to 17
+  subroutine/ON-branch tests for exact continuation, nested calls, loops,
+  variable/symbolic targets, PROC/FN boundaries, and cleanup after errors/END.
+- [x] Confirm selector zero and too-large selectors raise BBCSDL error 40
+  (ON range), and ELSE supplies a fallback. Add red-first range regressions;
+  fix the shared ON GOTO/GOSUB branch generation.
+- [x] Merge approved PR #46 into this branch. Full suite after subroutine work:
+  **380 passed, 4 skipped, 319 subtests passed, no failures**.
 
 #### Ordered continuation plan (2026-10-20)
 
@@ -178,7 +186,8 @@ The order below governs the remaining work above.
    dialect expansion and a general tokenizer are deferred from the current fix
    and subroutine milestones.
 
-Step 1 is complete. Steps 2-6 remain pending. The user's requested Python-suite
+Steps 1 and 4 are complete. The broader compatibility-policy/audit work in steps
+2-3 and release/next-feature planning in steps 5-6 remain pending. The user's requested Python-suite
 audit now has actual exported programs and a representative native menu in
 `compare/reference/python-mini-basic-control-flow/`. Four representative stored
 programs have recorded BBCSDL results; the broader audit remains pending.
@@ -195,14 +204,15 @@ Commands (from the repository root):
 python -m pytest tests/test_mini_basic_tdd.py::NestedJumpRegressionTest -q
 # Existing behavior must remain green
 python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py::ExistingExtensionsTest -q
-# All planned acceptance tests; intentionally red until features are implemented
+# Implemented acceptance tests: now green
 python -m pytest tests/test_mini_basic_tdd.py -q
-# Full suite also includes the pending acceptance tests and is currently red
+# Full suite: now green (optional external-Lisp checks may skip)
 python -m pytest tests -q
 ```
 
-Implementation status: **nested-label GOTO fix complete**. The four subroutine
-acceptance tests remain red; subroutine features are **not implemented yet**.
+Implementation status: **nested-label GOTO, numbered CASE, and GOSUB/RETURN/ON
+GOSUB are implemented**. All current acceptance tests pass; none are skipped or
+marked expected failures to hide unfinished work.
 This fix covers jumps within or out of already active bodies; entry into an
 inactive branch or loop is outside this change. A separate parser issue with
 numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.

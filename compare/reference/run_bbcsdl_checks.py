@@ -47,7 +47,16 @@ def main():
     parser.add_argument('--terminator-probe', choices=TERMINATORS + ('all',))
     parser.add_argument('--exported-menu', type=Path,
                         help='Tokenised representative menu saved from exported Python tests')
+    parser.add_argument('--on-gosub-index', type=int,
+                        help='Replace case 14 selector (existing target list is unchanged)')
+    parser.add_argument('--on-gosub-else', action='store_true',
+                        help='Give the selector probe an ELSE PRINT back branch')
     args = parser.parse_args()
+    if args.on_gosub_else and args.on_gosub_index is None:
+        parser.error('--on-gosub-else requires --on-gosub-index')
+    if args.on_gosub_index is not None and (
+            args.exported_menu or args.exit_probe or args.terminator_probe or args.case not in (None, [14])):
+        parser.error('--on-gosub-index is only valid for the original case 14')
     if args.exported_menu and (args.exit_probe or args.terminator_probe):
         parser.error('Exported menus cannot be combined with jump-fixture probes')
     if args.exit_probe and args.terminator_probe:
@@ -77,6 +86,12 @@ def main():
             if not any(header in body for _, body in original):
                 parser.error('Native menu headers do not match the export manifest')
     instrumented = dict(baseline)
+    if args.on_gosub_index is not None:
+        assert baseline[14010].startswith(b'\xee 2 ')
+        instrumented[14010] = b'\xee ' + str(args.on_gosub_index).encode('ascii') + baseline[14010][4:]
+        if args.on_gosub_else:
+            head, tail = instrumented[14010].split(b':', 1)
+            instrumented[14010] = head + b'\x8b ' + tail
     if args.exit_probe:
         # Copy already-tokenised bodies verbatim; no new keyword encoding.
         # Fresh loops push/pop their own frames. The enclosing variant instead
@@ -98,7 +113,8 @@ def main():
         names = TERMINATORS if args.terminator_probe == 'all' else (args.terminator_probe,)
         jobs = [(5, name) for name in names]
     else:
-        cases = args.case or ([5] if args.exit_probe else range(1, len(menu) + 1) if menu else range(1, 15))
+        cases = args.case or ([14] if args.on_gosub_index is not None else
+                             [5] if args.exit_probe else range(1, len(menu) + 1) if menu else range(1, 15))
         jobs = [(case, None) for case in cases]
     for case, terminator in jobs:
         if terminator:
@@ -154,6 +170,9 @@ def main():
             result['exit_probe'] = args.exit_probe
         if terminator:
             result['terminator_probe'] = terminator
+        if args.on_gosub_index is not None:
+            result['on_gosub_index'] = args.on_gosub_index
+            result['on_gosub_else'] = args.on_gosub_else
         results.append(result)
         print(json.dumps(result), flush=True)
         (output / 'results.json').write_text(json.dumps(results, indent=2), encoding='utf-8')

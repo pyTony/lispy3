@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: implement GOSUB / RETURN and ON ... GOSUB, including same-line
+  continuation, nested calls, calls from loops, and isolated PROC/FN call scopes.
+  Call state is restored on normal returns, errors and END. Out-of-range
+  ON ... GOTO/GOSUB now raises "ON range" unless an ELSE branch is supplied,
+  matching the new BBCSDL range probes. The four previously failing acceptance
+  tests are green; full suite: 380 passed, 4 skipped, 319 subtests passed.
 - mini-basic: accept numbered CASE clause headers, retaining their labels for
   DATA/RESTORE. Three regressions cover the BBCSDL reference case, nested clauses,
   and source-label preservation.
@@ -14,8 +20,8 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 - mini-basic: fix GOTO label lookup within active structured bodies, including
   FOR, WHILE, IF / ELSE, REPEAT and CASE. Jumps preserve the surrounding
   continuation, and targets in enclosing active bodies remain reachable.
-  Ten regression tests pass; four subroutine acceptance tests remain red
-  for future GOSUB / RETURN work. Progress is tracked in `TODO.md`.
+  Ten jump regression tests pass; the subsequent subroutine tests are now green
+  as well. Progress is tracked in `TODO.md`.
 - Help > About names the git branch the editor runs from (or says it is not
   a git checkout).
 - Tab completion offers `defun`.

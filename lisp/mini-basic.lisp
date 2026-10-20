@@ -24,6 +24,8 @@
 ;;;   (DEF-PROC (name parm ...) stmt ...)  and (PROC name arg ...) to call it
 ;;;   (DEF-FN (name parm ...) stmt ... (FN= exp))  and (FN name arg ...) to call it
 ;;;   (LOCAL var ...), (ENDPROC), (FN= exp), (EXIT-FOR), (EXIT-REPEAT), (EXIT-WHILE), (END)
+;;;   (GOTO target), (GOSUB target), (RETURN), (LABEL name)
+;;;   (ON-GOTO index (targets ...) (else-statements ...)) and ON-GOSUB
 ;;;
 ;;; As in BBC BASIC, PROC and FN parameters and LOCAL variables are dynamically
 ;;; scoped: the old values are saved on entry and put back on exit. bbc-program
@@ -273,7 +275,8 @@
 
 (define (bbc-tail-stmt stmt)
   (cond ((not (and (pair? stmt) (list? stmt))) stmt)
-        ((eq? (car stmt) 'FN=) (bbc-second stmt))
+        ;; A bare returned variable must not become a tagbody label.
+        ((eq? (car stmt) 'FN=) (list 'begin (bbc-second stmt)))
         ((eq? (car stmt) 'ENDPROC) #f)
         ((eq? (car stmt) 'IF)
          (let [parts (bbc-split (cdr (cdr stmt)) 'ELSE)]
@@ -331,7 +334,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(PRINT PROC END) body))
+         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -362,7 +365,7 @@
 ;;;   (pretty-print (bbc-expand text))   ; the (bbc-program ...) the text becomes
 ;;;
 ;;; Keywords are UPPERCASE only, as in BBC BASIC. Line numbers are read and
-;;; ignored; GOTO, GOSUB, DATA and arrays come later.
+;;; retained as labels; mini-basic-ext.lisp adds jumps, subroutines, DATA and arrays.
 
 ;;; --- Run-time support for expressions ---
 

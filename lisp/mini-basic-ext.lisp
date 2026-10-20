@@ -2,6 +2,7 @@
 ;;;
 ;;; Step 3a: SDL parenthesized labels (label), line labels, DATA, READ, RESTORE
 ;;; Step 3b: DIM and multi-dimensional arrays
+;;; Step 3d: GOSUB / RETURN and ON ... GOSUB with scoped call continuations
 
 ;;; --- Run-time state & helpers for DATA / READ / RESTORE ---
 
@@ -137,6 +138,50 @@
 ;;; ===================================================================
 
 (define bbc-goto-target #f)
+(define bbc-gosub-handlers (list))
+(define bbc-gosub-depth 0)
+
+(define (bbc-subroutine-scope thunk)
+  ;; Programs and PROC/FN bodies cannot borrow their caller's return frames.
+  (let [saved-handlers bbc-gosub-handlers
+        saved-depth bbc-gosub-depth]
+    (set! bbc-gosub-handlers (list))
+    (set! bbc-gosub-depth 0)
+    (try
+      (let [result (thunk)]
+        (set! bbc-gosub-handlers saved-handlers)
+        (set! bbc-gosub-depth saved-depth)
+        result)
+      (catch err
+        (set! bbc-gosub-handlers saved-handlers)
+        (set! bbc-gosub-depth saved-depth)
+        (error err)))))
+
+(define (bbc-gosub! target)
+  (let search ((handlers bbc-gosub-handlers))
+    (if (null? handlers)
+        (error (str "GOSUB: unknown label " target))
+        (let [entry (car handlers)
+              pc (get (car entry) target #f)]
+          (if pc
+              (let [saved-depth bbc-gosub-depth
+                    run (bbc-second entry)]
+                (set! bbc-gosub-depth (+ saved-depth 1))
+                (try
+                  (begin
+                    (run pc)
+                    (error "GOSUB reached end without RETURN"))
+                  (catch err
+                    (set! bbc-gosub-depth saved-depth)
+                    (if (equal? err "bbc:gosub-return") #f (error err)))))
+              (search (cdr handlers)))))))
+
+(define-macro (GOSUB target) `(bbc-gosub! ,target))
+
+(define-macro (RETURN)
+  '(if (> bbc-gosub-depth 0)
+       (error "bbc:gosub-return")
+       (error "RETURN without GOSUB")))
 
 (define (bbc-jump! target)
   (set! bbc-goto-target target)
@@ -148,16 +193,22 @@
 (define-macro (GO target)
   `(bbc-jump! ',target))
 
-(define-macro (ON-GOTO idx targets else-stmts)
+(define (bbc-on-branch-code transfer idx targets else-stmts)
   (let [k (gensym "idx")
         n (length targets)]
     `(let ((,k (bbc-int ,idx)))
        (cond ,@(map (lambda (i)
-                      `((= ,k ,(+ i 1)) (GOTO ,(nth targets i))))
+                      `((= ,k ,(+ i 1)) (,transfer ,(nth targets i))))
                     (range n))
              ,@(if (null? else-stmts)
-                   '()
+                   '((else (error "ON range")))
                    `((else #f ,@else-stmts)))))))
+
+(define-macro (ON-GOTO idx targets else-stmts)
+  (bbc-on-branch-code 'GOTO idx targets else-stmts))
+
+(define-macro (ON-GOSUB idx targets else-stmts)
+  (bbc-on-branch-code 'GOSUB idx targets else-stmts))
 
 (define (bbc-split-tagbody stmts)
   ;; Split a statement list at (LABEL name) or bare symbols into
@@ -189,30 +240,47 @@
         pc (gensym "pc")
         tbl (gensym "lbls")
         err (gensym "err")
-        nxt (gensym "nxt")]
-    `(let ((,pc 0)
-           (,tbl ,lbl-map))
-       (while (< ,pc ,n)
-         (try
-           (begin
-             (cond ,@(map (lambda (i) `((= ,pc ,i) ,(nth segs i)))
-                          (range n)))
-             (set! ,pc (+ ,pc 1)))
-           (catch ,err
-             (if (equal? ,err "bbc:goto")
-                 (let ((,nxt (get ,tbl bbc-goto-target #f)))
-                   (if ,nxt
-                       (set! ,pc ,nxt)
-                       ,(if (null? nested)
-                            '(error (str "GOTO: unknown label " bbc-goto-target))
-                            '(error "bbc:goto"))))
-                 (error ,err))))))))
+        nxt (gensym "nxt")
+        runner (gensym "segments")
+        saved (gensym "handlers")
+        value (gensym "value")
+        result (gensym "result")]
+    `(let ((,tbl ,lbl-map) (,saved bbc-gosub-handlers))
+       ;; A separate invocation keeps the caller's exact statement and loop
+       ;; continuation live, including multiple GOSUBs in the same segment.
+       (define (,runner ,pc)
+         (let ((,value #f))
+           (while (< ,pc ,n)
+             (try
+               (begin
+                 (set! ,value
+                   (cond ,@(map (lambda (i) `((= ,pc ,i) ,(nth segs i)))
+                                (range n))))
+                 (set! ,pc (+ ,pc 1)))
+               (catch ,err
+                 (if (equal? ,err "bbc:goto")
+                     (let ((,nxt (get ,tbl bbc-goto-target #f)))
+                       (if ,nxt
+                           (set! ,pc ,nxt)
+                           ,(if (null? nested)
+                                '(error (str "GOTO: unknown label " bbc-goto-target))
+                                '(error "bbc:goto"))))
+                     (error ,err)))))
+           ,value))
+       (set! bbc-gosub-handlers (cons (list ,tbl ,runner) ,saved))
+       (try
+         (let ((,result (,runner 0)))
+           (set! bbc-gosub-handlers ,saved)
+           ,result)
+         (catch ,err
+           (set! bbc-gosub-handlers ,saved)
+           (error ,err))))))
 
 (define (bbc-nested-body-code stmts)
   ;; Each active structured body resolves its own labels. A jump to an outer
   ;; body must unwind without losing its target; only the outermost handler
   ;; reports an unknown label. Jump-free bodies keep their ordinary value.
-  (if (bbc-uses? '(GOTO GO ON-GOTO) stmts)
+  (if (bbc-uses? '(GOTO GO ON-GOTO GOSUB ON-GOSUB RETURN) stmts)
       (bbc-tagbody-code stmts #t)
       `(begin #f ,@stmts)))
 
@@ -220,7 +288,7 @@
   (bbc-tagbody-code forms))
 
 (define (bbc-body-code stmts)
-  (if (bbc-uses? '(GOTO GO ON-GOTO) stmts)
+  (if (bbc-uses? '(GOTO GO ON-GOTO GOSUB ON-GOSUB RETURN) stmts)
       (bbc-tagbody-code stmts)
       `(begin #f ,@stmts)))
 
@@ -234,7 +302,9 @@
         result (gensym "result")
         tail-body (bbc-tail body)
         tag (if (eq? kind 'FN) "bbc:return" "bbc:endproc")
-        core (bbc-body-code tail-body)
+        core (if (bbc-uses? '(GOSUB ON-GOSUB RETURN) body)
+                 `(bbc-subroutine-scope (lambda () ,(bbc-body-code tail-body)))
+                 (bbc-body-code tail-body))
         run (if (bbc-uses? '(FN= ENDPROC) tail-body)
                 (bbc-catch tag core 'bbc-fn-value)
                 core)
@@ -255,7 +325,9 @@
         defs (map (lambda (d) (if (bbc-pure-fn? d vars) (cons 'DEF-MEMO-FN (cdr d)) d))
                   (filter bbc-def? stmts))
         main (filter (lambda (s) (not (bbc-def? s))) stmts)
-        run (bbc-body-code main)]
+        run (if (bbc-uses? '(GOSUB ON-GOSUB RETURN) stmts)
+                `(bbc-subroutine-scope (lambda () ,(bbc-body-code main)))
+                (bbc-body-code main))]
     `(begin
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
        ,@(map (lambda (l) `(define ,l ',l)) lbls)
@@ -416,14 +488,17 @@
   (list 'GOTO (bbc-p-goto-target)))
 
 (define (bbc-p-on)
-  (let [idx (bbc-value (bbc-p-expr))]
-    (if (bbc-accept! :kw "GOTO")
+  (let [idx (bbc-value (bbc-p-expr))
+        transfer (cond ((bbc-accept! :kw "GOTO") 'ON-GOTO)
+                       ((bbc-accept! :kw "GOSUB") 'ON-GOSUB)
+                       (else #f))]
+    (if transfer
         (let [targets (list (bbc-p-goto-target))]
           (while (bbc-accept! :op ",")
             (bbc-push! targets (bbc-p-goto-target)))
           (let [else-part (if (bbc-accept! :kw "ELSE") (bbc-p-line-stmts) (list))]
-            (list 'ON-GOTO idx targets else-part)))
-        (bbc-fail "expected GOTO after ON expression"))))
+            (list transfer idx targets else-part)))
+        (bbc-fail "expected GOTO or GOSUB after ON expression"))))
 
 (define (bbc-ext-statement)
   (let [tok (bbc-peek)
@@ -442,5 +517,8 @@
           ((equal? value "RESTORE") (bbc-advance!) (bbc-p-restore))
           ((equal? value "DIM") (bbc-advance!) (bbc-p-dim))
           ((equal? value "GOTO") (bbc-advance!) (bbc-p-goto))
+          ((equal? value "GOSUB")
+           (bbc-advance!) (list 'GOSUB (bbc-p-goto-target)))
+          ((equal? value "RETURN") (bbc-advance!) (list 'RETURN))
           ((equal? value "ON") (bbc-advance!) (bbc-p-on))
           (else #f))))

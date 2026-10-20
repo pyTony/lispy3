@@ -95,8 +95,48 @@ this case's output does not establish identical stack behavior. The additional
 probes below confirm the reference error. Decide explicitly whether to reproduce
 BBCSDL's errors or document an intentional extension before changing lispy3's
 continuation semantics. Symbolic-label behavior is also not verified by case 9's
-numeric-label variant. Cases 11-14 confirm reference behavior only: lispy3's
-subroutine acceptance tests still fail because those features are unimplemented.
+numeric-label variant. Cases 11-14 now also pass as lispy3 subroutine regression
+tests. Broader stack-policy differences still require explicit classification.
+
+## Implemented subroutine scope
+
+GOSUB resumes at the exact statement following the call, including calls within
+loops and nested calls on the same line. Program and PROC/FN bodies have separate
+subroutine scopes: a procedure cannot consume a caller's return frame or look
+up its subroutine targets. Missing targets, RETURN without GOSUB, and reaching
+the end of a called body without RETURN report errors. These are lispy3's
+supported execution rules, not a claim to reproduce every native stack edge
+case. Parameters/LOCAL restoration under arbitrary errors remains part of the
+broader audit rather than being established by call-frame cleanup tests.
+
+Targets can be in the program/PROC/FN statement list or an already active
+structured body; jumping into an inactive body is outside the current reader's
+supported model. GOTO-only and jump-free programs retain their existing paths;
+GOSUB is a synchronous segment invocation preserving the caller's continuation.
+Subroutine call state is restored on RETURN, errors and END. Native recursion
+depth equivalence is not established by the nested-call checks.
+
+## ON GOSUB range probes (2026-10-20)
+
+Three additional BBCSDL 1.44a runs used case 14's original native target list:
+
+| Selector / fallback | Native observation | Evidence |
+|---|---|---|
+| 0, no ELSE | ERR 40 at line 14010: ON range | [Log](runs/on-gosub-zero-2026-10-20/case-14.txt) |
+| 3 for two targets, no ELSE | ERR 40 at line 14010: ON range | [Log](runs/on-gosub-high-2026-10-20/case-14.txt) |
+| 0, ELSE PRINT back | back; no subroutine call | [Log](runs/on-gosub-else-2026-10-20/case-14.txt) |
+
+Reproduce using a new directory:
+
+```powershell
+python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-range-probe --on-gosub-index 0
+python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-else-probe --on-gosub-index 0 --on-gosub-else
+```
+
+The shared lispy3 ON GOTO/GOSUB code now reports ON range instead of silently
+falling through when no ELSE is present. This fixes an existing ON GOTO gap
+alongside the new ON GOSUB behavior. All three native processes exited normally;
+the reported BASIC errors are captured outputs, not process crashes.
 
 ## Small loops after exit: recorded 2026-10-20
 
