@@ -16,6 +16,7 @@ class CompleteNamesTest(LispyTestCase):
         """Completion offers built-ins and special forms such as define and lambda."""
         self.assertEqual(lispy3.complete_names("defi"), ["define", "define-macro"])
         self.assertIn("lambda", lispy3.complete_names("lam"))
+        self.assertEqual(lispy3.complete_names("def"), ["define", "define-macro", "defun"])
         self.assertIn("sqrt", lispy3.complete_names("sq"))
 
     def test_own_definitions(self):

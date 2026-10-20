@@ -169,7 +169,7 @@ Good to know: `+ - * /` take exactly two arguments, so write `(+ (+ a b) c)`; `(
 
 | Form | What it does |
 |------|--------------|
-| `(make-num-vector n fill)` | like `make-vector`, but a NumPy array of whole numbers when NumPy is installed; it prints as `#a(1 1 1)` |
+| `(make-num-vector n fill)` | like `make-vector`, but a NumPy array of whole numbers when NumPy is installed; it prints as `#a(1 1 1)`. `(make-num-vector [1 2 3])` makes one from the items of a vector or list |
 | `(vector-fill! v x [start] [stop])` | put `x` into items `start` up to (not including) `stop`; the whole vector if left out |
 | `(vector-slice-set! v start stop step x)` | put `x` into items `start`, `start+step`, ... below `stop` |
 | `(sum v)` | add up all items |

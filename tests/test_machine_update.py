@@ -79,6 +79,29 @@ class GitPull(unittest.TestCase):
         self.assertEqual(result, "failed")
         self.assertIn("git", output)
 
+    def test_branch_is_named(self):
+        """Help > About names the branch the checkout is on."""
+        git(self.clone, "checkout", "-q", "-b", "my-feature")
+        self.assertEqual(machine.git_branch(self.clone), "my-feature")
+        self.assertIn("Git branch: my-feature", machine.about_text(self.clone))
+        self.assertIn("Ctrl+Break  stop the running code", machine.about_text(self.clone))
+
+    def test_detached_head_names_the_commit(self):
+        """A detached checkout shows the short commit instead of a branch."""
+        git(self.clone, "checkout", "-q", "--detach")
+        self.assertTrue(machine.git_branch(self.clone).startswith("detached at "))
+
+    def test_folder_that_is_not_a_repository_has_no_branch(self):
+        """Outside a git checkout About says so instead of naming a branch."""
+        with tempfile.TemporaryDirectory() as plain:
+            self.assertEqual(machine.git_branch(plain), "not a git checkout")
+
+    def test_missing_git_has_no_branch(self):
+        """Without git installed About says the folder is not a git checkout."""
+        saved = os.environ["PATH"]
+        os.environ["PATH"] = ""
+        self.addCleanup(os.environ.__setitem__, "PATH", saved)
+        self.assertEqual(machine.git_branch(self.clone), "not a git checkout")
 
 
 class RestartCommand(unittest.TestCase):

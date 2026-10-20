@@ -16,6 +16,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   continuation, and targets in enclosing active bodies remain reachable.
   Ten regression tests pass; four subroutine acceptance tests remain red
   for future GOSUB / RETURN work. Progress is tracked in `TODO.md`.
+- Help > About names the git branch the editor runs from (or says it is not
+  a git checkout).
+- Tab completion offers `defun`.
+- `(make-num-vector [1 2 3])` makes a num vector from a vector or list, and
+  `(help 'make-num-vector)` and the other `lispy3-numpy.py` extras have help.
 - `lisp/mini-basic.lisp`: structured BBC BASIC statements as macros. `PRINT`,
   `LET`, multi-line `IF ... ELSE`, `FOR ... STEP`, `REPEAT ... UNTIL`, `WHILE`,
   `CASE ... WHEN ... OTHERWISE`, `DEF-PROC` / `DEF-FN` with `LOCAL`,
