@@ -232,3 +232,10 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 - [x] Tests for the Gemini Argon additions and the features restored after it (`tests/test_gemini_features.py`)
 - [x] Tests for Lispy's own additions (strings, maps, vectors, `while`, save/load, the example programs) (`tests/test_lispy_additions.py`)
 - [x] Every ticked item above has examples in `tests/test_todo.py`; ticking a box without adding them fails the tests
+
+### mini-basic user documentation
+
+- [x] Start `docs/MINI_BASIC.md`: loading, supported subset, control-flow limits,
+  TIME, external terminal Mandelbrot and existing ANSI escape output.
+- [ ] Add terminal commands only with failing acceptance tests first; current
+  TAB(x,y) ignores y and ANSI bytes affect output-column accounting.
