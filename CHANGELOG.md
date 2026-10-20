@@ -4,6 +4,14 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add explicit libraries with private environments and macro tables, declared
+  exports, composable only/prefix/rename imports and relative includes. Imported
+  macros retain private helpers and caller argument scope; imported values are
+  live read-only bindings. mini-basic supplies an opt-in library manifest while
+  legacy load remains supported. Both evaluators enforce the same rules.
+  Workspace save rejects imported bindings until serialization is implemented.
+
+
 - mini-basic: add ANSI terminal macros and reader commands: CLS, COLOUR/COLOR,
   real TAB(x,y), a bounded BBC VDU text-control decoder, and separate raw ANSI
   bytes/strings. Terminal effects are not memoized in FN. The mini-basic guide

@@ -4,6 +4,21 @@ mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.
 
+## Selective imports
+
+Use `(import (only mini-basic bbc-run))` to get the text reader without installing
+its parser helpers globally. For terminal macros, for example:
+
+```lisp
+(import (prefix (only mini-basic CLS COLOUR ANSI ANSI-RESET) term:))
+(term:CLS)
+(term:ANSI 27 "[31m")
+(term:ANSI-RESET)
+```
+
+The [library guide](LIBRARIES.md) explains exports, prefixes, renaming, helper
+isolation and workspace-save limits. Existing `load` examples below remain valid.
+
 ## Run BASIC text
 
 Start `python lispy3.py` from this checkout, then load the library:
