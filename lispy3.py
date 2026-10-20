@@ -2,6 +2,7 @@ from typing import Any, TypeAlias, Callable, Union
 from dataclasses import dataclass
 from fractions import Fraction
 import calendar
+import cmath
 import datetime
 import functools
 import inspect
@@ -18,7 +19,8 @@ import turtle
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
-Number: TypeAlias = int | float | Fraction
+Real: TypeAlias = int | float | Fraction          # real numbers (no complex)
+Number: TypeAlias = Real | complex                # any number, incl. complex
 Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char']
 List: TypeAlias = list['Exp']
 Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
@@ -625,6 +627,23 @@ def _div2(a: Number, b: Number) -> Number:
         return normalize(Fraction(a) / b)
     return a / b
 
+def _compute_epsilon() -> float:
+    """Machine epsilon by halving: the smallest power of two that still changes 1.0 when added."""
+    eps = 1.0
+    while 1.0 + eps / 2 != 1.0:
+        eps /= 2
+    return eps
+
+MACHINE_EPSILON = _compute_epsilon()
+
+def _clean_complex(z: complex) -> complex:
+    """Zero a part that is only rounding noise next to the larger part (within 4 epsilon of it).
+    Never zeroes both parts, so 1e-300+1e-300i is left alone."""
+    tol = 4 * MACHINE_EPSILON * max(abs(z.real), abs(z.imag))
+    re = 0.0 if abs(z.real) <= tol else z.real
+    im = 0.0 if abs(z.imag) <= tol else z.imag
+    return complex(re, im)
+
 def _expt(a: Number, b: Number) -> Number:
     """(expt 2 -1) is 1/2, exact like Scheme; decimals stay decimal."""
     if isinstance(a, (int, Fraction)) and type(b) is int and b < 0:
@@ -643,7 +662,7 @@ def _lisp_eq(a: Any, b: Any) -> bool:
         return type(a) is type(b) and a.value == b.value
     if isinstance(a, bool) or isinstance(b, bool):
         return a is b
-    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+    if isinstance(a, (int, float, complex)) and isinstance(b, (int, float, complex)):
         return a == b
     return a == b
 
@@ -767,7 +786,7 @@ def _universal_time_to_string(ut: Any = None, fmt: Any = None) -> String:
 def _number_to_string(n: Number, base: int = 10) -> String:
     """(number->string n) or (number->string n base) for a whole number in base 2 to 36."""
     if base == 10:
-        return String(str(n))
+        return String(lisp_str(n) if isinstance(n, complex) else str(n))
     if not 2 <= base <= 36:
         raise ValueError("number->string: base must be from 2 to 36")
     m = _whole(n, 'number->string')
@@ -839,6 +858,10 @@ def _string_to_number(s: Any, base: int = 10) -> Any:
     raw = _unwrap_str(s).strip()
     if base == 10 and FRACTION_RE.fullmatch(raw):
         return normalize(Fraction(raw))
+    if base == 10:
+        c = _try_parse_complex(raw)
+        if c is not None:
+            return c
     try:
         return int(raw, base)
     except ValueError:
@@ -1002,6 +1025,16 @@ def standard_env() -> Env:
         'float': float,
         'exact->inexact': float,
         'inexact->exact': _exact,
+        # Complex numbers (Common Lisp compatible)
+        'complex':           lambda re, im=0: complex(re, im),
+        'make-rectangular':  lambda re, im:   complex(re, im),
+        'make-polar':        lambda mag, ang: cmath.rect(mag, ang),
+        'real-part':         lambda x: x.real if type(x) is complex else x,
+        'imag-part':         lambda x: x.imag if type(x) is complex else 0,
+        'magnitude':         abs,
+        'angle':             lambda x: cmath.phase(x) if type(x) is complex
+                                      else (0.0 if x >= 0 else math.pi),
+        'conjugate':         lambda x: x.conjugate() if type(x) is complex else x,
         'expt': _expt,
         'abs': abs,
         'min': lambda first, *rest: min(first, *rest) if rest else first,
@@ -1019,7 +1052,10 @@ def standard_env() -> Env:
         # Type & Equality Predicates
         'null?': lambda x: type(x) is list and not x,
         'empty?': lambda x: len(_unwrap_str(x) if isinstance(x, String) else x) == 0 if isinstance(x, (list, tuple, dict, str, String)) else False,
-        'number?': lambda x: isinstance(x, (int, float, Fraction)) and not isinstance(x, bool),
+        'number?': lambda x: isinstance(x, (int, float, Fraction, complex)) and not isinstance(x, bool),
+        'complex?': lambda x: type(x) is complex,
+        'real?': lambda x: (isinstance(x, (int, float, Fraction)) and not isinstance(x, bool))
+                           or (type(x) is complex and x.imag == 0),
         'symbol?': lambda x: isinstance(x, str),
         'string?': lambda x: isinstance(x, String),
         'char?': lambda x: isinstance(x, Char),
@@ -1029,7 +1065,7 @@ def standard_env() -> Env:
         'map?': lambda x: isinstance(x, dict) and not isinstance(x, Env),
         'procedure?': lambda x: isinstance(x, Procedure) or callable(x),
         'boolean?': lambda x: isinstance(x, bool),
-        'eq?': lambda a, b: _lisp_eq(a, b) if isinstance(a, (int, float, str, String, Char, bool)) else (a is b),
+        'eq?': lambda a, b: _lisp_eq(a, b) if isinstance(a, (int, float, complex, str, String, Char, bool)) else (a is b),
         'equal?': _lisp_eq,
 
         # Lists & Sequences
@@ -1123,6 +1159,33 @@ def standard_env() -> Env:
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
 
     # Boolean and Lisp constants
+    # Complex-aware sqrt / log, installed last so they win over the math ones.
+    def _sqrt(x):
+        if isinstance(x, complex) or (isinstance(x, (int, float, Fraction)) and x < 0):
+            return cmath.sqrt(x)
+        return math.sqrt(x)
+
+    def _log(x, base=None):
+        if base is not None:
+            return _log(x) / _log(base)
+        if isinstance(x, complex) or (isinstance(x, (int, float, Fraction)) and x < 0):
+            return cmath.log(x)
+        if x == 0:
+            raise ValueError('math domain error')
+        return math.log(x)
+
+    env['sqrt'] = Procedure(parms=['*args'], body=None, env=env, native_fn=_sqrt, name='sqrt')
+
+    def _complex_aware(real_fn, complex_fn):
+        return lambda x: complex_fn(x) if isinstance(x, complex) else real_fn(x)
+
+    for _name in ('exp', 'sin', 'cos', 'tan', 'sinh', 'cosh', 'tanh'):
+        env[_name] = Procedure(parms=['*args'], body=None, env=env, name=_name,
+                               native_fn=_complex_aware(getattr(math, _name), getattr(cmath, _name)))
+    env['log']  = Procedure(parms=['*args'], body=None, env=env, native_fn=_log,  name='log')
+
+    env['epsilon'] = MACHINE_EPSILON
+
     env['#t'] = True
     env['#f'] = False
     env['true'] = True
@@ -1313,7 +1376,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         kind = type(x)
         if kind is str:
             return x if x.startswith(':') else env.find(x)[x]
-        if kind is int or kind is float or kind is Fraction:
+        if kind is int or kind is float or kind is Fraction or kind is complex:
             return x
         # (proc args...): function application, unless the head is a special form,
         # a :keyword lookup or an obj/method call. TCO: a Lisp procedure's body
@@ -1360,7 +1423,7 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 return env.find(symbol)[symbol]
                 
             # 3. Constant numeric literal
-            case int() | float() | Fraction():
+            case int() | float() | Fraction() | complex():
                 return x
                 
             # 4. Pure string literals (dataclass String) and Characters (dataclass Char)
@@ -1646,7 +1709,17 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         if tokens and tokens[0] == ')':
             tokens.pop(0)
         return L
-        
+
+    elif token in ('#C', '#c'):
+        # Common Lisp literal: #C(real imag), read at parse time.
+        args = read_from_tokens(tokens)
+        if not isinstance(args, list) or len(args) != 2:
+            raise SyntaxError("#C requires two numbers: #C(real imag)")
+        try:
+            return complex(args[0], args[1])
+        except (TypeError, ValueError) as e:
+            raise SyntaxError(f"#C needs two real numbers: {e}")
+
     elif token == '[':
         L = []
         while tokens and tokens[0] != ']':
@@ -1705,6 +1778,29 @@ def _unescape_string(raw: str) -> str:
 
 FRACTION_RE = re.compile(r'[+-]?\d+/\d*[1-9]\d*')   # 7/2 or -1/3; never a division by 0
 
+
+def _try_parse_complex(token: str) -> complex | None:
+    """Parse 3+4i, 3-4i, 4i, -4i, +i, -i (and j variants); None if it isn't one.
+
+    Bare `i` / `j` are *not* parsed, so `(define i 5)` and `(let [i 0] ...)` keep
+    working. Symbols that happen to end in i - pi, phi, loci, taxi - survive
+    because `complex("pj")` and `complex("locij")` raise ValueError.
+    """
+    if len(token) < 2 or token[-1] not in 'ij':
+        return None
+    body = token[:-1]
+    if body in ('+', '-'):
+        return complex(0, 1 if body == '+' else -1)
+    # Python's complex() also accepts 'nanj', 'infj', 'infinityj' and '1_0j'; those
+    # would swallow symbols like nani / infi, so allow plain numeric characters only.
+    if not re.fullmatch(r'[0-9+\-.eE]+', body):
+        return None
+    try:
+        return complex(body + 'j')
+    except ValueError:
+        return None
+
+
 def atom(token: str) -> Atom:
     """Numbers become numbers, "strings" become String, #\\c become Char, others are symbols."""
     if token == '#t':
@@ -1738,6 +1834,10 @@ def atom(token: str) -> Atom:
             except ValueError:
                 pass
         return Char(token[2:])
+    if len(token) > 1 and token[-1] in 'ij':
+        complex_val = _try_parse_complex(token)
+        if complex_val is not None:
+            return complex_val
     if FRACTION_RE.fullmatch(token):
         return normalize(Fraction(token))
     try:
@@ -1829,6 +1929,13 @@ def lisp_str(exp: Any) -> str:
         if exp.value in reverse_char_map:
             return reverse_char_map[exp.value]
         return f"#\\{exp.value}"
+    elif type_name == 'complex':
+        # Common Lisp spelling: #C(real imag). Round-trips through #C(...).
+        if math.isfinite(exp.real) and math.isfinite(exp.imag):
+            exp = _clean_complex(exp)
+            im = lisp_str(exp.imag)
+            return f"{lisp_str(exp.real)}{im if im.startswith('-') else '+' + im}i"
+        return f"#C({lisp_str(exp.real)} {lisp_str(exp.imag)})"   # nan/inf can't be infix
     elif isinstance(exp, Vector):
         return '[' + ' '.join(map(lisp_str, exp)) + ']'
     elif isinstance(exp, Pair):
