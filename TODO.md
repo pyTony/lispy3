@@ -180,11 +180,21 @@ The order below governs the remaining work above.
    lispy3-only; SBCL/Clojure currently lack the Step 3 extensions, so their parity
    must not be implied. Preserve the plain-macro fast path for jump-free programs.
 6. **Then select the next feature batch.** Candidate console features are INPUT,
-   TIME and RND, followed by file I/O as needed by real example programs. Choose
+   RND and further TIME compatibility, followed by file I/O as needed by real example programs. Choose
    one small behavior at a time, establish its SDL result, write the failing
    acceptance test, implement it, and retain the regression. Graphics, broad
    dialect expansion and a general tokenizer are deferred from the current fix
    and subroutine milestones.
+
+TIME progress: the existing terminal `mandelbrot2.bas` exposed a confirmed bug:
+TIME was an ordinary variable and always reported zero after TIME=0. Eight
+clock tests were added first (seven failed, one passed), then the assignable
+centisecond clock was implemented. It supports LET and compound updates,
+persists between runs, and prevents memoization of clock-dependent FN results.
+The unchanged demo rendered 25 rows and reported 1.03 seconds (outer load/run:
+1.205 seconds). Full suite: 388 passed, 4 skipped, 319 subtests passed.
+TIME starts when the library loads; BBC's 32-bit wrap and TIME$ remain pending.
+This implementation is for lispy3; backend parity is not implied.
 
 Steps 1 and 4 are complete. The broader compatibility-policy/audit work in steps
 2-3 and release/next-feature planning in steps 5-6 remain pending. The user's requested Python-suite

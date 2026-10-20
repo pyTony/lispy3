@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: make TIME an assignable elapsed clock in centiseconds, including
+  LET, += and -=. Clock reads persist across runs and are not memoized in FN.
+  The unchanged terminal Mandelbrot demo now reports elapsed time instead of
+  zero. Eight clock regressions pass; full suite: 388 passed, 4 skipped,
+  319 subtests passed.
 - mini-basic: implement GOSUB / RETURN and ON ... GOSUB, including same-line
   continuation, nested calls, calls from loops, and isolated PROC/FN call scopes.
   Call state is restored on normal returns, errors and END. Out-of-range
