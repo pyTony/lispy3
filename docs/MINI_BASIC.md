@@ -149,6 +149,14 @@ Raw `PRINT CHR$(27);"[31m"` still works, but counts escape bytes as text and can
 misalign later TAB, comma zones or numeric alignment. There is no automatic
 terminal reset on END or an error: restore attributes explicitly when finished.
 
+## Bundled terminal Mandelbrot demos
+
+The repository now includes matching plain and ANSI-coloured terminal renderers
+in BASIC and native Lisp. See [Terminal Mandelbrot](TERMINAL_MANDELBROT.md) for
+four one-command launchers, source locations and custom-size calls. The BASIC
+source is `lisp/programs/mandelbrot-terminal.bas`; it no longer requires the
+external Python mini_basic checkout. The external demo below is still available.
+
 ## TIME and terminal Mandelbrot
 
 ```basic

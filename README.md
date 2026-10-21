@@ -84,6 +84,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lisp/mini-basic.lisp` | BBC BASIC text via `(bbc-run """...""")` or `(bbc-load "prog.bas")`: structured statements, PROC/FN, GOTO, GOSUB/RETURN, ON branches, DATA/READ/RESTORE, DIM arrays and an assignable centisecond TIME clock. See the [mini-basic guide](docs/MINI_BASIC.md) for usage, ANSI output and limits, and `compare/reference/README.md` for native checks. |
 | `lisp/programs/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `lisp/programs/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
+| Terminal Mandelbrot in BASIC and Lisp | Plain and ANSI-coloured terminal demos; see [run commands and source](docs/TERMINAL_MANDELBROT.md). |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
