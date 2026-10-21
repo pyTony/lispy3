@@ -334,7 +334,9 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | `F1` | Open the Lispy guide (in the guide: `Ctrl+F` search, `Enter`/`F3` next match, `Alt+Left` back, `Esc` close) |
 | `F5` / `Ctrl+Enter` | Evaluate the outermost form at the cursor |
 | `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
-| `F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
+| `F7` | Run selected BASIC text or the current BASIC line through mini-basic |
+| `F8` | Run the whole BASIC buffer through mini-basic |
+| `Shift+F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
 | `F9` | Evaluate what you typed in the Listener |
 | `Ctrl+Break` | Stop the code that is running (also the Listener's **■ Stop** button, **Eval → Stop**, and `Esc` in the plain REPL) |
 | `Ctrl+F` | Open Find |
@@ -364,7 +366,7 @@ Lispy closes brackets you leave open. When it does, you see the brackets it adde
 
 ### Inspector
 
-After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. Long lists of atoms are packed into rows instead of one item per line. A `(define name …)` returns nothing, so the Inspector then shows the new value of `name`; press `F7` on any symbol to look at a variable later. If evaluation raised, the Inspector shows the error.
+After every evaluation the Inspector pane shows the value using the interpreter's own `pretty_print`. Clojure-style maps and vectors expand vertically; procedures print as `(lambda …)` or as their native name. Long lists of atoms are packed into rows instead of one item per line. A `(define name …)` returns nothing, so the Inspector then shows the new value of `name`; press `Shift+F7` on any symbol to look at a variable later. If evaluation raised, the Inspector shows the error.
 
 ### Syntax colouring
 

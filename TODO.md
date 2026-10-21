@@ -50,6 +50,13 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Editor BASIC execution (2026-10-21)
+
+- [x] F7 runs selected BASIC text or the current line; F8 runs the whole buffer
+  through mini-basic without a Lisp wrapper. Shift+F7 inspects a symbol.
+- [x] Preserve source quoting, automatic reader import, timing, and errors.
+  Four new tests failed before implementation; 19 focused checks now pass.
+
 ### Terminal output and buffer timing (2026-10-21)
 
 - [x] Route program output to a real ANSI terminal from Lisp or the GUI while

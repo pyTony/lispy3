@@ -4,6 +4,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add editor mini-basic commands: F7 runs selected BASIC text or the current
+  line; F8 runs the whole BASIC buffer. Import the reader automatically and
+  retain buffer timing and Stop. Move symbol inspection to Shift+F7.
+
 - Add same-workspace ANSI terminal output through `with-ansi-terminal` and
   Lispy Machine's Eval menu. New output windows wait for Enter before closing.
   Add optional whole-buffer timing for Listener and terminal runs, and silent

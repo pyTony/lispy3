@@ -8,7 +8,8 @@ Features
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : evaluate top-level form at cursor
   * F6 / Ctrl+Shift+Enter : evaluate whole buffer
-  * F7 : inspect the symbol at the cursor (or typed in the Listener)
+  * F7 / F8 : run BASIC selection or line / whole BASIC buffer
+  * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
   * Code runs in the background, so the window stays live; the Stop button
     (or Ctrl+Break) ends a long or endless run
@@ -202,7 +203,9 @@ def about_text(folder: str = APP_DIR) -> str:
         "F1  Lispy guide\n"
         "F5  eval form at cursor\n"
         "F6  eval whole buffer\n"
-        "F7  inspect symbol at cursor\n"
+        "F7  run BASIC selection or line\n"
+        "F8  run whole BASIC buffer\n"
+        "Shift+F7  inspect symbol at cursor\n"
         "F9  eval listener input\n"
         "Ctrl+Break  stop the running code\n"
         "Ctrl+Space  complete symbol\n"
@@ -1498,7 +1501,9 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
         eval_m.add_command(label="Eval buffer in ANSI terminal", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
-        eval_m.add_command(label="Inspect symbol at cursor", accelerator="F7", command=self.inspect_at_cursor)
+        eval_m.add_command(label="Run BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
+        eval_m.add_command(label="Run whole BASIC buffer", accelerator="F8", command=self.eval_basic_buffer)
+        eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
         eval_m.add_command(label="Stop", accelerator="Ctrl+Break", command=self.stop, state="disabled")
@@ -1768,7 +1773,9 @@ class LispMachine(tk.Tk):
 
     def _bind_global(self):
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
-        self.bind_all("<F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
+        self.bind_all("<F7>", lambda e: (self.eval_basic_at_cursor(), "break")[1])
+        self.bind_all("<F8>", lambda e: (self.eval_basic_buffer(), "break")[1])
+        self.bind_all("<Shift-F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
         self.bind_all("<Control-Cancel>", self.stop)
         self.bind_all("<Control-Break>", self.stop)
@@ -2130,6 +2137,19 @@ class LispMachine(tk.Tk):
     def eval_buffer_in_terminal(self):
         self.eval_buffer(terminal=True)
 
+    def eval_basic_buffer(self):
+        self.eval_buffer(basic=True)
+
+    def eval_basic_at_cursor(self):
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        text = tab.text
+        selection = text.tag_ranges('sel')
+        source = (text.get(selection[0], selection[1]) if selection
+                  else text.get('insert linestart', 'insert lineend'))
+        self.eval_buffer(basic=True, source=source)
+
     def _eval_forms_in_terminal(self, forms):
         try:
             with lispy_terminal.ansi_terminal_output():
@@ -2145,13 +2165,13 @@ class LispMachine(tk.Tk):
         if path:
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
-    def eval_buffer(self, terminal=False):
+    def eval_buffer(self, terminal=False, basic=False, source=None):
         tab = self.current_tab()
         if not tab or self._busy():
             return
-        content = tab.get_content()
+        content = tab.get_content() if source is None else source
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
-        closers = L.missing_closers(content)
+        closers = '' if basic else L.missing_closers(content)
         if closers:
             content = self._write_closers(tab, content, closers)
 
@@ -2161,7 +2181,14 @@ class LispMachine(tk.Tk):
             return
 
         try:
-            forms = self._parse_top_level_forms(content)
+            if basic:
+                # Quote source as a Lisp string; never parse BASIC as Lisp or
+                # insert Lisp closing brackets into the user's BASIC buffer.
+                forms = self._parse_top_level_forms(
+                    '(import (prefix (only mini-basic bbc-run) editor-basic:))\n'
+                    '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
+            else:
+                forms = self._parse_top_level_forms(content)
         except Exception as e:                       # noqa: BLE001
             self.listener_write(f"Parse error: {e}\n", "error")
             self.listener_write(";; --- done ---\n", "info")
@@ -2288,7 +2315,7 @@ class LispMachine(tk.Tk):
         return True
 
     def inspect_at_cursor(self):
-        """F7: inspect the symbol under the editor cursor, or the name typed in the Listener."""
+        """Shift+F7: inspect the symbol under the editor cursor or in the Listener."""
         name = ""
         if self.focus_get() is self.listener_input:
             name = self.listener_input.get().strip()
