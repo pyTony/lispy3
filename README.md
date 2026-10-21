@@ -332,10 +332,10 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | Key | Action |
 |-----|--------|
 | `F1` | Open the Lispy guide (in the guide: `Ctrl+F` search, `Enter`/`F3` next match, `Alt+Left` back, `Esc` close) |
-| `F5` / `Ctrl+Enter` | Evaluate the outermost form at the cursor |
-| `F6` / `Ctrl+Shift+Enter` | Evaluate the whole buffer |
-| `F7` | Run selected BASIC text or the current BASIC line through mini-basic |
-| `F8` | Run the whole BASIC buffer through mini-basic |
+| `F5` / `Ctrl+Enter` | Run Lisp form, or BASIC/Python selection/current line |
+| `F6` / `Ctrl+Shift+Enter` | Run the buffer by its highlighting language; BASIC uses Lispy mini-basic |
+| `F7` | Run selected BASIC text or the current BASIC line through Python mini_basic |
+| `F8` | Run the whole BASIC buffer through Python mini_basic |
 | `Shift+F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
 
 | `F9` | Evaluate what you typed in the Listener |
@@ -367,11 +367,25 @@ invalid buffer unchanged. Formatting preserves strings/comments and is grouped
 as one undo operation. These are reader checks, not checks for undefined names
 or runtime errors. BASIC indentation is a layout helper, not a BASIC validator.
 
-**Eval → BASIC Settings** selects **Lispy mini-basic** (the default, sharing the
-Lisp workspace) or **Python mini_basic** (a separate CLI process). F7/F8 use the
-selected backend. Choose output separately: **Eval → BASIC output → Listener / ANSI terminal**
-applies to F7/F8 with either backend and is saved across restarts. New ANSI
-output windows wait for Enter before closing. For Python, select the directory
+**F5/F6 follow the buffer's highlighting language.** Lisp runs in the workspace;
+BASIC uses Lispy mini-basic in that workspace; Python runs in a fresh process.
+F5 runs an enclosing Lisp form, or selected BASIC/Python text (the current line
+when nothing is selected). F6 runs the whole buffer. Python selections are
+unindented for execution; traceback line numbers still refer to the buffer.
+Python definitions do not persist between runs. Use the configured Python
+executable under **Eval → BASIC Settings…** for both external Python runners.
+
+BASIC Settings opens a window that stays open while you change options.
+Radio/check states remain visible; changes save automatically and show
+“Saved. Applies to the next run.” Python mini_basic console exit status 10
+means normal completion with a console-hold request, rather than an error.
+
+**F7/F8 explicitly run Python mini_basic**, independently of F5/F6. There is
+no saved backend selector. **BASIC Settings** retains Python executable/project
+locations and the optional SDL window. **Eval → BASIC Settings… → BASIC text output** applies to both BASIC interpreters and is saved across restarts.
+For terminal-only programs turn SDL graphics off: enabling it mirrors PRINT
+through the SDL window and terminal, which can have very different performance.
+New ANSI output windows wait for Enter before closing. Select the directory
 containing `mini_basic/__main__.py` and optionally a Python executable with the
 package installed. A sibling `mini_basic` checkout is detected automatically.
 The adapter uses the same `python -m mini_basic` entry point as
@@ -396,11 +410,11 @@ The Listener is a real REPL backed by the interpreter's `global_env`. Code in th
 
 **Plain lispy3 REPL.** Tick **View → Plain lispy3 REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener becomes a console like `python lispy3.py`, still sharing the editor's `global_env`: the `USER>` entry line goes away and you type at a `lispy3>` prompt in the Listener itself, so your input and the output scroll together. Enter on an unfinished form continues it on the next line under a `... (1)>` prompt, pasted lines are read one by one, `Tab` completes like readline (the shared start, then the list of choices) and `Ctrl+Space` opens the same pick list as elsewhere, `↑` / `↓` bring back earlier lines, `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`, and a result too long for one line, such as a whole function, indented like in the Inspector). The text above the prompt is read-only: `←` stops at the prompt, and a click in older output puts the cursor back at the prompt (drag to select and copy). The choice is remembered in `~/.lispy3_machine.json`; untick it to get the `USER>` Listener back.
 
-F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
+In Lisp buffers, F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
 
 **Running and stopping.** Code runs on its own thread, so the editor stays live while it works: you can scroll, edit, read the guide, and watch `display` output arrive. While it runs the status bar says *Running...* and the **■ Stop** button at the top right of the Listener turns red; press it (or `Ctrl+Break`, or **Eval → Stop**) to end an endless loop or a long `(sleep ...)`. The Listener prints `;; Stopped.` and everything defined so far stays defined. `(try ...)` does not catch a Stop. One evaluation runs at a time: F5, F6 or F9 during a run says *Still running* and does nothing. Turtle commands are still carried out by the window's own thread, as Tk requires, so drawings work as before.
 
-F6 wraps the whole buffer in `(begin …)` and evaluates it. That is precisely what `python lispy3.py file.lisp` does under the hood, so the results are identical.
+In Lisp buffers, F6 evaluates the buffer forms in order. That is precisely what `python lispy3.py file.lisp` does under the hood, so the results are identical.
 
 Lispy closes brackets you leave open. When it does, you see the brackets it added: in the Listener they are printed at the end of your line, and with F5 or F6 they are written into the buffer at the end of the last line of code (before any `;` comment), with a `;; added ))` note in the Listener. `Ctrl+Z` takes them out again.
 

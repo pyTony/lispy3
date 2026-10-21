@@ -4,6 +4,15 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Keep BASIC settings in a persistent window with visible option state and
+  saved feedback. Treat Python mini_basic console-hold exit code 10 as normal
+  completion; retain nonzero error reporting for regular Python scripts.
+
+- Replace backend selection with language-aware F5/F6: Lisp form/buffer,
+  Lispy BASIC selection/line/buffer, or external Python selection/line/buffer.
+  F7/F8 always use Python mini_basic. Retain BASIC Settings for locations/SDL,
+  shared BASIC output choice, timing, Stop and source error highlights.
+
 - Add a saved BASIC output selector independent of backend selection. F7/F8
   route either Lispy or Python BASIC output to the Listener or a real ANSI
   terminal while preserving timing, Stop and source error highlighting.

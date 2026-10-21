@@ -6,9 +6,9 @@ Features
   * Multiple editor buffers (tabs) with syntax colouring read from syntax/*.json
   * Persistent Listener (REPL) with history, coloured output
   * Inspector pane showing the last evaluated value (pretty-printed)
-  * F5 / Ctrl+Enter : evaluate top-level form at cursor
-  * F6 / Ctrl+Shift+Enter : evaluate whole buffer
-  * F7 / F8 : run BASIC selection or line / whole BASIC buffer
+  * F5 / Ctrl+Enter : run Lisp form or BASIC/Python selection/current line
+  * F6 / Ctrl+Shift+Enter : run buffer using its highlighted language
+  * F7 / F8 : Python mini_basic selection/current line / whole BASIC buffer
   * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
   * Code runs in the background, so the window stays live; the Stop button
@@ -109,6 +109,13 @@ def source_filetypes(languages=LANGUAGES):
             groups.append((language.name, patterns))
     supported = tuple(dict.fromkeys(pattern for _, patterns in groups for pattern in patterns))
     return ([('Supported source files', supported)] if supported else []) + groups + [('All files', '*')]
+
+
+def execution_language(tab):
+    language = getattr(tab, 'language', None)
+    if language is None:
+        language = SH.language_for(getattr(tab, 'path', None) or tab.name, LANGUAGES)
+    return getattr(language, 'name', None)
 SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
 BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 # The name being typed at the end of a line, for completion (":name" keywords included)
@@ -215,10 +222,10 @@ def about_text(folder: str = APP_DIR) -> str:
         "Git branch: " + git_branch(folder) + "\n\n"
         + ABOUT_CREDITS + "\n\n"
         "F1  Lispy guide\n"
-        "F5  eval form at cursor\n"
-        "F6  eval whole buffer\n"
-        "F7  run BASIC selection or line\n"
-        "F8  run whole BASIC buffer\n"
+        "F5  run form / selection / line\n"
+        "F6  run buffer by language\n"
+        "F7  Python BASIC selection or line\n"
+        "F8  Python BASIC whole buffer\n"
         "Shift+F7  inspect symbol at cursor\n"
         "F9  eval listener input\n"
         "Ctrl+Break  stop the running code\n"
@@ -1383,11 +1390,11 @@ class LispMachine(tk.Tk):
         self.listener_hist_idx = 0
         self._welcome_done = False
         self.settings = load_settings()
-        backend = self.settings.get('basic_backend', 'lispy')
-        self.basic_backend = tk.StringVar(self, value=backend if backend in ('lispy', 'python') else 'lispy')
+        self.settings.pop('basic_backend', None)  # The run command now chooses it.
         output = self.settings.get('basic_output', 'listener')
         self.basic_output = tk.StringVar(self, value=output if output in ('listener', 'ansi') else 'listener')
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
+        self.basic_settings_window = None
         if plain_repl is None:
             plain_repl = bool(self.settings.get("plain_repl", False))
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
@@ -1421,7 +1428,7 @@ class LispMachine(tk.Tk):
             self.new_buffer(name, content, path=path)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
-        self.listener_write(";; F5 = eval form at cursor,  F6 = eval buffer,  F9 = eval listener input.\n", "info")
+        self.listener_write(";; F5/F6 = run by buffer language; F7/F8 = Python BASIC; F9 = Lisp listener.\n", "info")
         self.listener_write(";; Stop (Ctrl+Break) ends code that runs too long.\n", "info")
         self.listener_write(";; Ctrl+Space completes a symbol.  Try `(load \"lsystems\")`.\n", "info")
         self.listener_write(";; View > Plain lispy3 REPL switches the Listener to the lispy3 prompt.\n\n", "info")
@@ -1520,22 +1527,12 @@ class LispMachine(tk.Tk):
         self.eval_menu = eval_m = tk.Menu(bar, tearoff=0)
         self.time_buffer_runs = tk.BooleanVar(value=False)
         eval_m.add_checkbutton(label="Time buffer runs", variable=self.time_buffer_runs)
-        eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
+        eval_m.add_command(label="Run form / selection / line", accelerator="F5", command=self.eval_form_at_cursor)
         eval_m.add_command(label="Eval buffer in ANSI terminal", command=self.eval_buffer_in_terminal)
-        eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
-        eval_m.add_command(label="Run BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
-        eval_m.add_command(label="Run whole BASIC buffer", accelerator="F8", command=self.eval_basic_buffer)
-        basic_m = tk.Menu(eval_m, tearoff=0)
-        basic_m.add_radiobutton(label='Lispy mini-basic', variable=self.basic_backend, value='lispy', command=self._save_basic_settings)
-        basic_m.add_radiobutton(label='Python mini_basic', variable=self.basic_backend, value='python', command=self._save_basic_settings)
-        basic_m.add_checkbutton(label='Python SDL graphics (hold window)', variable=self.basic_pygame, command=self._save_basic_settings)
-        basic_m.add_command(label='Python mini_basic directory…', command=self._choose_basic_directory)
-        basic_m.add_command(label='Python executable…', command=self._choose_basic_python)
-        eval_m.add_cascade(label='BASIC Settings', menu=basic_m)
-        output_m = tk.Menu(eval_m, tearoff=0)
-        output_m.add_radiobutton(label='Listener', variable=self.basic_output, value='listener', command=self._save_basic_settings)
-        output_m.add_radiobutton(label='ANSI terminal', variable=self.basic_output, value='ansi', command=self._save_basic_settings)
-        eval_m.add_cascade(label='BASIC output', menu=output_m)
+        eval_m.add_command(label="Run whole buffer", accelerator="F6", command=self.eval_buffer)
+        eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
+        eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
+        eval_m.add_command(label='BASIC Settings…', command=self._open_basic_settings)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
@@ -2127,6 +2124,21 @@ class LispMachine(tk.Tk):
         tab = self.current_tab()
         if not tab or self._busy():
             return
+        language = execution_language(tab)
+        if language == 'BBC BASIC':
+            self.eval_basic_at_cursor(backend='lispy')
+            return
+        if language == 'Python':
+            text = tab.text
+            selection = text.tag_ranges('sel')
+            source = (text.get(selection[0], selection[1]) if selection else
+                      text.get('insert linestart', 'insert lineend'))
+            line = int(str(selection[0]).split('.')[0]) if selection else int(text.index('insert').split('.')[0])
+            self.eval_buffer(python_source=True, source=source, source_line=line)
+            return
+        if language != 'Lisp':
+            self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
+            return
         t = tab.text
         content = t.get("1.0", "end-1c")
         try:
@@ -2245,10 +2257,10 @@ class LispMachine(tk.Tk):
     def eval_buffer_in_terminal(self):
         self.eval_buffer(terminal=True)
 
-    def eval_basic_buffer(self):
-        self.eval_buffer(basic=True)
+    def eval_basic_buffer(self, backend='python'):
+        self.eval_buffer(basic=True, basic_backend=backend)
 
-    def eval_basic_at_cursor(self):
+    def eval_basic_at_cursor(self, backend='python'):
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -2257,13 +2269,58 @@ class LispMachine(tk.Tk):
         source = (text.get(selection[0], selection[1]) if selection
                   else text.get('insert linestart', 'insert lineend'))
         line = int(str(selection[0]).split('.')[0]) if selection else int(text.index('insert').split('.')[0])
-        self.eval_buffer(basic=True, source=source, source_line=line)
+        self.eval_buffer(basic=True, basic_backend=backend, source=source, source_line=line)
 
     def _save_basic_settings(self):
-        self.settings['basic_backend'] = self.basic_backend.get()
+        self.settings.pop('basic_backend', None)
         self.settings['basic_pygame'] = self.basic_pygame.get()
         self.settings['basic_output'] = self.basic_output.get()
         save_settings(self.settings)
+
+    def _open_basic_settings(self):
+        if self.basic_settings_window is not None and self.basic_settings_window.winfo_exists():
+            self.basic_settings_window.lift()
+            return
+        window = self.basic_settings_window = tk.Toplevel(self)
+        window.title('BASIC Settings')
+        window.transient(self)
+        frame = ttk.Frame(window, padding=16)
+        frame.pack(fill='both', expand=True)
+        ttk.Label(frame, text='BASIC: F5/F6 use Lispy mini-basic; F7/F8 use Python mini_basic.').pack(anchor='w', pady=(0,12))
+        output = ttk.LabelFrame(frame, text='BASIC text output', padding=8)
+        output.pack(fill='x', pady=(0,12))
+        status = tk.StringVar(window, value='Settings are saved automatically.')
+
+        def save():
+            self._save_basic_settings()
+            status.set('Saved. Applies to the next run.')
+
+        ttk.Radiobutton(output, text='Listener', variable=self.basic_output,
+                        value='listener', command=save).pack(anchor='w')
+        ttk.Radiobutton(output, text='ANSI terminal (keep open after running)', variable=self.basic_output,
+                        value='ansi', command=save).pack(anchor='w')
+        python = ttk.LabelFrame(frame, text='Python mini_basic', padding=8)
+        python.pack(fill='x', pady=(0,12))
+        ttk.Checkbutton(python, text='SDL graphics window (hold after running)',
+                        variable=self.basic_pygame, command=save).pack(anchor='w')
+        ttk.Label(python, text='Leave SDL off for terminal-only programs. SDL mirrors text when enabled.').pack(anchor='w', pady=(0,8))
+        for label, key, choose, default in (
+                ('Project directory', 'basic_directory', self._choose_basic_directory, BR.default_package_root()),
+                ('Python executable', 'basic_python', self._choose_basic_python, lispy_terminal.console_python())):
+            row = ttk.Frame(python)
+            row.pack(fill='x', pady=4)
+            ttk.Label(row, text=label, width=18).pack(side='left')
+            value = tk.StringVar(window, value=self.settings.get(key) or default)
+            ttk.Entry(row, textvariable=value, state='readonly', width=55).pack(side='left', fill='x', expand=True)
+
+            def browse(choose=choose, value=value, key=key, default=default):
+                choose()
+                value.set(self.settings.get(key) or default)
+                status.set('Settings are saved automatically.')
+
+            ttk.Button(row, text='Browse…', command=browse).pack(side='left', padx=(8,0))
+        ttk.Label(frame, textvariable=status).pack(anchor='w', pady=(0,8))
+        ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
 
     def _choose_basic_directory(self):
         path = filedialog.askdirectory(title='Python mini_basic project directory',
@@ -2289,7 +2346,7 @@ class LispMachine(tk.Tk):
         error.lineno, error.offset, error.whole_line = line, 1, True
         LispMachine._highlight_source_error(self, tab, error)
 
-    def _run_python_basic_buffer(self, tab, source, source_line, terminal=False):
+    def _run_python_basic_buffer(self, tab, source, source_line, terminal=False, python_source=False):
         original = tab.get_content()
         settings = dict(getattr(self, 'settings', {}))
         graphics = getattr(self, 'basic_pygame', None)
@@ -2297,6 +2354,8 @@ class LispMachine(tk.Tk):
         timing = getattr(self, 'time_buffer_runs', None)
         timed = timing is not None and timing.get()
         cwd = os.path.dirname(os.path.abspath(tab.path)) if getattr(tab, 'path', None) else os.getcwd()
+        filename = getattr(tab, 'path', None) or tab.name
+        label = 'Python' if python_source else 'Python mini_basic'
 
         def work():
             started = time.perf_counter() if timed else None
@@ -2306,15 +2365,31 @@ class LispMachine(tk.Tk):
                     sys.stdout.flush()
                 else:
                     self._ui_post(self.listener_write, line, 'result')
-                if re.match(r'^\s*(?:\?|error\b|[A-Za-z_]*(?:Error|Exception)\b)', line, re.IGNORECASE):
+                if python_source:
+                    location = re.search(r'File "'+re.escape(filename)+r'", line (\d+)', line)
+                    if location:
+                        error = SyntaxError('Python error')
+                        error.lineno, error.offset, error.whole_line = int(location[1]), 1, True
+                        def highlight(error=error):
+                            if tab.get_content() == original:
+                                LispMachine._highlight_source_error(self, tab, error)
+                        self._ui(highlight)
+                elif re.match(r'^\s*(?:\?|error\b|[A-Za-z_]*(?:Error|Exception)\b)', line, re.IGNORECASE):
                     self._ui(LispMachine._basic_error_highlight, self, tab, source, line, source_line, original, True)
             try:
                 output = lispy_terminal.ansi_terminal_output() if terminal else contextlib.nullcontext()
                 with output:
-                    status = BR.run_python_basic(source, write, cwd=cwd,
-                        executable=settings.get('basic_python'),
-                        package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
-                self._ui(self.listener_write, f';; Python mini_basic exited with status {status}.\n', 'info' if status == 0 else 'error')
+                    if python_source:
+                        status = BR.run_python_source(source, write, cwd=cwd,
+                            executable=settings.get('basic_python'), filename=filename, source_line=source_line)
+                    else:
+                        status = BR.run_python_basic(source, write, cwd=cwd,
+                            executable=settings.get('basic_python'),
+                            package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
+                if not python_source and not pygame and status == 10:
+                    self._ui(self.listener_write, ';; Python mini_basic finished (console hold requested).\n', 'info')
+                else:
+                    self._ui(self.listener_write, f';; {label} exited with status {status}.\n', 'info' if status == 0 else 'error')
             except Exception as error:
                 self._ui(self._report_form_error, error)
             finally:
@@ -2340,18 +2415,26 @@ class LispMachine(tk.Tk):
         if path:
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
-    def eval_buffer(self, terminal=False, basic=False, source=None, source_line=1):
+    def eval_buffer(self, terminal=False, basic=False, source=None, source_line=1,
+                    basic_backend='lispy', python_source=False):
         tab = self.current_tab()
         if not tab or self._busy():
             return
         content = tab.get_content() if source is None else source
+        if not basic and not python_source:
+            language = execution_language(tab)
+            basic = language == 'BBC BASIC'
+            python_source = language == 'Python'
+            if not basic and not python_source and language != 'Lisp':
+                self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
+                return
         if basic:
             output = getattr(self, 'basic_output', None)
             terminal = terminal or (output is not None and output.get() == 'ansi')
-        backend = getattr(self, 'basic_backend', None)
-        if basic and backend is not None and backend.get() == 'python':
+        if python_source or (basic and basic_backend == 'python'):
             if content.strip():
-                LispMachine._run_python_basic_buffer(self, tab, content, source_line, terminal=terminal)
+                LispMachine._run_python_basic_buffer(self, tab, content, source_line,
+                    terminal=terminal, python_source=python_source)
             return
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)

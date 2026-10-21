@@ -19,7 +19,7 @@ class BasicBufferTest(TestCase):
     def test_whole_buffer_runs_basic_with_quotes_and_backslashes(self):
         app = _FakeMachine('FOR I%=1 TO 3\nPRINT I%\nNEXT\nPRINT "C:\\demo"')
         app.eval_buffer = lambda **kwargs: machine.LispMachine.eval_buffer(app, **kwargs)
-        machine.LispMachine.eval_basic_buffer(app)
+        machine.LispMachine.eval_basic_buffer(app, backend='lispy')
         out = ''.join(app.lines)
         self.assertNotIn('Error:', out)
         self.assertIn('1\n2\n3\nC:\\demo', '\n'.join(line.strip() for line in out.splitlines()))
@@ -32,7 +32,7 @@ class BasicBufferTest(TestCase):
         app.tab.text.index.return_value = '5.0'
         app.eval_buffer = Mock()
         machine.LispMachine.eval_basic_at_cursor(app)
-        app.eval_buffer.assert_called_once_with(basic=True, source='PRINT 42', source_line=1)
+        app.eval_buffer.assert_called_once_with(basic=True, basic_backend='python', source='PRINT 42', source_line=1)
 
     def test_current_line_is_used_without_selection(self):
         app = _FakeMachine('PRINT 42')
@@ -43,7 +43,7 @@ class BasicBufferTest(TestCase):
         app.eval_buffer = Mock()
         machine.LispMachine.eval_basic_at_cursor(app)
         app.tab.text.get.assert_called_once_with('insert linestart', 'insert lineend')
-        app.eval_buffer.assert_called_once_with(basic=True, source='PRINT 42', source_line=5)
+        app.eval_buffer.assert_called_once_with(basic=True, basic_backend='python', source='PRINT 42', source_line=5)
 
     def test_basic_buffer_timing_and_syntax_errors(self):
         # Library initialization also uses the clock for BASIC TIME.
@@ -62,8 +62,6 @@ class BasicBufferTest(TestCase):
     def test_python_backend_uses_unsaved_text_and_highlights_numbered_line(self):
         app = _FakeMachine('10 PRINT 1\n100 FOR')
         app.tab.text = Mock()
-        app.basic_backend = Mock()
-        app.basic_backend.get.return_value = 'python'
         app.basic_pygame = Mock()
         app.basic_pygame.get.return_value = False
         app.settings = {'basic_directory': '/configured/mini_basic'}
@@ -73,7 +71,7 @@ class BasicBufferTest(TestCase):
             write('Error in line 100: expected variable\n')
             return 1
         with patch.object(machine.BR, 'run_python_basic', side_effect=run):
-            machine.LispMachine.eval_buffer(app, basic=True)
+            machine.LispMachine.eval_buffer(app, basic=True, basic_backend='python')
         app.tab.text.tag_add.assert_called_with('syntax_error', '2.0', '2.end')
 
     def test_lispy_selected_error_maps_to_original_buffer_line(self):
@@ -100,8 +98,6 @@ class BasicBufferTest(TestCase):
         app = _FakeMachine('PRINT "terminal-only"')
         app.basic_output = Mock()
         app.basic_output.get.return_value = 'ansi'
-        app.basic_backend = Mock()
-        app.basic_backend.get.return_value = 'python'
         terminal = io.StringIO()
         @contextlib.contextmanager
         def output():
@@ -111,16 +107,16 @@ class BasicBufferTest(TestCase):
             write('\x1b[31mterminal-only\x1b[0m\n')
             return 0
         with patch.object(machine.BR, 'run_python_basic', side_effect=run), patch.object(machine.lispy_terminal, 'ansi_terminal_output', output):
-            machine.LispMachine.eval_buffer(app, basic=True)
+            machine.LispMachine.eval_buffer(app, basic=True, basic_backend='python')
         self.assertIn('\x1b[31mterminal-only\x1b[0m', terminal.getvalue())
         self.assertNotIn('terminal-only', ''.join(app.lines))
 
     def test_output_setting_is_persisted(self):
         app = Mock()
-        app.settings = {}
-        app.basic_backend.get.return_value = 'lispy'
+        app.settings = {'basic_backend': 'python'}
         app.basic_pygame.get.return_value = False
         app.basic_output.get.return_value = 'ansi'
         with patch.object(machine, 'save_settings') as save:
             machine.LispMachine._save_basic_settings(app)
         self.assertEqual(save.call_args.args[0]['basic_output'], 'ansi')
+        self.assertNotIn('basic_backend', save.call_args.args[0])
