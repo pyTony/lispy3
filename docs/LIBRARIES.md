@@ -4,6 +4,11 @@ Use `load` to run an existing Lisp script in the shared workspace. Use `import`
 when a library declares public exports and keeps its helpers private. The forms
 below are lispy3's Scheme-inspired subset, not a complete Scheme library standard.
 
+Use `(load "path/to/library.lisp" :silent)` to suppress the loader's status
+message. Explicit program output and errors remain visible. Lispy Machine also
+provides **File → Load library silently…**. Imports already produce no status
+message.
+
 ## Import just what you need
 
 ```lisp

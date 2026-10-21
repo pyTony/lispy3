@@ -6,6 +6,7 @@ what would be written to the Listener.
 Run:  python -m unittest discover tests
 """
 import unittest
+from unittest.mock import patch, Mock
 
 import turtle_stub
 from support import fresh_global_env
@@ -75,6 +76,37 @@ class EvalBufferTest(unittest.TestCase):
 
     def setUp(self):
         fresh_global_env()
+
+    def test_optional_timing_reports_whole_run(self):
+        app = _FakeMachine('(define timed-value 4)\n(+ timed-value 2)')
+        app.time_buffer_runs = Mock()
+        app.time_buffer_runs.get.return_value = True
+        with patch.object(machine.time, 'perf_counter', side_effect=[10.0, 10.125]):
+            out = app.run()
+        self.assertIn('6', out)
+        self.assertIn(';; Buffer elapsed time: 0.125 s', out)
+
+    def test_timing_is_off_by_default(self):
+        self.assertNotIn('Buffer elapsed time:', _FakeMachine('(+ 1 2)').run())
+
+    def test_timing_also_wraps_terminal_runs(self):
+        app = _FakeMachine('(+ 1 2)')
+        app.time_buffer_runs = Mock()
+        app.time_buffer_runs.get.return_value = True
+        app._eval_forms_in_terminal = Mock()
+        with patch.object(machine.time, 'perf_counter', side_effect=[1.0, 1.5]):
+            machine.LispMachine.eval_buffer(app, terminal=True)
+        app._eval_forms_in_terminal.assert_called_once()
+        self.assertIn(';; Buffer elapsed time: 0.500 s', ''.join(app.lines))
+
+    def test_timing_reports_aborted_run(self):
+        app = _FakeMachine('(unknown-timed-procedure)')
+        app.time_buffer_runs = Mock()
+        app.time_buffer_runs.get.return_value = True
+        with patch.object(machine.time, 'perf_counter', side_effect=[1.0, 1.25]):
+            out = app.run()
+        self.assertIn('aborted', out)
+        self.assertIn(';; Buffer elapsed time: 0.250 s', out)
 
     def test_defun_in_a_buffer(self):
         """F6 runs a buffer with defun and reports the function as defined."""

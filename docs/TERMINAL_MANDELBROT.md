@@ -17,6 +17,11 @@ Colour mode selects a black background, uses bright ANSI foreground colours and
 restores terminal defaults at completion. It requires an ANSI-capable terminal;
 the Tk Listener does not emulate those controls.
 
+In Lispy Machine, open a launcher and choose **Eval → Eval buffer in ANSI
+terminal**. Enable **Eval → Time buffer runs** for an elapsed-time line in the
+Listener. New output windows stay open until you press Enter. See
+[terminal output](TERMINAL_OUTPUT.md) for the program form and silent loading.
+
 ## Call the renderers yourself
 
 Load the native Lisp implementation without drawing, then choose a mode and size:

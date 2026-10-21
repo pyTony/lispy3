@@ -50,6 +50,19 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Terminal output and buffer timing (2026-10-21)
+
+- [x] Route program output to a real ANSI terminal from Lisp or the GUI while
+  retaining the current workspace; keep new output windows open for inspection.
+- [x] Add silent loader status and a GUI silent-load action.
+- [x] Add optional whole-buffer elapsed timing for both output destinations.
+  Timing regressions first failed for successful and aborted runs, then passed.
+- [x] Document usage in [TERMINAL_OUTPUT.md](docs/TERMINAL_OUTPUT.md).
+- [x] Validate the combined changes: 462 passed, 4 skipped, 337 subtests
+  passed in an isolated copy using committed demo launchers. Local timing edits
+  to the two native Lisp demo launchers were preserved; their extra output
+  makes the unchanged 25-row demo assertions fail in the working checkout.
+
 ### mini-basic: fixes before improvements
 
 Progress recorded 2026-10-20. Fix demonstrated errors before adding features.

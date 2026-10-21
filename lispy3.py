@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import turtle
+import lispy_terminal
 from lispy_libraries import LibrarySystem, LibraryReference
 
 # --- Types and Data Structures ---
@@ -157,6 +158,7 @@ def gensym(prefix: Any = "G__") -> Symbol:
 HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
+        ("with-ansi-terminal", "(with-ansi-terminal body...) - send output to a real terminal, sharing workspace state; the terminal stays open"),
         ("define-library", "(define-library name (export names...) (begin definitions...)) - isolated library; see docs/LIBRARIES.md"),
         ("import", "(import (only library a b)) - selected exports; prefix and rename also supported"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
@@ -178,7 +180,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("define-macro", "(define-macro (name parms...) body) - a function that writes code, run before evaluation"),
         ("#t", "#t and #f - true and false. False in a test: #f, 0 and (); everything else is true"),
         ("save", "(save \"name\") - write your definitions to lisp/name.lisp"),
-        ("load", "(load \"name\") - run name.lisp (from lisp/ if not found here)"),
+        ("load", "(load \"name\") - run name.lisp (from lisp/ if not found here); add :silent to suppress loader status"),
     ],
     "Lists and sequences": [
         ("car", "(car lst) - first item; same as first. () for an empty list"),
@@ -456,6 +458,13 @@ def slurp(filename: Any) -> String:
     with open(name, encoding='utf-8') as f:
         return String(f.read())
     
+def call_with_ansi_terminal(thunk):
+    try:
+        return lispy_terminal.call_with_ansi_terminal(thunk)
+    except lispy_terminal.TerminalError as error:
+        raise LispyError(str(error)) from error
+
+
 def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
     """(run-program "sbcl" (list "--version") [input]) - run another program, print what it prints, give its exit code."""
     command = [_unwrap_str(program)] + [_unwrap_str(a) if isinstance(a, String) else str(a) for a in args]
@@ -515,7 +524,7 @@ def save_workspace(filename: str) -> str:
             
     return f"Workspace saved to {real_filename}"
 
-def load_workspace(filename: str) -> str:
+def load_workspace(filename: str, silent: bool = False) -> str | None:
     """Loads and evaluates all Lisp definitions from a file safely, preventing REPL leaks."""
     real_filename = lisp_file_for_load(filename)
     
@@ -534,6 +543,8 @@ def load_workspace(filename: str) -> str:
 
     _ = eval_exp(expand(ast, toplevel=True), global_env)
 
+    if silent:
+        return None
     if defined_symbols:
         return f"Workspace loaded from {real_filename}. Defined: {', '.join(defined_symbols)}"
     return f"Workspace loaded from {real_filename}"
@@ -1132,6 +1143,7 @@ def standard_env() -> Env:
         'slurp': slurp,
         'memoize': memoize,
         'run-program': run_program,
+        'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
@@ -1311,6 +1323,11 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         library_system.check_definition(library_system.env(), name)
         library_system.macros()[name] = proc
         return None
+
+    if head == 'with-ansi-terminal':
+        if len(x) < 2:
+            raise SyntaxError("with-ansi-terminal needs a body")
+        return expand(['call-with-ansi-terminal', ['lambda', [], *x[1:]]], toplevel)
 
     if head == 'time':
         # (time exp): run exp, print how long it took, give its value
@@ -1657,13 +1674,15 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                 fn_str = filename.value if isinstance(filename, String) else str(filename)
                 return save_workspace(fn_str)
 
-            case ['load', filename_exp]:
+            case ['load', filename_exp] | ['load', filename_exp, ':silent']:
                 filename = eval_exp(filename_exp, env)
                 fn_str = filename.value if isinstance(filename, String) else str(filename)
                 library = library_system.owner(env)
+                silent = len(x) == 3
                 if library:
-                    return library_system.load_source(fn_str, library)
-                return load_workspace(fn_str)
+                    result = library_system.load_source(fn_str, library)
+                    return None if silent else result
+                return load_workspace(fn_str, silent=silent)
 
             # 15. Property list flavor: (:name user)
             case [str(keyword), target_exp] if keyword.startswith(':'):
@@ -1996,7 +2015,7 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 
 def completion_candidates(env: 'Env' = global_env) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
-    names = set(SPECIAL_FORMS) | {'defun', 'exit'}   # defun is expanded away, so not in SPECIAL_FORMS
+    names = set(SPECIAL_FORMS) | {'defun', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
