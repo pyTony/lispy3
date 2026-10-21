@@ -1,6 +1,6 @@
 ;; Mandelbrot set drawn with the turtle.
 ;; Turn the mouse wheel over the picture: away from you zooms in around the
-;; pointer, towards you zooms out. Run:  python lispy3.py lisp/mandelbrot.lisp
+;; pointer, towards you zooms out. Run:  python lispy3.py lisp/programs/mandelbrot.lisp
 
 (define (escape cx cy max-iter)
   ;; how many steps z -> z*z + c takes to leave the circle of radius 2

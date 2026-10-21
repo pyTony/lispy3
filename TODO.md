@@ -270,3 +270,16 @@ terminal check; tests verify exact emitted controls and column behavior.
 Library acceptance tests: 14 initial failures established the baseline; 30 tests
 now pass, including later regressions for nested macro scope and scoped read/eval.
 Full suite: 433 passed, 4 skipped, 324 subtests passed.
+
+### Terminal Mandelbrot examples
+
+- [x] Add native Lisp and mini-basic source with plain/ANSI-colour modes and
+  four standalone launchers; retain the existing graphical turtle example.
+- [x] Compare small renders with a mathematical reference and each other;
+  verify known inside/outside/boundary points, colour reset and 79x25 defaults.
+  Four tests / 13 subtests pass after first establishing failures.
+- [x] Document run commands and source paths in docs/TERMINAL_MANDELBROT.md.
+
+Terminal Mandelbrot full verification: 444 passed, 4 skipped, 337 subtests
+passed. Normal Lisp/plain and NumPy BASIC/colour CLI smoke checks each rendered
+79x25 output; colour output ended with the terminal attribute reset.

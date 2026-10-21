@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add matching terminal Mandelbrot demos in BASIC and native Lisp, with four
+  one-command plain/ANSI-colour launchers. Both use the same view, shading and
+  bright-colour palette; coloured runs restore terminal attributes. Tests cover
+  mathematical reference output, boundary points and all launchers. The turtle
+  version remains available; its source comment now gives the correct run path.
+
+
 - Add explicit libraries with private environments and macro tables, declared
   exports, composable only/prefix/rename imports and relative includes. Imported
   macros retain private helpers and caller argument scope; imported values are
