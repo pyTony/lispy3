@@ -1742,9 +1742,34 @@ TOKEN_RE = re.compile(
     + r'|[^\s()\[\]{}"\'`,;]+'            # symbols and numbers
 )
 
-def tokenize(chars: str) -> list[str]:
+class _ClosingToken(str):
+    """Closing punctuation retains its source location without changing atoms."""
+
+    def __new__(cls, value, line, column, source_name):
+        token = super().__new__(cls, value)
+        token.line, token.column, token.source_name = line, column, source_name
+        return token
+
+
+def tokenize(chars: str, source_name: str | None = None) -> list[str]:
     """Convert a string into a list of tokens, handling comments, quotes, quasiquotes, and strings."""
-    return [t for t in TOKEN_RE.findall(chars) if not t.startswith(';')]
+    tokens = []
+    line, last_newline, previous = 1, -1, 0
+    for match in TOKEN_RE.finditer(chars):
+        gap = chars[previous:match.start()]
+        line += gap.count('\n')
+        if '\n' in gap:
+            last_newline = previous + gap.rfind('\n')
+        token = match.group()
+        if token in (')', ']', '}'):
+            tokens.append(_ClosingToken(token, line, match.start() - last_newline, source_name))
+        elif not token.startswith(';'):
+            tokens.append(token)
+        line += token.count('\n')
+        if '\n' in token:
+            last_newline = match.start() + token.rfind('\n')
+        previous = match.end()
+    return tokens
 
 def read_from_tokens(tokens: list[str]) -> Exp:
     """Read an expression from a sequence of tokens with automatic closing parentheses."""
@@ -1799,7 +1824,14 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         return D
         
     elif token in (')', ']', '}'):
-        raise SyntaxError(f"Unexpected closing bracket: {token}")
+        message = f"Unexpected closing bracket: {token}"
+        if isinstance(token, _ClosingToken):
+            source = f"{token.source_name}: " if token.source_name else ''
+            error = SyntaxError(f"{source}{message} at line {token.line}, column {token.column}")
+            error.filename = token.source_name
+            error.lineno, error.offset = token.line, token.column
+            raise error
+        raise SyntaxError(message)
     elif token == "'":
         return ['quote', read_from_tokens(tokens)]
     elif token == '`':

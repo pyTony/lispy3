@@ -50,6 +50,13 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Reader closing-bracket locations (2026-10-21)
+
+- [x] Retain source positions for closing punctuation and report line/column
+  for unexpected closing brackets, including buffer filenames in the GUI.
+- [x] Add failing tests first, including comments, multiline strings and plain
+  token-list compatibility. Reader/editor checks: 65 passed, 38 subtests passed.
+
 ### Editor BASIC execution (2026-10-21)
 
 - [x] F7 runs selected BASIC text or the current line; F8 runs the whole buffer

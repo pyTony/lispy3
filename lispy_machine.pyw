@@ -2126,9 +2126,9 @@ class LispMachine(tk.Tk):
         self.listener_write(f";; added {closers} at the end of line {index.split('.')[0]}\n", "info")
         return content[:pos] + closers + content[pos:]
 
-    def _parse_top_level_forms(self, content: str):
+    def _parse_top_level_forms(self, content: str, source_name=None):
         """Split buffer text into a list of top-level forms using the interpreter's own parser."""
-        tokens = L.tokenize(content)
+        tokens = L.tokenize(content, source_name=source_name)
         forms = []
         while tokens:
             forms.append(L.read_from_tokens(tokens))
@@ -2188,7 +2188,7 @@ class LispMachine(tk.Tk):
                     '(import (prefix (only mini-basic bbc-run) editor-basic:))\n'
                     '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
             else:
-                forms = self._parse_top_level_forms(content)
+                forms = self._parse_top_level_forms(content, source_name=getattr(tab, 'path', None) or tab.name)
         except Exception as e:                       # noqa: BLE001
             self.listener_write(f"Parse error: {e}\n", "error")
             self.listener_write(";; --- done ---\n", "info")
