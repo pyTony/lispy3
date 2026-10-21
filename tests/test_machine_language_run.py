@@ -68,3 +68,12 @@ class LanguageRunTest(TestCase):
         with patch.object(machine.BR, 'run_python_source', return_value=10):
             machine.LispMachine.eval_buffer(app)
         self.assertIn(';; Python exited with status 10.\n', app.lines)
+
+    def test_explicit_output_commands_choose_and_save_destination(self):
+        for name, destination, terminal in [('eval_buffer_listener', 'listener', False),
+                                             ('eval_buffer_in_terminal', 'ansi', True)]:
+            app = Mock()
+            getattr(machine.LispMachine, name)(app)
+            app.basic_output.set.assert_called_once_with(destination)
+            app._save_basic_settings.assert_called_once()
+            app.eval_buffer.assert_called_once_with(terminal=terminal)

@@ -391,3 +391,17 @@ Full suite: 433 passed, 4 skipped, 324 subtests passed.
 Terminal Mandelbrot full verification: 444 passed, 4 skipped, 337 subtests
 passed. Normal Lisp/plain and NumPy BASIC/colour CLI smoke checks each rendered
 79x25 output; colour output ended with the terminal attribute reset.
+
+### Editor destinations, file navigation and real BBCSDL (2026-10-21)
+
+- [x] F6 runs in Listener; Shift+F6 runs in ANSI. Reuse the saved destination
+  for form/selection and Python BASIC runs; remove duplicate Settings radios.
+- [x] F4, Ctrl+click and context menu open quoted filenames; preserve existing
+  unsaved buffers, decode literals without evaluation, and report missing files.
+- [x] Add a separate real BBCSDL buffer action and executable/native helper paths.
+  Prepare the attributed native loader source; no editor tokenizer is added.
+- [ ] Save tools/bbcsdl-basrun.bas as native basrun.bbc in BBCSDL and perform
+  an end-to-end desktop run. EXEC startup probes did not consume queued source.
+
+Validation: exact staged tree passed 525 tests, 4 skipped, 353 subtests.
+Native desktop execution remains pending the one-time helper save above.

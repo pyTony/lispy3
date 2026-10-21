@@ -7,7 +7,7 @@ Features
   * Persistent Listener (REPL) with history, coloured output
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : run Lisp form or BASIC/Python selection/current line
-  * F6 / Ctrl+Shift+Enter : run buffer using its highlighted language
+  * F6 / Ctrl+Shift+Enter : run buffer in Listener; Shift+F6 in ANSI terminal
   * F7 / F8 : Python mini_basic selection/current line / whole BASIC buffer
   * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
@@ -223,7 +223,7 @@ def about_text(folder: str = APP_DIR) -> str:
         + ABOUT_CREDITS + "\n\n"
         "F1  Lispy guide\n"
         "F5  run form / selection / line\n"
-        "F6  run buffer by language\n"
+        "F6  run buffer in Listener; Shift+F6 in ANSI terminal\n"
         "F7  Python BASIC selection or line\n"
         "F8  Python BASIC whole buffer\n"
         "Shift+F7  inspect symbol at cursor\n"
@@ -309,7 +309,7 @@ def context_menu_items(has_selection: bool, editable: bool) -> list[tuple[str, s
             ("Paste",      "<<Paste>>",     editable),
             ("Select all", "<<SelectAll>>", True)]
 
-def add_context_menu(widget, read_only: bool = False):
+def add_context_menu(widget, read_only: bool = False, extra_commands=()):
     """Right-click (and Ctrl+click on macOS) on a Text or Entry opens Cut / Copy / Paste.
 
     A disabled widget, or one marked read_only, offers only Copy and Select all."""
@@ -325,6 +325,11 @@ def add_context_menu(widget, read_only: bool = False):
         for label, virtual, enabled in context_menu_items(has_sel, not read_only and str(widget.cget("state")) != "disabled"):
             menu.add_command(label=label, state="normal" if enabled else "disabled",
                              command=lambda v=virtual: widget.event_generate(v))
+        if extra_commands:
+            widget.mark_set('insert', widget.index(f'@{event.x},{event.y}'))
+            menu.add_separator()
+            for label, command in extra_commands:
+                menu.add_command(label=label, command=command)
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
 
@@ -595,7 +600,7 @@ class EditorTab(tk.Frame):
         # X11 middle-click paste; right-click opens Cut / Copy / Paste
         t.bind("<ButtonRelease-2>", self._on_key)
         t.bind("<ButtonRelease-3>", self._on_key)
-        add_context_menu(t)
+        add_context_menu(t, extra_commands=[("Open file at cursor", self._open_file_at_cursor)])
 
     # ---------- bindings ----------
     def _setup_bindings(self):
@@ -613,11 +618,37 @@ class EditorTab(tk.Frame):
         t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(), 'break')[1])
         t.bind("<Control-w>", lambda e: (self.app.close_current(), 'break')[1])
 
+        t.bind('<F4>', self._open_file_at_cursor)
+        t.bind('<Command-Button-1>' if sys.platform == 'darwin' else '<Control-Button-1>',
+               self._open_file_at_cursor)
+
         # Eval bindings
         t.bind("<F5>",                      lambda e: (self.app.eval_form_at_cursor(), "break")[1])
         t.bind("<Control-Return>",          lambda e: (self.app.eval_form_at_cursor(), "break")[1])
-        t.bind("<F6>",                      lambda e: (self.app.eval_buffer(), "break")[1])
-        t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer(), "break")[1])
+        t.bind("<Shift-F6>", lambda e: (self.app.eval_buffer_in_terminal(), "break")[1])
+        t.bind("<F6>",                      lambda e: (self.app.eval_buffer_listener(), "break")[1])
+        t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer_listener(), "break")[1])
+
+    def _open_file_at_cursor(self, event=None):
+        text = self.text
+        if event is not None and getattr(event, 'num', None) == 1:
+            text.mark_set('insert', text.index(f'@{event.x},{event.y}'))
+        source = self.get_content()
+        offset = len(text.get('1.0', 'insert'))
+        reference = ET.file_reference_at_cursor(source, offset, self.language.name)
+        if reference is None:
+            self.app.listener_write(';; No quoted filename at cursor.\n', 'info')
+            return 'break'
+        roots = [os.path.dirname(self.path)] if self.path else []
+        roots += [os.getcwd(), APP_DIR, L.LISP_DIR]
+        for root in roots:
+            path = os.path.abspath(os.path.join(root, reference))
+            for candidate in [path] + ([path+'.lisp'] if not os.path.splitext(path)[1] else []):
+                if os.path.isfile(candidate):
+                    self.app._open_source_path(candidate)
+                    return 'break'
+        self.app.listener_write(f';; File not found: {reference}\n', 'error')
+        return 'break'
 
     # ---------- highlighting ----------
     def set_language(self):
@@ -1406,6 +1437,7 @@ class LispMachine(tk.Tk):
         self.settings.pop('basic_backend', None)  # The run command now chooses it.
         output = self.settings.get('basic_output', 'listener')
         self.basic_output = tk.StringVar(self, value=output if output in ('listener', 'ansi') else 'listener')
+        self._output_mode = self.basic_output.get()
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         self.basic_settings_window = None
         if plain_repl is None:
@@ -1479,7 +1511,8 @@ class LispMachine(tk.Tk):
             self.listener_write(f'Error running startup.lisp: {error}\n', 'error')
             return
         self.listener_write(f';; Running {STARTUP_FILE}\n', 'info')
-        self._start(lambda: self._eval_forms(forms))
+        terminal = getattr(self, '_output_mode', 'listener') == 'ansi'
+        self._start(lambda: self._eval_forms_in_terminal(forms) if terminal else self._eval_forms(forms))
 
     def _open_startup_settings(self):
         if self.startup_settings_window is not None and self.startup_settings_window.winfo_exists():
@@ -1585,6 +1618,7 @@ class LispMachine(tk.Tk):
         edit_m.add_command(label="Toggle comment",   accelerator="Ctrl+/", command=lambda: self._call_editor("_toggle_comment"))
         edit_m.add_command(label="Complete symbol",  accelerator="Ctrl+Space", command=lambda: self._call_editor("_complete"))
         edit_m.add_separator()
+        edit_m.add_command(label="Open file at cursor", accelerator="F4", command=lambda: self._call_editor("_open_file_at_cursor"))
         edit_m.add_command(label="Check Lisp syntax", command=self.check_buffer_syntax)
         edit_m.add_command(label="Reindent selection or buffer", command=self.reindent_buffer)
         bar.add_cascade(label="Edit", menu=edit_m)
@@ -1593,10 +1627,11 @@ class LispMachine(tk.Tk):
         self.time_buffer_runs = tk.BooleanVar(value=False)
         eval_m.add_checkbutton(label="Time buffer runs", variable=self.time_buffer_runs)
         eval_m.add_command(label="Run form / selection / line", accelerator="F5", command=self.eval_form_at_cursor)
-        eval_m.add_command(label="Eval buffer in ANSI terminal", command=self.eval_buffer_in_terminal)
-        eval_m.add_command(label="Run whole buffer", accelerator="F6", command=self.eval_buffer)
+        eval_m.add_command(label="Run buffer → ANSI terminal", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
+        eval_m.add_command(label="Run buffer → Listener", accelerator="F6", command=self.eval_buffer_listener)
         eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
         eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
+        eval_m.add_command(label="Real BBC BASIC for SDL buffer", command=self.eval_bbcsdl_buffer)
         eval_m.add_command(label='BASIC Settings…', command=self._open_basic_settings)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
@@ -1976,10 +2011,17 @@ class LispMachine(tk.Tk):
             filetypes=source_filetypes())
         if not path:
             return
+        self._open_source_path(path)
+
+    def _open_source_path(self, path):
+        for tab in self.tabs.values():
+            if tab.path and os.path.normcase(os.path.abspath(tab.path)) == os.path.normcase(os.path.abspath(path)):
+                self.notebook.select(tab)
+                return
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-        except OSError as e:
+        except (OSError, UnicodeError) as e:
             messagebox.showerror("Open failed", str(e))
             return
         self.new_buffer(os.path.basename(path), content, path=path)
@@ -2178,6 +2220,13 @@ class LispMachine(tk.Tk):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
         return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
 
+    def _evaluation_stdout(self):
+        if lispy_terminal.terminal_output_active():
+            return contextlib.nullcontext()
+        if getattr(self, '_output_mode', 'listener') == 'ansi':
+            return lispy_terminal.ansi_terminal_output()
+        return contextlib.redirect_stdout(_ListenerWriter(self))
+
     def _eval_with_turtle(self, evaluate):
         """Call `evaluate()` with stdout streamed to the Listener. Returns (value, error)."""
         import turtle as _turtle
@@ -2190,14 +2239,14 @@ class LispMachine(tk.Tk):
         _turtle.TurtleScreen._RUNNING = True
 
         try:
-            output = contextlib.nullcontext() if lispy_terminal.terminal_output_active() else contextlib.redirect_stdout(_ListenerWriter(self))
+            output = LispMachine._evaluation_stdout(self)
             with output:
                 return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                output = contextlib.nullcontext() if lispy_terminal.terminal_output_active() else contextlib.redirect_stdout(_ListenerWriter(self))
+                output = LispMachine._evaluation_stdout(self)
                 with output:
                     return evaluate(), None
             except _turtle.Terminator:
@@ -2341,8 +2390,32 @@ class LispMachine(tk.Tk):
             forms.append(L.read_from_tokens(tokens))
         return forms
 
+    def eval_buffer_listener(self):
+        self.basic_output.set('listener')
+        self._save_basic_settings()
+        self.eval_buffer(terminal=False)
+
     def eval_buffer_in_terminal(self):
+        self.basic_output.set('ansi')
+        self._save_basic_settings()
         self.eval_buffer(terminal=True)
+
+    def eval_bbcsdl_buffer(self):
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        source = tab.get_content()
+        settings = dict(self.settings)
+        cwd = os.path.dirname(tab.path) if tab.path else APP_DIR
+        def run():
+            try:
+                self.listener_write(';; Running real BBC BASIC for SDL in its own window.\n', 'info')
+                status = BR.run_bbcsdl(source, cwd=cwd, executable=settings.get('bbcsdl_executable', ''),
+                                      helper=settings.get('bbcsdl_helper', ''))
+                self.listener_write(f';; BBCSDL exited with status {status}.\n', 'info' if status == 0 else 'error')
+            except Exception as error:
+                self.listener_write(f';; BBCSDL: {error}\n', 'error')
+        self._start(run)
 
     def eval_basic_buffer(self, backend='python'):
         self.eval_buffer(basic=True, basic_backend=backend)
@@ -2362,6 +2435,7 @@ class LispMachine(tk.Tk):
         self.settings.pop('basic_backend', None)
         self.settings['basic_pygame'] = self.basic_pygame.get()
         self.settings['basic_output'] = self.basic_output.get()
+        self._output_mode = self.basic_output.get()
         save_settings(self.settings)
 
     def _open_basic_settings(self):
@@ -2374,18 +2448,30 @@ class LispMachine(tk.Tk):
         frame = ttk.Frame(window, padding=16)
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='BASIC: F5/F6 use Lispy mini-basic; F7/F8 use Python mini_basic.').pack(anchor='w', pady=(0,12))
-        output = ttk.LabelFrame(frame, text='BASIC text output', padding=8)
-        output.pack(fill='x', pady=(0,12))
         status = tk.StringVar(window, value='Settings are saved automatically.')
 
         def save():
             self._save_basic_settings()
             status.set('Saved. Applies to the next run.')
 
-        ttk.Radiobutton(output, text='Listener', variable=self.basic_output,
-                        value='listener', command=save).pack(anchor='w')
-        ttk.Radiobutton(output, text='ANSI terminal (keep open after running)', variable=self.basic_output,
-                        value='ansi', command=save).pack(anchor='w')
+        native = ttk.LabelFrame(frame, text='Real BBC BASIC for SDL', padding=8)
+        native.pack(fill='x', pady=(0,12))
+        for label, key, default in (('Executable', 'bbcsdl_executable', BR.default_bbcsdl()),
+                                    ('Native basrun.bbc', 'bbcsdl_helper', '')):
+            row = ttk.Frame(native)
+            row.pack(fill='x', pady=4)
+            ttk.Label(row, text=label, width=18).pack(side='left')
+            value = tk.StringVar(window, value=self.settings.get(key) or default)
+            ttk.Entry(row, textvariable=value, state='readonly', width=55).pack(side='left', fill='x', expand=True)
+            def choose_native(key=key, value=value):
+                path = filedialog.askopenfilename(parent=window, title='Select '+key,
+                    filetypes=[('All files', '*')])
+                if path:
+                    self.settings[key] = path
+                    value.set(path)
+                    save()
+            ttk.Button(row, text='Browse…', command=choose_native).pack(side='left')
+        ttk.Label(native, text='Runs in BBCSDL’s own window; Listener/ANSI applies to mini-basic.').pack(anchor='w')
         python = ttk.LabelFrame(frame, text='Python mini_basic', padding=8)
         python.pack(fill='x', pady=(0,12))
         ttk.Checkbutton(python, text='SDL graphics window (hold after running)',
@@ -2502,7 +2588,7 @@ class LispMachine(tk.Tk):
         if path:
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
-    def eval_buffer(self, terminal=False, basic=False, source=None, source_line=1,
+    def eval_buffer(self, terminal=None, basic=False, source=None, source_line=1,
                     basic_backend='lispy', python_source=False):
         tab = self.current_tab()
         if not tab or self._busy():
@@ -2515,9 +2601,9 @@ class LispMachine(tk.Tk):
             if not basic and not python_source and language != 'Lisp':
                 self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
                 return
-        if basic:
+        if terminal is None:
             output = getattr(self, 'basic_output', None)
-            terminal = terminal or (output is not None and output.get() == 'ansi')
+            terminal = output is not None and output.get() == 'ansi'
         if python_source or (basic and basic_backend == 'python'):
             if content.strip():
                 LispMachine._run_python_basic_buffer(self, tab, content, source_line,

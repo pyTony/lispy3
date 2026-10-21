@@ -122,3 +122,36 @@ def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>
                    "exec(compile(pathlib.Path(p).read_text(encoding='utf-8'),filename,'exec'),module.__dict__)")
         command = [executable or console_python(), '-u', '-c', wrapper, str(path), filename, cwd]
         return _stream_command(command, write, cwd, env)
+
+
+def default_bbcsdl():
+    import shutil
+    installed = Path(r'C:\Program Files (x86)\BBC BASIC for SDL 2.0\bbcsdl.exe')
+    return str(installed) if installed.is_file() else (shutil.which('bbcsdl') or '')
+
+
+def run_bbcsdl(source, *, cwd, executable='', helper=''):
+    """Run unsaved text via BBCSDL's native basrun helper, in its own window."""
+    executable = executable or default_bbcsdl()
+    if not executable or not Path(executable).is_file():
+        raise RuntimeError('Select the real BBC BASIC for SDL executable in BASIC Settings.')
+    if not helper or not Path(helper).is_file():
+        raise RuntimeError('Select a native basrun.bbc helper in BASIC Settings; see docs/BBCSDL.md.')
+    with tempfile.TemporaryDirectory(prefix='lispy-bbcsdl-') as folder:
+        path = Path(folder)/'buffer.bas'
+        path.write_text(source, encoding='utf-8')
+        process = subprocess.Popen([str(executable), str(helper), str(path)], cwd=cwd)
+        try:
+            while True:
+                try:
+                    return process.wait(timeout=0.1)
+                except subprocess.TimeoutExpired:
+                    pass
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()

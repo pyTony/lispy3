@@ -15,7 +15,7 @@ class Variable:
 
 
 class BasicSettingsTest(TestCase):
-    def test_radio_change_saves_without_closing_and_reopen_reuses_window(self):
+    def test_sdl_change_saves_without_closing_and_reopen_reuses_window(self):
         app = Mock()
         app.basic_settings_window = None
         app.settings = {}
@@ -33,12 +33,13 @@ class BasicSettingsTest(TestCase):
             top = patches.enter_context(patch.object(machine.tk, 'Toplevel', return_value=window))
             patches.enter_context(patch.object(machine.tk, 'StringVar', side_effect=variable))
             patches.enter_context(patch.object(machine.ttk, 'Radiobutton', side_effect=radio))
-            for name in ('Frame', 'Label', 'LabelFrame', 'Checkbutton', 'Entry', 'Button'):
+            for name in ('Frame', 'Label', 'LabelFrame', 'Entry', 'Button'):
                 patches.enter_context(patch.object(machine.ttk, name, return_value=Mock()))
+            patches.enter_context(patch.object(machine.ttk, 'Checkbutton', side_effect=radio))
             machine.LispMachine._open_basic_settings(app)
-            self.assertEqual([r['value'] for r in radios], ['listener', 'ansi'])
-            app.basic_output.set('ansi')
-            radios[1]['command']()
+            self.assertEqual(len(radios), 1)
+            self.assertIn('SDL graphics', radios[0]['text'])
+            radios[0]['command']()
             app._save_basic_settings.assert_called_once()
             self.assertEqual(variables[0].get(), 'Saved. Applies to the next run.')
             window.destroy.assert_not_called()
