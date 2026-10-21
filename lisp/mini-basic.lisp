@@ -408,11 +408,12 @@
                 (let ((,result ,run))
                   ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
                   ,result)))]
-    `(define ,(bbc-def-name kind name) ,(if memo `(memoize ,fn) fn))))
+    `(define ,(bbc-def-name kind name) ,(if memo `(memoize-exact ,fn) fn))))
 
 (define-macro (DEF-PROC head & body) (bbc-def 'PROC head body #f))
 (define-macro (DEF-FN head & body) (bbc-def 'FN head body #f))
-;; A pure FN remembers its results, as mini_basic does: FNfib(30) runs once per n
+;; A pure FN caches calls only when every argument is an exact number.
+;; Float/mixed/string calls run directly; explicit Lisp memoize is unchanged.
 (define-macro (DEF-MEMO-FN head & body) (bbc-def 'FN head body #t))
 
 (define (bbc-symbols x found)

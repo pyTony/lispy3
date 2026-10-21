@@ -50,6 +50,17 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Exact-argument memoization (2026-10-21)
+
+- [x] Gate automatic BASIC FN memoization and Lisp define-memo on actual
+  integer/fraction arguments; bypass floating-point/mixed/non-numeric calls.
+- [x] Keep explicit memoize unchanged and expose memoize-exact. Cover argument
+  equality collisions (1 versus 1.0), fractions, mixed calls and result types.
+- [x] Update both BASIC definition expanders, reader/library integration, help
+  and documentation. Regression tests failed before implementation.
+- [x] Full validation in an isolated staged copy: 488 passed, 4 skipped,
+  351 subtests passed, including the existing recursive Fibonacci regression.
+
 ### Editor checking, colouring and indentation (2026-10-21)
 
 - [x] Open/Save dialogs offer combined supported-source, language-specific and

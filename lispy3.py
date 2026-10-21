@@ -163,7 +163,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("import", "(import (only library a b)) - selected exports; prefix and rename also supported"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
-        ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
+        ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
         ("if", "(if test then else) - the else part may be left out"),
@@ -293,6 +293,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("run-program", "(run-program \"sbcl\" (list \"--version\") [input]) - run another program with input text, print what it prints, give its exit code"),
         ("lispy-home", "lispy-home - the folder lispy3.py is in"),
         ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
+        ("memoize-exact", "(memoize-exact f) - cache only calls with all-exact numeric arguments (integers/fractions); floats and other values bypass caching"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -477,12 +478,15 @@ def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
     print(result.stderr, end="", file=sys.stderr)
     return result.returncode
 
-def memoize(proc: Callable) -> Callable:
+def memoize(proc: Callable, *, exact_arguments_only: bool = False) -> Callable:
     """(memoize f) - f with a cache of its results, as Python's functools.cache.
 
-    Arguments that cannot be dict keys, such as lists, skip the cache."""
+    Arguments that cannot be dict keys, such as lists, skip the cache.
+    BASIC automatic caches additionally require exact numeric arguments."""
     cache: dict = {}
     def memo(*args: Any) -> Any:
+        if exact_arguments_only and not all(_is_exact(arg) for arg in args):
+            return proc(*args)
         try:
             return cache[args]
         except KeyError:
@@ -1142,6 +1146,7 @@ def standard_env() -> Env:
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
         'memoize': memoize,
+        'memoize-exact': lambda proc: memoize(proc, exact_arguments_only=True),
         'run-program': run_program,
         'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
@@ -1347,10 +1352,10 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
 
     if head == 'define-memo':
-        # (define-memo (f x) body...) is (define f (memoize (lambda (x) body...)))
+        # define-memo caches calls only when all arguments are exact numbers.
         if len(x) < 3 or not isinstance(x[1], (list, tuple)) or not x[1]:
             raise SyntaxError("define-memo needs a name with parameters and a body: (define-memo (f x) ...)")
-        return expand(['define', x[1][0], ['memoize', ['lambda', list(x[1][1:])] + list(x[2:])]], toplevel)
+        return expand(['define', x[1][0], ['memoize-exact', ['lambda', list(x[1][1:])] + list(x[2:])]], toplevel)
 
     if head == 'define':
         # Support shorthand: (define (f x y) body1 body2...)

@@ -1,5 +1,17 @@
 # mini-basic in lispy3
 
+Pure BASIC `FN` definitions are automatically wrapped with `memoize-exact`.
+Each call is cached only when **every argument value is an exact number**
+(an integer or fraction). Floating-point, mixed exact/inexact, boolean, string,
+complex and container arguments bypass the cache. The return type does not
+affect eligibility. Integer factorial/Fibonacci calls still benefit; ordinary
+floating-point Mandelbrot coordinates do not fill the cache.
+
+Lisp `define-memo` uses the same policy. Explicit `(memoize f)` retains its
+general cache, including floating-point keys; `(memoize-exact f)` explicitly
+selects the restricted policy. Restart or reload/redefine existing functions
+after updating: previously created cache wrappers keep their old behaviour.
+
 mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.

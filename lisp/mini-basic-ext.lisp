@@ -314,7 +314,7 @@
                 (let ((,result ,run))
                   ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
                   ,result)))]
-    `(define ,(bbc-def-name kind name) ,(if memo `(memoize ,fn) fn))))
+    `(define ,(bbc-def-name kind name) ,(if memo `(memoize-exact ,fn) fn))))
 
 (define-macro (bbc-program & stmts)
   (let [vars (bbc-assigned-vars stmts)

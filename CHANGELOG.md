@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Restrict automatic BASIC FN caches and Lisp define-memo to calls whose
+  argument values are all exact numbers. Bypass floating-point and other
+  arguments before cache lookup, including float keys equal to cached integers.
+  Explicit memoize remains unrestricted; add memoize-exact for the gated policy.
+
 - Add a saved Lispy/Python BASIC backend selector, configurable Python/project
   paths and optional SDL graphics. Use the existing Python CLI entry point and
   terminate its subprocess on Stop. Highlight located BASIC errors in source,
