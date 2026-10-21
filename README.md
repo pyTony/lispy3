@@ -333,7 +333,9 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 |-----|--------|
 | `F1` | Open the Lispy guide (in the guide: `Ctrl+F` search, `Enter`/`F3` next match, `Alt+Left` back, `Esc` close) |
 | `F5` / `Ctrl+Enter` | Run Lisp form, or BASIC/Python selection/current line |
-| `F6` / `Ctrl+Shift+Enter` | Run the buffer by its highlighting language; BASIC uses Lispy mini-basic |
+| `F6` / `Ctrl+Shift+Enter` | Run the buffer in Listener; BASIC uses Lispy mini-basic |
+| `Shift+F6` | Run the buffer in a real ANSI terminal |
+| `F4` / `Ctrl+click` | Open the quoted filename at the cursor (Command+click on macOS) |
 | `F7` | Run selected BASIC text or the current BASIC line through Python mini_basic |
 | `F8` | Run the whole BASIC buffer through Python mini_basic |
 | `Shift+F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
@@ -376,13 +378,15 @@ Python definitions do not persist between runs. Use the configured Python
 executable under **Eval → BASIC Settings…** for both external Python runners.
 
 BASIC Settings opens a window that stays open while you change options.
-Radio/check states remain visible; changes save automatically and show
+Check states remain visible; changes save automatically and show
 “Saved. Applies to the next run.” Python mini_basic console exit status 10
 means normal completion with a console-hold request, rather than an error.
 
 **F7/F8 explicitly run Python mini_basic**, independently of F5/F6. There is
 no saved backend selector. **BASIC Settings** retains Python executable/project
-locations and the optional SDL window. **Eval → BASIC Settings… → BASIC text output** applies to both BASIC interpreters and is saved across restarts.
+locations and the optional SDL window. **F6 → Listener** and **Shift+F6 → ANSI terminal** run the buffer and save the destination for F5/F7/F8 and Listener evaluations. There is no separate output selector in BASIC Settings.
+
+**Eval → Real BBC BASIC for SDL buffer** uses the actual BBCSDL executable in its own window. Configure it and the native text loader in BASIC Settings; see [one-time setup](docs/BBCSDL.md).
 For terminal-only programs turn SDL graphics off: enabling it mirrors PRINT
 through the SDL window and terminal, which can have very different performance.
 New ANSI output windows wait for Enter before closing. Select the directory
@@ -503,7 +507,7 @@ If you ever want a frozen interpreter inside the editor, the change is a one-lin
 
 ### Routing `display` output into the Listener
 
-The default destination is the Listener. **Eval → Eval buffer in ANSI terminal**
+The default destination is the Listener. **Eval → Run buffer → ANSI terminal (Shift+F6)**
 and `(with-ansi-terminal body...)` select a real terminal instead. Enable
 **Eval → Time buffer runs** for timing with either destination. See
 [terminal output and timing](docs/TERMINAL_OUTPUT.md).
@@ -562,3 +566,7 @@ Example, all inside the Listener pane:
 Try `Ctrl+H`, search `define`, tick `Aa`, replace with `DEFINE` and press **All** — the whole buffer is redefined (in capitals) in one undoable step. Try `Ctrl+Space` at the end of `(l`, and pick `lambda` or `length` from the popup.
 
 Everything the plain REPL can do, the editor can do — plus a place to keep your `.lisp` files open while you do it.
+
+Quoted filenames can be opened with **F4**, **Ctrl+click** (Command+click on macOS),
+or the editor context menu. Relative paths resolve from the source directory,
+then the working/editor/library directories. Already-open buffers retain their edits.

@@ -3,7 +3,7 @@ import contextlib
 import io
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from support import LispyTestCase, lispy3
 from test_machine_args import machine
 from test_machine_eval_buffer import _FakeMachine
@@ -55,6 +55,8 @@ class TerminalRoutingTest(LispyTestCase):
 
     def test_gui_can_evaluate_unsaved_buffer_in_terminal(self):
         app = _FakeMachine('(display "colour")\n(define gui-terminal-value 9)')
+        app.basic_output = Mock()
+        app._save_basic_settings = Mock()
         app.eval_buffer = lambda **kwargs: machine.LispMachine.eval_buffer(app, **kwargs)
         app._eval_forms_in_terminal = lambda forms: machine.LispMachine._eval_forms_in_terminal(app, forms)
         terminal = io.StringIO()

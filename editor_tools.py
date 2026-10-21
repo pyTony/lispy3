@@ -120,3 +120,25 @@ def next_indent(text, basic=False):
     depth = sum((1 if c in '([{' else -1 if c in ')]}' else 0)
                 for i,c in enumerate(text) if not mask[i])
     return 2*max(0, depth)
+
+
+def file_reference_at_cursor(text, offset, language='Lisp'):
+    """Decode a string under the caret without evaluating source code."""
+    import ast
+    language = next((item for item in _languages if item.name == language), _lisp)
+    for tag, start, end in language.spans(text):
+        if tag != 'string' or not start <= offset < end:
+            continue
+        token = text[start:end]
+        try:
+            if language.name == 'BBC BASIC':
+                return token[1:-1].replace('""', '"')
+            if language.name == 'Lisp':
+                import lispy3
+                value = lispy3.atom(token)
+                return value.value if isinstance(value, lispy3.String) else None
+            value = ast.literal_eval(token)
+            return value if isinstance(value, str) else None
+        except (ValueError, SyntaxError):
+            return None
+    return None

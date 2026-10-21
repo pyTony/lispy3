@@ -1,6 +1,6 @@
 # ANSI terminal output and buffer timing
 
-In Lispy Machine, choose **Eval → Eval buffer in ANSI terminal** to send a
+In Lispy Machine, choose **Eval → Run buffer → ANSI terminal (Shift+F6)** to send a
 buffer's printed output to a real terminal. Evaluation uses the current Lisp
 workspace, so definitions and changes to existing variables remain available.
 Results, errors and Inspector updates still appear in the GUI.
@@ -38,17 +38,18 @@ Python traceback lines map back to the buffer; Python definitions do not persist
 between runs. The configured Python executable is shared with the external
 BASIC runner. Only syntax implemented by the chosen interpreter is supported.
 
-Choose **Eval → BASIC Settings…** and select **Listener** or **ANSI terminal** for either BASIC
-interpreter. New ANSI windows wait for Enter after execution. Status, timing
-and located error highlights stay in the editor. This redirects output only;
-console input is not connected to the terminal viewer. **BASIC Settings** keeps
-Python location and SDL graphics options. Disable SDL for terminal-only BASIC
-programs to avoid drawing/mirroring through a second output window.
+Use **F6 → Listener** or **Shift+F6 → ANSI terminal** for the whole buffer.
+The last destination is saved and reused by F5/F7/F8 and Listener evaluation;
+there is no separate output selection in BASIC Settings. New ANSI windows wait
+for Enter after execution. Status, timing and error highlights stay in the editor.
+Input is not connected to the terminal viewer. BASIC Settings keeps Python
+locations and SDL graphics options. Disable SDL for terminal-only BASIC programs.
+The [real BBCSDL command](BBCSDL.md) uses its own window independently.
 
 ## Time the whole buffer
 
-Enable **Eval → Time buffer runs**, then use either **Run whole buffer (F6)**
-or **Eval buffer in ANSI terminal**. The Listener reports, for example:
+Enable **Eval → Time buffer runs**, then use either **Run buffer → Listener (F6)**
+or **Run buffer → ANSI terminal (Shift+F6)**. The Listener reports, for example:
 
 ```text
 ;; Buffer elapsed time: 0.946 s
