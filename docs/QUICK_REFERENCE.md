@@ -26,7 +26,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | Form | What it does |
 |------|--------------|
 | `(define name value)` | name a value or a function |
-| `(define-memo (f a b) body...)` | like `define`, but remembers each result, as Python's `@cache` |
+| `(define-memo (f a b) body...)` | like `define`, caching calls only when all arguments are exact numbers (integers/fractions) |
 | `(set! name value)` | change an existing variable |
 | `(time exp)` | run `exp`, print how long it took in seconds, give its value |
 | `(lambda [a b] body)` | a function; one body expression |
@@ -109,6 +109,7 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(run-program "sbcl" (list "--version") [input])` | run another program, feeding it the input text; prints what it prints, gives its exit code |
 | `lispy-home` | the folder `lispy3.py` is in |
 | `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |
+| `(memoize-exact f)` | cache only all-exact numeric argument lists; bypass floats, booleans, strings, complex values and containers |
 
 Only in `python lispy3-numpy.py` (NumPy optional):
 

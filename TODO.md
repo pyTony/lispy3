@@ -50,6 +50,56 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Exact-argument memoization (2026-10-21)
+
+- [x] Gate automatic BASIC FN memoization and Lisp define-memo on actual
+  integer/fraction arguments; bypass floating-point/mixed/non-numeric calls.
+- [x] Keep explicit memoize unchanged and expose memoize-exact. Cover argument
+  equality collisions (1 versus 1.0), fractions, mixed calls and result types.
+- [x] Update both BASIC definition expanders, reader/library integration, help
+  and documentation. Regression tests failed before implementation.
+- [x] Full validation in an isolated staged copy: 488 passed, 4 skipped,
+  351 subtests passed, including the existing recursive Fibonacci regression.
+
+### Editor checking, colouring and indentation (2026-10-21)
+
+- [x] Open/Save dialogs offer combined supported-source, language-specific and
+  all-file filters derived from syntax definitions, including uppercase suffixes.
+
+- [x] Add persistent Lispy/Python BASIC backend settings and reuse Python's CLI
+  entry point from tools/editor.py. Stream output, support configured project
+  and interpreter paths, optional SDL graphics, and child-process cancellation.
+- [x] Highlight located BASIC errors and preserve selection/line-number mapping.
+  Keep Lisp error highlighting visible until the source changes or is rechecked.
+- [ ] Share interpreter-based BASIC pretty-print/renumber and tokenized opening
+  with the standalone BASIC editor; do not duplicate or replace its GUI here.
+
+- [x] Keep F7/F8 BASIC execution; add .bas/.basic highlighting with insensitive
+  keyword matching and string/REM protection.
+- [x] Add Edit menu Lisp reader checks, error navigation, and selection/buffer
+  reindent for Lisp and common BASIC blocks. Preserve multiline strings; refuse
+  malformed Lisp; group formatting into one undo edit.
+- [x] Use lexical Lisp nesting and BASIC blocks for Return indentation.
+- [x] Six initial regression tests failed before implementation. Focused
+  checks: 40 passed, 4 subtests passed.
+- [x] Combined editor/backend validation in an isolated staged copy: 484 passed,
+  4 skipped, 341 subtests passed. Real Python mini_basic CLI diagnostics were
+  checked with a tiny invalid program; graphical windows were not exercised.
+
+### Reader closing-bracket locations (2026-10-21)
+
+- [x] Retain source positions for closing punctuation and report line/column
+  for unexpected closing brackets, including buffer filenames in the GUI.
+- [x] Add failing tests first, including comments, multiline strings and plain
+  token-list compatibility. Reader/editor checks: 65 passed, 38 subtests passed.
+
+### Editor BASIC execution (2026-10-21)
+
+- [x] F7 runs selected BASIC text or the current line; F8 runs the whole buffer
+  through mini-basic without a Lisp wrapper. Shift+F7 inspects a symbol.
+- [x] Preserve source quoting, automatic reader import, timing, and errors.
+  Four new tests failed before implementation; 19 focused checks now pass.
+
 ### Terminal output and buffer timing (2026-10-21)
 
 - [x] Route program output to a real ANSI terminal from Lisp or the GUI while

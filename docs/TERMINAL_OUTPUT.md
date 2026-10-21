@@ -24,6 +24,20 @@ Windows uses Windows Terminal when available, or a console window. Linux uses
 an installed terminal emulator; `TERMINAL` can name a preferred executable.
 macOS uses Terminal. Missing emulators and connection failures report errors.
 
+## Run BASIC source from the editor
+
+Use **F7** (**Run BASIC selection or line**) to execute selected BASIC text,
+or the current line when there is no selection. Use **F8** (**Run whole BASIC
+buffer**) for a complete program, including unsaved buffers. These commands
+automatically import mini-basic's reader with a private editor prefix; no Lisp
+wrapper or temporary file is needed. Run a whole loop, procedure or multiline
+block together rather than an incomplete opening line.
+
+**Shift+F7** now inspects the symbol at the cursor. **F5/F6** retain their Lisp
+evaluation commands. BASIC runs use the current workspace and the normal
+Listener output, Stop action and **Time buffer runs** option. Only syntax
+implemented by lispy3 mini-basic is supported.
+
 ## Time the whole buffer
 
 Enable **Eval → Time buffer runs**, then use either **Eval whole buffer (F6)**

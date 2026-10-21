@@ -8,7 +8,8 @@ Features
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : evaluate top-level form at cursor
   * F6 / Ctrl+Shift+Enter : evaluate whole buffer
-  * F7 : inspect the symbol at the cursor (or typed in the Listener)
+  * F7 / F8 : run BASIC selection or line / whole BASIC buffer
+  * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
   * Code runs in the background, so the window stays live; the Stop button
     (or Ctrl+Break) ends a long or endless run
@@ -65,6 +66,8 @@ def _use_numpy_interpreter() -> bool:
 USING_NUMPY = _use_numpy_interpreter()
 import guide
 import syntax_highlight as SH
+import editor_tools as ET
+import basic_runner as BR
 
 
 # =============================================================================
@@ -94,6 +97,18 @@ COLORS = {
 # Syntax colours and rules come from syntax/*.json (see syntax_highlight.py).
 LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
 DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
+
+
+def source_filetypes(languages=LANGUAGES):
+    """Use the installed syntax definitions for source-file dialog filters."""
+    groups = []
+    for language in languages:
+        patterns = tuple(dict.fromkeys(pattern for extension in language.extensions
+                                      for pattern in ('*'+extension, '*'+extension.upper())))
+        if patterns:
+            groups.append((language.name, patterns))
+    supported = tuple(dict.fromkeys(pattern for _, patterns in groups for pattern in patterns))
+    return ([('Supported source files', supported)] if supported else []) + groups + [('All files', '*')]
 SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
 BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 # The name being typed at the end of a line, for completion (":name" keywords included)
@@ -202,7 +217,9 @@ def about_text(folder: str = APP_DIR) -> str:
         "F1  Lispy guide\n"
         "F5  eval form at cursor\n"
         "F6  eval whole buffer\n"
-        "F7  inspect symbol at cursor\n"
+        "F7  run BASIC selection or line\n"
+        "F8  run whole BASIC buffer\n"
+        "Shift+F7  inspect symbol at cursor\n"
         "F9  eval listener input\n"
         "Ctrl+Break  stop the running code\n"
         "Ctrl+Space  complete symbol\n"
@@ -557,6 +574,8 @@ class EditorTab(tk.Frame):
                                        foreground="#000000")
         t.tag_configure("paren_bad",   background=COLORS["paren_bad"],
                                        foreground="#ffffff")
+        t.tag_configure("syntax_error", background=COLORS["paren_bad"],
+                        foreground="#ffffff", underline=True)
         t.tag_configure("search_all",  background="#5c4d00",
                                        foreground="#ffffff")
         t.tag_configure("search_current", background="#ffd700",
@@ -611,6 +630,10 @@ class EditorTab(tk.Frame):
 
     def _highlight(self):
         self._highlight_job = None
+        if getattr(self, '_syntax_error_source', None) is not None:
+            if self.get_content() != self._syntax_error_source:
+                self.text.tag_remove('syntax_error', '1.0', 'end')
+                self._syntax_error_source = None
         t = self.text
         for tag in SYNTAX_TAGS:
             t.tag_remove(tag, "1.0", "end")
@@ -672,18 +695,12 @@ class EditorTab(tk.Frame):
     # ---------- smart keys ----------
     def _on_return(self, event=None):
         t = self.text
-        line_idx = t.index("insert").split(".")[0]
-        line = t.get(f"{line_idx}.0", f"{line_idx}.end")
-        stripped = line.lstrip()
-        indent = len(line) - len(stripped)
-        
-        opens  = line.count("(") + line.count("[") + line.count("{")
-        closes = line.count(")") + line.count("]") + line.count("}")
-        
-        # Keep the current line's indent level as the base, adding extra only for unclosed openings.
-        # Do not reduce indent when closing brackets are present.
-        extra = 2 if opens > closes else 0
-        target_indent = indent + extra
+        prefix = t.get('1.0', 'insert')
+        if self.language.name in ('Lisp', 'BBC BASIC'):
+            target_indent = ET.next_indent(prefix, basic=self.language.name == 'BBC BASIC')
+        else:
+            line = prefix.split('\n')[-1]
+            target_indent = len(line)-len(line.lstrip())
         
         t.insert("insert", "\n" + " " * target_indent)
         return "break"
@@ -1366,6 +1383,9 @@ class LispMachine(tk.Tk):
         self.listener_hist_idx = 0
         self._welcome_done = False
         self.settings = load_settings()
+        backend = self.settings.get('basic_backend', 'lispy')
+        self.basic_backend = tk.StringVar(self, value=backend if backend in ('lispy', 'python') else 'lispy')
+        self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         if plain_repl is None:
             plain_repl = bool(self.settings.get("plain_repl", False))
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
@@ -1490,6 +1510,9 @@ class LispMachine(tk.Tk):
         edit_m.add_separator()
         edit_m.add_command(label="Toggle comment",   accelerator="Ctrl+/", command=lambda: self._call_editor("_toggle_comment"))
         edit_m.add_command(label="Complete symbol",  accelerator="Ctrl+Space", command=lambda: self._call_editor("_complete"))
+        edit_m.add_separator()
+        edit_m.add_command(label="Check Lisp syntax", command=self.check_buffer_syntax)
+        edit_m.add_command(label="Reindent selection or buffer", command=self.reindent_buffer)
         bar.add_cascade(label="Edit", menu=edit_m)
 
         self.eval_menu = eval_m = tk.Menu(bar, tearoff=0)
@@ -1498,7 +1521,16 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
         eval_m.add_command(label="Eval buffer in ANSI terminal", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
-        eval_m.add_command(label="Inspect symbol at cursor", accelerator="F7", command=self.inspect_at_cursor)
+        eval_m.add_command(label="Run BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
+        eval_m.add_command(label="Run whole BASIC buffer", accelerator="F8", command=self.eval_basic_buffer)
+        basic_m = tk.Menu(eval_m, tearoff=0)
+        basic_m.add_radiobutton(label='Lispy mini-basic', variable=self.basic_backend, value='lispy', command=self._save_basic_settings)
+        basic_m.add_radiobutton(label='Python mini_basic', variable=self.basic_backend, value='python', command=self._save_basic_settings)
+        basic_m.add_checkbutton(label='Python SDL graphics (hold window)', variable=self.basic_pygame, command=self._save_basic_settings)
+        basic_m.add_command(label='Python mini_basic directory…', command=self._choose_basic_directory)
+        basic_m.add_command(label='Python executable…', command=self._choose_basic_python)
+        eval_m.add_cascade(label='BASIC backend', menu=basic_m)
+        eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
         eval_m.add_command(label="Stop", accelerator="Ctrl+Break", command=self.stop, state="disabled")
@@ -1768,7 +1800,9 @@ class LispMachine(tk.Tk):
 
     def _bind_global(self):
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
-        self.bind_all("<F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
+        self.bind_all("<F7>", lambda e: (self.eval_basic_at_cursor(), "break")[1])
+        self.bind_all("<F8>", lambda e: (self.eval_basic_buffer(), "break")[1])
+        self.bind_all("<Shift-F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
         self.bind_all("<Control-Cancel>", self.stop)
         self.bind_all("<Control-Break>", self.stop)
@@ -1864,9 +1898,9 @@ class LispMachine(tk.Tk):
 
     def open_file(self):
         path = filedialog.askopenfilename(
-            title="Open Lisp file",
+            title="Open source file",
             initialdir=self._file_dialog_dir(),
-            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
+            filetypes=source_filetypes())
         if not path:
             return
         try:
@@ -1900,8 +1934,9 @@ class LispMachine(tk.Tk):
         path = filedialog.asksaveasfilename(
             title="Save as",
             initialdir=self._file_dialog_dir(tab),
-            defaultextension=".lisp",
-            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
+            initialfile=tab.name,
+            defaultextension=os.path.splitext(tab.name)[1] or '.lisp',
+            filetypes=source_filetypes())
         if not path:
             return
         tab.path = path
@@ -2110,6 +2145,80 @@ class LispMachine(tk.Tk):
         self._start(lambda: self._run(form),
                     lambda result, stopped: stopped or self._report_eval(*result, code=form))
 
+    def _editor_syntax_error(self, tab, error):
+        self.listener_write(f"Syntax error: {error}\n", 'error')
+        LispMachine._highlight_source_error(self, tab, error)
+
+    def _highlight_source_error(self, tab, error):
+        if getattr(error, 'lineno', None):
+            index = f'{error.lineno}.{max(0, (error.offset or 1)-1)}'
+            tab.text.mark_set('insert', index)
+            tab.text.see(index)
+            tab.text.focus_set()
+            tab._syntax_error_source = tab.get_content()
+            tab.text.tag_remove('syntax_error', '1.0', 'end')
+            end = f'{error.lineno}.end' if getattr(error, 'whole_line', False) else index+'+1c'
+            tab.text.tag_add('syntax_error', index, end)
+            tab.text.tag_raise('syntax_error')
+
+    def check_buffer_syntax(self):
+        tab = self.current_tab()
+        if not tab:
+            return
+        if tab.language.name != 'Lisp':
+            self.listener_write(';; Check Lisp syntax requires a Lisp buffer.\n', 'info')
+            return
+        tab.text.tag_remove('syntax_error', '1.0', 'end')
+        tab._syntax_error_source = None
+        try:
+            ET.check_lisp(tab.get_content(), tab.path or tab.name)
+        except SyntaxError as error:
+            self._editor_syntax_error(tab, error)
+            return
+        self.listener_write(f';; {tab.name}: Lisp reader syntax OK (no execution).\n', 'info')
+
+    def reindent_buffer(self):
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        source = tab.get_content()
+        try:
+            if tab.language.name == 'Lisp':
+                formatted = ET.indent_lisp(source, tab.path or tab.name)
+            elif tab.language.name == 'BBC BASIC':
+                formatted = ET.indent_basic(source)
+            else:
+                self.listener_write(';; Reindent supports Lisp and BASIC buffers.\n', 'info')
+                return
+        except SyntaxError as error:
+            self._editor_syntax_error(tab, error)
+            return
+        text = tab.text
+        selection = text.tag_ranges('sel')
+        if selection:
+            first = int(str(selection[0]).split('.')[0])-1
+            last_line, last_col = map(int, str(selection[1]).split('.'))
+            stop = last_line if last_col else last_line-1
+            original_lines = source.splitlines(keepends=True)
+            new_lines = formatted.splitlines(keepends=True)
+            original_lines[first:stop] = new_lines[first:stop]
+            formatted = ''.join(original_lines)
+        if formatted == source:
+            return
+        cursor = text.index('insert')
+        separators = text.cget('autoseparators')
+        text.edit_separator()
+        text.configure(autoseparators=False)
+        try:
+            text.delete('1.0', 'end-1c')
+            text.insert('1.0', formatted)
+        finally:
+            text.edit_separator()
+            text.configure(autoseparators=separators)
+        text.mark_set('insert', cursor)
+        text.see('insert')
+        tab._schedule_highlight()
+
     def _write_closers(self, tab, content: str, closers: str) -> str:
         """Put the missing `closers` at the end of the last code line and say so."""
         pos = L.close_position(content)
@@ -2119,9 +2228,9 @@ class LispMachine(tk.Tk):
         self.listener_write(f";; added {closers} at the end of line {index.split('.')[0]}\n", "info")
         return content[:pos] + closers + content[pos:]
 
-    def _parse_top_level_forms(self, content: str):
+    def _parse_top_level_forms(self, content: str, source_name=None):
         """Split buffer text into a list of top-level forms using the interpreter's own parser."""
-        tokens = L.tokenize(content)
+        tokens = L.tokenize(content, source_name=source_name)
         forms = []
         while tokens:
             forms.append(L.read_from_tokens(tokens))
@@ -2129,6 +2238,76 @@ class LispMachine(tk.Tk):
 
     def eval_buffer_in_terminal(self):
         self.eval_buffer(terminal=True)
+
+    def eval_basic_buffer(self):
+        self.eval_buffer(basic=True)
+
+    def eval_basic_at_cursor(self):
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        text = tab.text
+        selection = text.tag_ranges('sel')
+        source = (text.get(selection[0], selection[1]) if selection
+                  else text.get('insert linestart', 'insert lineend'))
+        line = int(str(selection[0]).split('.')[0]) if selection else int(text.index('insert').split('.')[0])
+        self.eval_buffer(basic=True, source=source, source_line=line)
+
+    def _save_basic_settings(self):
+        self.settings['basic_backend'] = self.basic_backend.get()
+        self.settings['basic_pygame'] = self.basic_pygame.get()
+        save_settings(self.settings)
+
+    def _choose_basic_directory(self):
+        path = filedialog.askdirectory(title='Python mini_basic project directory',
+            initialdir=self.settings.get('basic_directory') or BR.default_package_root() or APP_DIR)
+        if path:
+            if not os.path.isfile(os.path.join(path, 'mini_basic', '__main__.py')):
+                messagebox.showerror('mini_basic directory', 'Choose the project directory containing mini_basic/__main__.py')
+                return
+            self.settings['basic_directory'] = path
+            self._save_basic_settings()
+
+    def _choose_basic_python(self):
+        path = filedialog.askopenfilename(title='Python interpreter for mini_basic')
+        if path:
+            self.settings['basic_python'] = path
+            self._save_basic_settings()
+
+    def _basic_error_highlight(self, tab, source, message, first_line, original, numbered=False):
+        line = BR.error_source_line(source, message, first_line, numbered)
+        if line is None or tab.get_content() != original:
+            return
+        error = SyntaxError(str(message))
+        error.lineno, error.offset, error.whole_line = line, 1, True
+        LispMachine._highlight_source_error(self, tab, error)
+
+    def _run_python_basic_buffer(self, tab, source, source_line):
+        original = tab.get_content()
+        settings = dict(getattr(self, 'settings', {}))
+        graphics = getattr(self, 'basic_pygame', None)
+        pygame = graphics is not None and graphics.get()
+        timing = getattr(self, 'time_buffer_runs', None)
+        timed = timing is not None and timing.get()
+        cwd = os.path.dirname(os.path.abspath(tab.path)) if getattr(tab, 'path', None) else os.getcwd()
+
+        def work():
+            started = time.perf_counter() if timed else None
+            def write(line):
+                self._ui_post(self.listener_write, line, 'result')
+                if re.match(r'^\s*(?:\?|error\b|[A-Za-z_]*(?:Error|Exception)\b)', line, re.IGNORECASE):
+                    self._ui(LispMachine._basic_error_highlight, self, tab, source, line, source_line, original, True)
+            try:
+                status = BR.run_python_basic(source, write, cwd=cwd,
+                    executable=settings.get('basic_python'),
+                    package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
+                self._ui(self.listener_write, f';; Python mini_basic exited with status {status}.\n', 'info' if status == 0 else 'error')
+            except Exception as error:
+                self._ui(self._report_form_error, error)
+            finally:
+                if started is not None:
+                    self._ui(self.listener_write, f';; Buffer elapsed time: {time.perf_counter()-started:.3f} s\n', 'info')
+        self._start(work)
 
     def _eval_forms_in_terminal(self, forms):
         try:
@@ -2145,13 +2324,18 @@ class LispMachine(tk.Tk):
         if path:
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
-    def eval_buffer(self, terminal=False):
+    def eval_buffer(self, terminal=False, basic=False, source=None, source_line=1):
         tab = self.current_tab()
         if not tab or self._busy():
             return
-        content = tab.get_content()
+        content = tab.get_content() if source is None else source
+        backend = getattr(self, 'basic_backend', None)
+        if basic and backend is not None and backend.get() == 'python':
+            if content.strip():
+                LispMachine._run_python_basic_buffer(self, tab, content, source_line)
+            return
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
-        closers = L.missing_closers(content)
+        closers = '' if basic else L.missing_closers(content)
         if closers:
             content = self._write_closers(tab, content, closers)
 
@@ -2161,14 +2345,29 @@ class LispMachine(tk.Tk):
             return
 
         try:
-            forms = self._parse_top_level_forms(content)
+            if basic:
+                # Quote source as a Lisp string; never parse BASIC as Lisp or
+                # insert Lisp closing brackets into the user's BASIC buffer.
+                forms = self._parse_top_level_forms(
+                    '(import (prefix (only mini-basic bbc-run) editor-basic:))\n'
+                    '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
+            else:
+                forms = self._parse_top_level_forms(content, source_name=getattr(tab, 'path', None) or tab.name)
         except Exception as e:                       # noqa: BLE001
-            self.listener_write(f"Parse error: {e}\n", "error")
+            if isinstance(e, SyntaxError) and getattr(e, 'lineno', None) and hasattr(tab, 'text'):
+                LispMachine._editor_syntax_error(self, tab, e)
+            else:
+                self.listener_write(f"Parse error: {e}\n", "error")
             self.listener_write(";; --- done ---\n", "info")
             return
 
         timing = getattr(self, 'time_buffer_runs', None)
         timed = timing is not None and timing.get()
+        original = tab.get_content()
+
+        def basic_error(error):
+            self._report_form_error(error)
+            LispMachine._basic_error_highlight(self, tab, content, str(error), source_line, original)
 
         def run_buffer():
             started = time.perf_counter() if timed else None
@@ -2176,7 +2375,10 @@ class LispMachine(tk.Tk):
                 if terminal:
                     self._eval_forms_in_terminal(forms)
                 else:
-                    self._eval_forms(forms)
+                    if basic:
+                        self._eval_forms(forms, on_error=basic_error)
+                    else:
+                        self._eval_forms(forms)
             finally:
                 if started is not None:
                     elapsed = time.perf_counter() - started
@@ -2184,7 +2386,7 @@ class LispMachine(tk.Tk):
 
         self._start(run_buffer)
 
-    def _eval_forms(self, forms):
+    def _eval_forms(self, forms, on_error=None):
         """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread."""
         for form in forms:
             self._ui(self._echo_form, form)
@@ -2197,7 +2399,7 @@ class LispMachine(tk.Tk):
 
             result, err = self._eval_with_turtle(run_form)
             if err is not None:
-                self._ui(self._report_form_error, err)
+                self._ui(on_error or self._report_form_error, err)
                 return
             self._ui(self._report_form, *result)
         self._ui(self.listener_write, ";; --- done ---\n", "info")
@@ -2288,7 +2490,7 @@ class LispMachine(tk.Tk):
         return True
 
     def inspect_at_cursor(self):
-        """F7: inspect the symbol under the editor cursor, or the name typed in the Listener."""
+        """Shift+F7: inspect the symbol under the editor cursor or in the Listener."""
         name = ""
         if self.focus_get() is self.listener_input:
             name = self.listener_input.get().strip()
