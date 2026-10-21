@@ -421,3 +421,9 @@ Native desktop smoke check passed with the user-saved helper on 2026-10-21.
 
 Tokenised input validation: exact staged tree passed 535 tests, 4 skipped,
 353 subtests. Local graphics/demo changes remain excluded.
+
+### BBC function terminator diagnostic (2026-10-22)
+
+- [x] Reproduce misleading next-line DEF error after END DEF. Reject this
+  non-BBC syntax at its own source line, explain =expression / ENDPROC, and
+  retain numbered recursive FN definitions using their normal value return.

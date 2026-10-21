@@ -153,5 +153,21 @@ class SlurpTest(LispyTestCase):
             os.unlink(f.name)
 
 
+class FunctionTerminatorDiagnosticTest(ReaderTestCase):
+    def test_numbered_recursive_function_returns_without_end_def(self):
+        source = ('10 PRINT FNfact(6)\n20 END\n100 DEF FNfact(n%)\n'
+                  '110 IF n%<2 THEN\n120 =1\n130 ELSE\n'
+                  '140 =n%*FNfact(n%-1)\n150 ENDIF')
+        self.assertEqual(self.run_bbc(source).strip(), '720')
+
+    def test_end_def_reports_its_own_line_and_correct_function_return(self):
+        with self.assertRaisesRegex(lispy3.LispyError, r'line 3: END DEF.*=expression'):
+            self.expand('DEF FNf(n)\n=n+1\nEND DEF\nPRINT FNf(4)')
+
+    def test_orphan_end_def_has_a_located_error(self):
+        with self.assertRaisesRegex(lispy3.LispyError, r'line 1: END DEF.*ENDPROC'):
+            self.expand('END DEF')
+
+
 if __name__ == '__main__':
     unittest.main()
