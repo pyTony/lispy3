@@ -337,6 +337,7 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | `F7` | Run selected BASIC text or the current BASIC line through mini-basic |
 | `F8` | Run the whole BASIC buffer through mini-basic |
 | `Shift+F7` | Inspect the symbol at the cursor (or the name typed in the Listener) |
+
 | `F9` | Evaluate what you typed in the Listener |
 | `Ctrl+Break` | Stop the code that is running (also the Listener's **■ Stop** button, **Eval → Stop**, and `Esc` in the plain REPL) |
 | `Ctrl+F` | Open Find |
@@ -349,6 +350,39 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 | `Ctrl+L` | Clear Listener |
 | `Ctrl+E` | Focus the Listener input |
 | `Ctrl+Q` | Quit |
+
+For `.bas`/`.basic` files, the editor provides case-insensitive BASIC keyword,
+string, number and REM-comment colouring. **Edit → Reindent selection or buffer**
+indents common BASIC blocks or Lisp forms in two-space steps. Selection reindent
+operates on complete lines using the surrounding buffer's nesting.
+
+**Edit → Check Lisp syntax** checks brackets, strings and reader syntax without
+executing code or expanding macros. Errors report the filename, line and column
+and move the cursor to the location. Lisp reindent checks first and leaves an
+invalid buffer unchanged. Formatting preserves strings/comments and is grouped
+as one undo operation. These are reader checks, not checks for undefined names
+or runtime errors. BASIC indentation is a layout helper, not a BASIC validator.
+
+**Eval → BASIC backend** selects **Lispy mini-basic** (the default, sharing the
+Lisp workspace) or **Python mini_basic** (a separate CLI process). F7/F8 use the
+selected backend. The choice is saved. For Python, select the project directory
+containing `mini_basic/__main__.py` and optionally a Python executable with the
+package installed. A sibling `mini_basic` checkout is detected automatically.
+The adapter uses the same `python -m mini_basic` entry point as
+`mini_basic/tools/editor.py`, with BBC dialect selected. It runs unsaved source,
+streams output to the Listener, and Stop terminates its process. Enable
+**Python SDL graphics (hold window)** for graphical programs; close that window
+when finished. Python buffer timing includes subprocess startup and window hold.
+Terminal INPUT is not connected to the Listener; use the standalone terminal
+runner for programs needing console input.
+
+BASIC errors with a reported line highlight the corresponding source line,
+including selection offsets and ordinary numbered/unnumbered Python programs.
+Errors without a reliable location still appear in the Listener. Complex Python
+source preambles/continuations may lack a reliable mapping. Highlights remain
+visible while navigating and clear after editing or a new Lisp check. These
+commands do not replace the standalone BASIC editor's tokenized-file support,
+interpreter pretty-printer or renumbering commands.
 
 ### Buffers and the Listener
 

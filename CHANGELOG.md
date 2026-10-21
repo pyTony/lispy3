@@ -4,6 +4,17 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add a saved Lispy/Python BASIC backend selector, configurable Python/project
+  paths and optional SDL graphics. Use the existing Python CLI entry point and
+  terminate its subprocess on Stop. Highlight located BASIC errors in source,
+  accounting for selected text and BASIC line numbers; keep Lisp error marks
+  separate from temporary bracket matching.
+
+- Add BASIC syntax highlighting for .bas/.basic files, language-aware Return
+  indentation and selection/buffer reindent for Lisp and common BASIC blocks.
+  Add non-executing Lisp reader checks with source locations and cursor
+  navigation. Reject malformed Lisp before formatting and group edits for undo.
+
 - Add editor mini-basic commands: F7 runs selected BASIC text or the current
   line; F8 runs the whole BASIC buffer. Import the reader automatically and
   retain buffer timing and Stop. Move symbol inspection to Shift+F7.

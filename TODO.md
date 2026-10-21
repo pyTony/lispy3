@@ -50,6 +50,28 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Editor checking, colouring and indentation (2026-10-21)
+
+- [x] Add persistent Lispy/Python BASIC backend settings and reuse Python's CLI
+  entry point from tools/editor.py. Stream output, support configured project
+  and interpreter paths, optional SDL graphics, and child-process cancellation.
+- [x] Highlight located BASIC errors and preserve selection/line-number mapping.
+  Keep Lisp error highlighting visible until the source changes or is rechecked.
+- [ ] Share interpreter-based BASIC pretty-print/renumber and tokenized opening
+  with the standalone BASIC editor; do not duplicate or replace its GUI here.
+
+- [x] Keep F7/F8 BASIC execution; add .bas/.basic highlighting with insensitive
+  keyword matching and string/REM protection.
+- [x] Add Edit menu Lisp reader checks, error navigation, and selection/buffer
+  reindent for Lisp and common BASIC blocks. Preserve multiline strings; refuse
+  malformed Lisp; group formatting into one undo edit.
+- [x] Use lexical Lisp nesting and BASIC blocks for Return indentation.
+- [x] Six initial regression tests failed before implementation. Focused
+  checks: 40 passed, 4 subtests passed.
+- [x] Combined editor/backend validation in an isolated staged copy: 484 passed,
+  4 skipped, 341 subtests passed. Real Python mini_basic CLI diagnostics were
+  checked with a tiny invalid program; graphical windows were not exercised.
+
 ### Reader closing-bracket locations (2026-10-21)
 
 - [x] Retain source positions for closing punctuation and report line/column

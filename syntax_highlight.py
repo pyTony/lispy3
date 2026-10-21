@@ -48,11 +48,12 @@ class Language:
         self.extensions = [e.lower() for e in spec.get("extensions", [])]
         self.line_comment = spec.get("line_comment", "")
         self.env_words = bool(spec.get("env_words", False))
+        self.case_insensitive = bool(spec.get("case_insensitive", False))
 
         self.words = {}                       # word -> tag (first list wins)
         for tag, words in spec.get("words", {}).items():
             for w in words:
-                self.words.setdefault(w, tag)
+                self.words.setdefault(w.casefold() if self.case_insensitive else w, tag)
 
         rules = list(spec.get("rules", []))
         parts, self._group_tags = [], {}
@@ -64,7 +65,7 @@ class Language:
         if spec.get("word_pattern"):
             re.compile(spec["word_pattern"])
             parts.append(f"(?P<word>{spec['word_pattern']})")
-        self.regex = re.compile("|".join(parts)) if parts else None
+        self.regex = re.compile("|".join(parts), re.IGNORECASE if self.case_insensitive else 0) if parts else None
 
         tags = set(self._group_tags.values()) | set(self.words.values())
         if self.env_words:
@@ -82,7 +83,7 @@ class Language:
             group = m.lastgroup
             if group == "word":
                 w = m.group()
-                tag = self.words.get(w)
+                tag = self.words.get(w.casefold() if self.case_insensitive else w)
                 if tag is None and self.env_words:
                     if w in variables:
                         tag = "variable"
