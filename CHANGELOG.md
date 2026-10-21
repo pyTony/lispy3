@@ -4,6 +4,9 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Let Python mini_basic honour source dialect hints instead of forcing BBC
+  dialect, so mini-only statements can run when the program requests mini.
+
 - Fix editor Ctrl+S/Ctrl+W handling, track real text modifications and preserve
   saved state on navigation/shortcut release. Save As updates tab identities
   only after writing successfully and keeps duplicate basenames distinct.

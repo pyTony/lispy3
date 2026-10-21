@@ -42,7 +42,7 @@ def default_package_root():
     return ''
 
 
-def run_python_basic(source, write, *, cwd, executable=None, package_root='', dialect='bbc', pygame=False):
+def run_python_basic(source, write, *, cwd, executable=None, package_root='', dialect=None, pygame=False):
     """Stream a CLI subprocess; always stop/reap it on cancellation or errors.
 
     INPUT has no console here; programs needing interactive input should use
@@ -58,7 +58,9 @@ def run_python_basic(source, write, *, cwd, executable=None, package_root='', di
     with tempfile.TemporaryDirectory(prefix='lispy-basic-') as folder:
         path = Path(folder)/'buffer.bas'
         path.write_text(source, encoding='utf-8')
-        command = [executable, '-u', '-m', 'mini_basic', '-q', '--dialect', dialect]
+        command = [executable, '-u', '-m', 'mini_basic', '-q']
+        if dialect:
+            command += ['--dialect', dialect]
         if pygame:
             command += ['--pygame', '--tee-terminal', '--hold']
         else:

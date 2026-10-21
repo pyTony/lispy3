@@ -389,7 +389,8 @@ New ANSI output windows wait for Enter before closing. Select the directory
 containing `mini_basic/__main__.py` and optionally a Python executable with the
 package installed. A sibling `mini_basic` checkout is detected automatically.
 The adapter uses the same `python -m mini_basic` entry point as
-`mini_basic/tools/editor.py`, with BBC dialect selected. It runs unsaved source,
+`mini_basic/tools/editor.py`, honouring source dialect hints such as
+`REM dialect: mini` or `REM dialect: bbc` instead of forcing a dialect. It runs unsaved source,
 streams output to the selected destination, and Stop terminates its process. Enable
 **Python SDL graphics (hold window)** for graphical programs; close that window
 when finished. Python buffer timing includes subprocess startup and window hold.

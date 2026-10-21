@@ -50,6 +50,10 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+- [x] Python BASIC adapter respects file dialect hints: remove the default
+  forced BBC flag; retain an explicit dialect override for adapter callers.
+  Regression first failed with --dialect bbc in the captured child arguments.
+
 ### Editor save and close fixes (2026-10-21)
 
 - [x] Bind save/close directly on editor widgets and consume shortcuts before
