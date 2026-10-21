@@ -24,7 +24,7 @@ Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
       --repl starts the Listener as the plain lispy3 REPL (View menu toggles it).
       Each file named on the command line opens in its own buffer; a file that
       does not exist yet opens empty and is created on the first Save. With no
-      files, startup.lisp from the Lispy folder opens instead, if it exists.
+      files, startup.lisp beside the editor opens by default; configure it in Startup Settings.
 """
 import io
 import contextlib
@@ -1399,6 +1399,10 @@ class LispMachine(tk.Tk):
         self.listener_hist_idx = 0
         self._welcome_done = False
         self.settings = load_settings()
+        self.startup_show_buffer = tk.BooleanVar(self, value=bool(self.settings.get('startup_show_buffer', True)))
+        self.startup_run = tk.BooleanVar(self, value=bool(self.settings.get('startup_run', False)))
+        self.startup_settings_window = None
+        self._startup_ran = False
         self.settings.pop('basic_backend', None)  # The run command now chooses it.
         output = self.settings.get('basic_output', 'listener')
         self.basic_output = tk.StringVar(self, value=output if output in ('listener', 'ansi') else 'listener')
@@ -1423,18 +1427,7 @@ class LispMachine(tk.Tk):
         self._build_status()
         self._bind_global()
 
-        # files from the command line, or startup.lisp
-        open_errors = []
-        for arg in files:
-            try:
-                name, content, path = read_file_arg(arg)
-            except (OSError, UnicodeDecodeError) as e:
-                open_errors.append(f"{arg}: {e}")
-                continue
-            self.new_buffer(name, content, path=path)
-        if not self.tabs:
-            name, content, path = read_startup()
-            self.new_buffer(name, content, path=path)
+        open_errors = self._open_initial_buffers(files)
 
         self.listener_write(";; Lispy3 Machine ready.\n", "info")
         self.listener_write(";; F5/F6 = run by buffer language; F7/F8 = Python BASIC; F9 = Lisp listener.\n", "info")
@@ -1450,6 +1443,69 @@ class LispMachine(tk.Tk):
         self.refresh_definitions()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        if self.startup_run.get():
+            self.after_idle(self._run_startup)
+
+    def _open_initial_buffers(self, files):
+        errors = []
+        for arg in files:
+            try:
+                name, content, path = read_file_arg(arg)
+            except (OSError, UnicodeDecodeError) as error:
+                errors.append(f'{arg}: {error}')
+                continue
+            self.new_buffer(name, content, path=path)
+        if not self.tabs:
+            if self.startup_show_buffer.get():
+                name, content, path = read_startup()
+            else:
+                name, content, path = 'untitled.lisp', '', None
+            self.new_buffer(name, content, path=path)
+        return errors
+
+    def _run_startup(self):
+        if self._startup_ran or not self.startup_run.get():
+            return
+        if self._job is not None:
+            self.after(100, self._run_startup)
+            return
+        self._startup_ran = True
+        try:
+            with open(STARTUP_FILE, encoding='utf-8') as source:
+                content = source.read()
+            ET.check_lisp(content, STARTUP_FILE)
+            forms = self._parse_top_level_forms(content, source_name=STARTUP_FILE)
+        except (OSError, UnicodeError, SyntaxError) as error:
+            self.listener_write(f'Error running startup.lisp: {error}\n', 'error')
+            return
+        self.listener_write(f';; Running {STARTUP_FILE}\n', 'info')
+        self._start(lambda: self._eval_forms(forms))
+
+    def _open_startup_settings(self):
+        if self.startup_settings_window is not None and self.startup_settings_window.winfo_exists():
+            self.startup_settings_window.lift()
+            return
+        window = self.startup_settings_window = tk.Toplevel(self)
+        window.title('Startup Settings')
+        window.transient(self)
+        frame = ttk.Frame(window, padding=16)
+        frame.pack(fill='both', expand=True)
+        status = tk.StringVar(window, value='Changes apply at the next launch.')
+
+        def save():
+            self.settings['startup_show_buffer'] = self.startup_show_buffer.get()
+            self.settings['startup_run'] = self.startup_run.get()
+            save_settings(self.settings)
+            status.set('Saved for the next launch.')
+
+        ttk.Checkbutton(frame, text='Show startup.lisp buffer when no files are supplied',
+                        variable=self.startup_show_buffer, command=save).pack(anchor='w')
+        ttk.Checkbutton(frame, text='Run startup.lisp once at startup (also when hidden)',
+                        variable=self.startup_run, command=save).pack(anchor='w', pady=8)
+        ttk.Label(frame, text=STARTUP_FILE).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Running executes every form, including printing and graphics.').pack(anchor='w')
+        ttk.Label(frame, textvariable=status).pack(anchor='w', pady=8)
+        ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
 
     # ---------- window icon ----------
     def _set_icon(self):
@@ -1552,6 +1608,7 @@ class LispMachine(tk.Tk):
         bar.add_cascade(label="Eval", menu=eval_m)
 
         view_m = tk.Menu(bar, tearoff=0)
+        view_m.add_command(label='Startup Settings…', command=self._open_startup_settings)
         view_m.add_command(label="Reload lsystems",     command=lambda: self._run_silent('(load "lsystems")'))
         view_m.add_command(label="Show global env",     command=self._show_env)
         view_m.add_separator()
@@ -3123,6 +3180,9 @@ class LispMachine(tk.Tk):
         ):
             return
         files = [t.path for t in self.tabs.values() if t.path]
+        if not self.startup_show_buffer.get():
+            startup = os.path.normcase(os.path.abspath(STARTUP_FILE))
+            files = [path for path in files if os.path.normcase(os.path.abspath(path)) != startup]
         try:
             subprocess.Popen(restart_command(files, self.plain_repl.get()), cwd=os.getcwd())
         except OSError as e:

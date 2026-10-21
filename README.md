@@ -87,7 +87,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | Terminal Mandelbrot in BASIC and Lisp | Plain and ANSI-coloured terminal demos; see [run commands and source](docs/TERMINAL_MANDELBROT.md). |
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
-| `startup.lisp` | Opens in the editor when it starts without a file (a short tour); change it to start with your own code, or delete it to start with an empty buffer. |
+| `startup.lisp` | Optional startup buffer/script beside the editor; configure showing and execution independently in View → Startup Settings…. |
 | `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
@@ -406,6 +406,18 @@ commands do not replace the standalone BASIC editor's tokenized-file support,
 interpreter pretty-printer or renumbering commands.
 
 ### Buffers and the Listener
+
+**View → Startup Settings…** has independent saved options to show the
+`startup.lisp` buffer and to run it once at launch. Defaults preserve the old
+behaviour: show it when no files are supplied, without executing it. Disable
+showing to start with an empty buffer; files explicitly supplied on the command
+line still open normally. Enabling execution runs the saved `startup.lisp`
+beside the editor after the GUI is ready, even when hidden or other files are
+open. Definitions stay in the workspace, output/errors appear in the Listener,
+and Stop is available. Running executes all forms, including graphics in the
+sample startup file. Settings stay visible while changing them, save
+automatically and apply on the next launch; the current startup file is not
+changed. The editor's Restart also respects the hidden-startup option.
 
 Ctrl+S saves the current editor buffer to its associated path, shown in the
 status bar after a successful save. Save As updates that path and the tab's

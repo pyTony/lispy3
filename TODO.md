@@ -50,6 +50,16 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Startup visibility and execution (2026-10-21)
+
+- [x] Add independent saved show-buffer and run-at-startup options in a
+  persistent View → Startup Settings window. Keep show-only defaults.
+- [x] Run the saved startup source once via the Lisp worker after UI setup,
+  even when hidden, with visible errors and existing Stop support.
+- [x] Respect explicit files and hidden startup on Restart. Five initial
+  regressions failed first; 29 focused startup/file/worker checks now pass.
+- [x] Full isolated validation: 516 passed, 4 skipped, 353 subtests passed.
+
 - [x] Python BASIC adapter respects file dialect hints: remove the default
   forced BBC flag; retain an explicit dialect override for adapter callers.
   Regression first failed with --dialect bbc in the captured child arguments.

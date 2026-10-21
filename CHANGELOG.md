@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add persistent Startup Settings for independently showing startup.lisp and
+  executing it once at launch, including hidden execution through the normal
+  worker with Stop/errors. Preserve show-only defaults and explicit file opens;
+  avoid restoring a hidden startup buffer on editor Restart.
+
 - Let Python mini_basic honour source dialect hints instead of forcing BBC
   dialect, so mini-only statements can run when the program requests mini.
 
