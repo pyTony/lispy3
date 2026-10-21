@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add same-workspace ANSI terminal output through `with-ansi-terminal` and
+  Lispy Machine's Eval menu. New output windows wait for Enter before closing.
+  Add optional whole-buffer timing for Listener and terminal runs, and silent
+  loader status with `(load "file" :silent)` and File → Load library silently.
+
 - Add matching terminal Mandelbrot demos in BASIC and native Lisp, with four
   one-command plain/ANSI-colour launchers. Both use the same view, shading and
   bright-colour palette; coloured runs restore terminal attributes. Tests cover

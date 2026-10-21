@@ -428,6 +428,11 @@ If you ever want a frozen interpreter inside the editor, the change is a one-lin
 
 ### Routing `display` output into the Listener
 
+The default destination is the Listener. **Eval → Eval buffer in ANSI terminal**
+and `(with-ansi-terminal body...)` select a real terminal instead. Enable
+**Eval → Time buffer runs** for timing with either destination. See
+[terminal output and timing](docs/TERMINAL_OUTPUT.md).
+
 In the plain REPL, `(display …)` and `(pretty-print …)` call Python's `print`, which writes to the process' stdout — the terminal window. Under the editor, the same call would still leak to that terminal, because `display` is a native Python lambda that closes over `print`.
 
 The fix is to redirect `sys.stdout` to the Listener for the duration of each evaluation:

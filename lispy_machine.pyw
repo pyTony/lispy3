@@ -45,6 +45,8 @@ from tkinter.scrolledtext import ScrolledText
 
 # --- import the interpreter (no side effects when imported) -------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
+import lispy_terminal
+from lispy_terminal import terminal_command
 import lispy3 as L
 
 def _use_numpy_interpreter() -> bool:
@@ -325,46 +327,6 @@ def restart_command(files, plain_repl: bool) -> list[str]:
     """The command that starts Lispy3 Machine again with these files open."""
     script = os.path.join(APP_DIR, "lispy_machine.pyw")
     return [sys.executable, script] + (["--repl"] if plain_repl else []) + list(files)
-
-# View > Open terminal: (program, arguments) tried in order on Linux; the
-# working directory is also passed to Popen, so plain terminals start there too.
-LINUX_TERMINALS = (
-    ("x-terminal-emulator", ()),
-    ("gnome-terminal",      ("--working-directory={cwd}",)),
-    ("konsole",             ("--workdir", "{cwd}")),
-    ("xfce4-terminal",      ("--working-directory={cwd}",)),
-    ("mate-terminal",       ("--working-directory={cwd}",)),
-    ("lxterminal",          ("--working-directory={cwd}",)),
-    ("alacritty",           ("--working-directory", "{cwd}")),
-    ("kitty",               ("--directory", "{cwd}")),
-    ("xterm",               ()),
-)
-
-def terminal_command(cwd: str, platform: str = sys.platform,
-                     which=shutil.which, env=os.environ) -> list[str] | None:
-    """The command that opens a system terminal in `cwd`, or None if none is found.
-
-    Windows: Windows Terminal, else cmd.exe (started in a new console).
-    Linux: $TERMINAL, then the usual terminals; under WSL without a Linux
-    terminal, a Windows terminal running wsl.exe in `cwd`.
-    """
-    if platform == "win32":
-        if which("wt.exe"):
-            return ["wt.exe", "-d", cwd]
-        return [env.get("COMSPEC", "cmd.exe")]
-    if platform == "darwin":
-        return ["open", "-a", "Terminal", cwd]
-    if env.get("TERMINAL") and which(env["TERMINAL"]):
-        return [env["TERMINAL"]]
-    for program, args in LINUX_TERMINALS:
-        if which(program):
-            return [program] + [a.format(cwd=cwd) for a in args]
-    if env.get("WSL_DISTRO_NAME"):
-        if which("wt.exe"):
-            return ["wt.exe", "wsl.exe", "--cd", cwd]
-        if which("cmd.exe"):
-            return ["cmd.exe", "/c", "start", "wsl.exe", "--cd", cwd]
-    return None
 
 FONT_MONO      = ("Consolas", 11)
 FONT_MONO_BOLD = ("Consolas", 11, "bold")
@@ -1513,6 +1475,7 @@ class LispMachine(tk.Tk):
 
         file_m = tk.Menu(bar, tearoff=0)
         file_m.add_command(label="New buffer",       accelerator="Ctrl+N", command=self.new_buffer_dialog)
+        file_m.add_command(label="Load library silently…", command=self.load_library_silently)
         file_m.add_command(label="Open…",            accelerator="Ctrl+O", command=self.open_file)
         file_m.add_command(label="Save",             accelerator="Ctrl+S", command=self.save_current)
         file_m.add_command(label="Save as…",         accelerator="Ctrl+Shift+S", command=self.save_current_as)
@@ -1530,7 +1493,10 @@ class LispMachine(tk.Tk):
         bar.add_cascade(label="Edit", menu=edit_m)
 
         self.eval_menu = eval_m = tk.Menu(bar, tearoff=0)
+        self.time_buffer_runs = tk.BooleanVar(value=False)
+        eval_m.add_checkbutton(label="Time buffer runs", variable=self.time_buffer_runs)
         eval_m.add_command(label="Eval form at cursor", accelerator="F5",     command=self.eval_form_at_cursor)
+        eval_m.add_command(label="Eval buffer in ANSI terminal", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Eval whole buffer",   accelerator="F6",     command=self.eval_buffer)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
@@ -2099,13 +2065,15 @@ class LispMachine(tk.Tk):
         _turtle.TurtleScreen._RUNNING = True
 
         try:
-            with contextlib.redirect_stdout(_ListenerWriter(self)):
+            output = contextlib.nullcontext() if lispy_terminal.terminal_output_active() else contextlib.redirect_stdout(_ListenerWriter(self))
+            with output:
                 return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
-                with contextlib.redirect_stdout(_ListenerWriter(self)):
+                output = contextlib.nullcontext() if lispy_terminal.terminal_output_active() else contextlib.redirect_stdout(_ListenerWriter(self))
+                with output:
                     return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
@@ -2159,7 +2127,25 @@ class LispMachine(tk.Tk):
             forms.append(L.read_from_tokens(tokens))
         return forms
 
-    def eval_buffer(self):
+    def eval_buffer_in_terminal(self):
+        self.eval_buffer(terminal=True)
+
+    def _eval_forms_in_terminal(self, forms):
+        try:
+            with lispy_terminal.ansi_terminal_output():
+                self._eval_forms(forms)
+        except Exception as error:
+            self._ui(self._report_form_error, error)
+
+    def load_library_silently(self):
+        if self._busy():
+            return
+        path = filedialog.askopenfilename(title="Load library silently", initialdir=L.LISP_DIR,
+                                          filetypes=[("Lisp source", "*.lisp"), ("All files", "*")])
+        if path:
+            self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
+
+    def eval_buffer(self, terminal=False):
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -2181,7 +2167,22 @@ class LispMachine(tk.Tk):
             self.listener_write(";; --- done ---\n", "info")
             return
 
-        self._start(lambda: self._eval_forms(forms))
+        timing = getattr(self, 'time_buffer_runs', None)
+        timed = timing is not None and timing.get()
+
+        def run_buffer():
+            started = time.perf_counter() if timed else None
+            try:
+                if terminal:
+                    self._eval_forms_in_terminal(forms)
+                else:
+                    self._eval_forms(forms)
+            finally:
+                if started is not None:
+                    elapsed = time.perf_counter() - started
+                    self._ui(self.listener_write, f";; Buffer elapsed time: {elapsed:.3f} s\n", "info")
+
+        self._start(run_buffer)
 
     def _eval_forms(self, forms):
         """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread."""
