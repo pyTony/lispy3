@@ -73,6 +73,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 
 | File | Role |
 |------|------|
+| `lispy_libraries.py` | Explicit libraries and selective imports; see the [library guide](docs/LIBRARIES.md). |
 | `lispy3.py` | The interpreter (REPL + `python lispy3.py file.lisp` script runner). |
 | `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
 | `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |

@@ -257,3 +257,16 @@ numbered `WHEN` lines was confirmed against BBCSDL and is now fixed.
 ANSI/VDU validation: 15 targeted tests and 5 subtests passed; full suite
 403 passed, 4 skipped, 324 subtests passed. Desktop rendering remains a manual
 terminal check; tests verify exact emitted controls and column behavior.
+
+### Explicit libraries and imports
+
+- [x] Test library/export isolation, only/prefix/rename, private macro helpers,
+  use-site arguments, mutable private state, includes, cycles and collisions.
+- [x] Add mini-basic's opt-in `.sld` manifest without changing legacy load.
+- [x] Integrate the NumPy evaluator, completion, help and user documentation.
+- [ ] Portable library-aware workspace serialization and reload/unload.
+- [ ] Full hygienic syntax-rules; procedural macro temporaries still need gensym.
+
+Library acceptance tests: 14 initial failures established the baseline; 30 tests
+now pass, including later regressions for nested macro scope and scoped read/eval.
+Full suite: 433 passed, 4 skipped, 324 subtests passed.

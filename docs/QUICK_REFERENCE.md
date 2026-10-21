@@ -36,8 +36,9 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(while test body...)` | loop while test is true |
 | `(quote x)` / `'x` | `x` itself, unevaluated |
 | `(:key map)` | look `:key` up in `map` |
-| `(save "name")` | write your definitions to `lisp/name.lisp` |
+| `(save "name")` | write definitions to `lisp/name.lisp`; imported bindings require keeping original source |
 | `(load "name")` | run `name.lisp`, from `lisp/` if it is not in the current folder |
+| `(import (only library a b))` | select public exports; also prefix/rename; see [Libraries](LIBRARIES.md) |
 
 ## Lists and strings
 

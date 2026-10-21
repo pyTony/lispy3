@@ -16,12 +16,13 @@ import subprocess
 import sys
 import time
 import turtle
+from lispy_libraries import LibrarySystem, LibraryReference
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
 Real: TypeAlias = int | float | Fraction          # real numbers (no complex)
 Number: TypeAlias = Real | complex                # any number, incl. complex
-Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char']
+Atom: TypeAlias = Union[Symbol, Number, 'String', 'Char', LibraryReference]
 List: TypeAlias = list['Exp']
 Exp: TypeAlias = Union[Atom, List, tuple['Exp', ...], dict['Exp', 'Exp']]
 
@@ -128,8 +129,13 @@ class Env(dict):
     def __init__(self, parms: list[Symbol] = None, args: list[Any] = None, outer: 'Env' = None):
         super().__init__()
         self.outer = outer
+        self.library = getattr(outer, 'library', None)
         if parms and args is not None:
             self.update(zip(parms, args))
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        return value.value() if isinstance(value, LibraryReference) else value
 
     def find(self, var: Symbol) -> 'Env':
         """Find the innermost environment where var is defined."""
@@ -151,6 +157,8 @@ def gensym(prefix: Any = "G__") -> Symbol:
 HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Special forms (write them as code, quote the name to ask about one: (help 'if))": [
         ("define", "(define name value) or (define (f a b) body...) - give a name to a value or a function"),
+        ("define-library", "(define-library name (export names...) (begin definitions...)) - isolated library; see docs/LIBRARIES.md"),
+        ("import", "(import (only library a b)) - selected exports; prefix and rename also supported"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - like define, but remembers each result, as Python's @cache"),
@@ -485,6 +493,8 @@ def lisp_file_for_save(filename: str) -> str:
 
 def save_workspace(filename: str) -> str:
     """Saves only user-defined variables and Lisp Procedures to a file, ignoring Python built-ins."""
+    if library_system.has_imports():
+        raise LispyError("save: library imports cannot be serialized; keep source with import forms")
     real_filename = lisp_file_for_save(filename)
     std = standard_env()
     
@@ -1254,6 +1264,15 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     head = x[0]
 
+    if head in ('define-library', 'import'):
+        if not toplevel:
+            raise SyntaxError(f"{head} only allowed at top-level")
+        if head == 'define-library':
+            library_system.define(x)
+        else:
+            library_system.import_sets(x[1:])
+        return None
+
     if head == 'quote':
         return x
 
@@ -1283,13 +1302,14 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
             name = x[1][0]
             parms = list(x[1][1:])
             body = x[2] if len(x) == 3 else ['begin'] + list(x[2:])
-            proc = eval_exp(expand(['lambda', parms, body]), global_env)
+            proc = eval_exp(expand(['lambda', parms, body]), library_system.env())
         else:
             name = x[1]
-            proc = eval_exp(expand(x[2]), global_env)
+            proc = eval_exp(expand(x[2]), library_system.env())
         if not isinstance(proc, Procedure):
             raise TypeError("macro must evaluate to a procedure")
-        macro_table[name] = proc
+        library_system.check_definition(library_system.env(), name)
+        library_system.macros()[name] = proc
         return None
 
     if head == 'time':
@@ -1359,14 +1379,14 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return ['begin'] + [expand(e, toplevel) for e in x[1:]]
 
     # Macro invocation
-    if isinstance(head, str) and head in macro_table:
-        expanded = macro_table[head](*x[1:])
+    if isinstance(head, str) and head in library_system.macros(head):
+        expanded = library_system.macros(head)[head](*x[1:])
         return expand(expanded, toplevel)
 
     return [expand(e, False) for e in x]
 
 SPECIAL_FORMS = frozenset({'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
-                           'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load'})
+                           'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import'})
 
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
 def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
@@ -1374,7 +1394,9 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
     while True:
         # Fast path for the commonest cases: variables and numbers
         kind = type(x)
-        if kind is str:
+        if isinstance(x, LibraryReference):
+            return x.value()
+        if isinstance(x, str):
             return x if x.startswith(':') else env.find(x)[x]
         if kind is int or kind is float or kind is Fraction or kind is complex:
             return x
@@ -1383,10 +1405,10 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
         # replaces x in this loop instead of growing the Python call stack.
         if kind is list and x:
             proc_exp = x[0]
-            if not (type(proc_exp) is str and (proc_exp in SPECIAL_FORMS or proc_exp.startswith(':')
+            if not (isinstance(proc_exp, str) and (proc_exp in SPECIAL_FORMS or proc_exp.startswith(':')
                                                or ('/' in proc_exp and proc_exp != '/'))):
-                if type(proc_exp) is str and proc_exp in macro_table:
-                    x = macro_table[proc_exp](*x[1:])
+                if isinstance(proc_exp, str) and (macro := library_system.runtime_macro(proc_exp, env)) is not None:
+                    x = macro(*x[1:])
                     continue
                 proc = eval_exp(proc_exp, env)
                 args = [eval_exp(arg, env) for arg in x[1:]]
@@ -1506,15 +1528,17 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
             case ['define', target, *rest_exp]:
                 if isinstance(target, (list, tuple)):
                     var = target[0]
+                    library_system.check_definition(env, var)
                     parms = list(target[1:])
                     body = rest_exp[0] if len(rest_exp) == 1 else ['begin'] + list(rest_exp)
-                    val = Procedure(parms, expand(body, False), env, name=var)
+                    val = Procedure(parms, library_system.expand_in(body, env), env, name=var)
                     env[var] = val
                     return None
                 else:
                     var = str(target)
+                    library_system.check_definition(env, var)
                     body = rest_exp[0] if len(rest_exp) == 1 else ['begin'] + list(rest_exp)
-                    val = eval_exp(expand(body, False), env)
+                    val = eval_exp(library_system.expand_in(body, env), env)
                     if isinstance(val, Procedure) and val.name is None:
                         val.name = var
                     env[var] = val
@@ -1522,12 +1546,19 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
 
             # 9b. (define-macro ...)
             case ['define-macro', *_]:
-                expand(x, toplevel=True)
+                library_system.expand_in(x, env, toplevel=True)
                 return None
                         
             # 10. (set! var exp)
+            case ['set!', LibraryReference() as ref, exp]:
+                ref.env[ref.name] = eval_exp(exp, env)
+                return None
+
             case ['set!', str(var), exp]:
-                env.find(var)[var] = eval_exp(exp, env)
+                target = env.find(var)
+                if isinstance(dict.get(target, var), LibraryReference):
+                    raise LispyError(f"import binding is read-only: {var}")
+                target[var] = eval_exp(exp, env)
                 return None
                 
             # 11. (lambda (parms...) body1 body2...)
@@ -1629,6 +1660,9 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
             case ['load', filename_exp]:
                 filename = eval_exp(filename_exp, env)
                 fn_str = filename.value if isinstance(filename, String) else str(filename)
+                library = library_system.owner(env)
+                if library:
+                    return library_system.load_source(fn_str, library)
                 return load_workspace(fn_str)
 
             # 15. Property list flavor: (:name user)
@@ -1907,11 +1941,15 @@ def auto_close(text: str) -> tuple[str, str]:
     pos = close_position(text)
     return text[:pos] + closers + text[pos:], closers
 
+library_system = LibrarySystem(sys.modules[__name__])
+
 # --- Interaction and REPL Printing ---
 def lisp_str(exp: Any) -> str:
     """Convert a Python object back into a Lisp-readable string format, handling custom types safely."""
     type_name = type(exp).__name__
-    
+    if isinstance(exp, LibraryReference):
+        return f"<library-binding {exp.name}>"
+
     if exp is True:
         return "#t"
     if exp is False:
