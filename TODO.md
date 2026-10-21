@@ -400,8 +400,9 @@ passed. Normal Lisp/plain and NumPy BASIC/colour CLI smoke checks each rendered
   unsaved buffers, decode literals without evaluation, and report missing files.
 - [x] Add a separate real BBCSDL buffer action and executable/native helper paths.
   Prepare the attributed native loader source; no editor tokenizer is added.
-- [ ] Save tools/bbcsdl-basrun.bas as native basrun.bbc in BBCSDL and perform
-  an end-to-end desktop run. EXEC startup probes did not consume queued source.
+- [x] User saved the native BASRUN.bbc helper; real BBCSDL ran temporary
+  source with spaces in its path, printed NATIVE SDL OK 42 and exited 0.
+  Executable/helper settings saved locally. EXEC startup probes did not consume queued source.
 
 Validation: exact staged tree passed 525 tests, 4 skipped, 353 subtests.
-Native desktop execution remains pending the one-time helper save above.
+Native desktop smoke check passed with the user-saved helper on 2026-10-21.

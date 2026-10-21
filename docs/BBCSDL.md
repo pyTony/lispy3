@@ -25,9 +25,12 @@ BBCSDL command-line startup expects a native `.bbc` program, not plain `.bas`
 text. `*EXEC` reads console input; an isolated startup probe did not enter the
 interactive prompt and consume its queued source after the launcher ended.
 Consequently this runner uses the documented native loader rather than that
-unverified EXEC startup path. The helper must be saved once in BBCSDL before
-end-to-end desktop validation; headless tests verify argument handling,
-unsaved source transfer, file lifetime and actionable configuration errors.
+unverified EXEC startup path. The helper must be saved once in BBCSDL. An end-to-end check on 2026-10-21
+ran the user-saved native helper against temporary source whose path contained
+spaces: BBCSDL printed `NATIVE SDL OK 42` and exited with status 0. Adapter
+tests also verify argument handling, unsaved source transfer, cancellation and
+actionable configuration errors. Do not append switches after the source path:
+the helper treats all remaining command-line text as that filename.
 
 Only real BBCSDL syntax works here. The mini-basic extension `ANSI` is not a
 BBCSDL keyword; use BBCSDL's supported terminal/VDU statements for those demos.
