@@ -50,6 +50,12 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### BASIC output destination (2026-10-21)
+
+- [x] Add saved Eval → BASIC output → Listener / ANSI terminal selection for
+  both BASIC backends. Keep error navigation, timing and Stop; reuse terminal
+  hold behaviour. Three new checks failed first; 33 focused checks now pass, including ANSI carriage-return preservation.
+
 ### Exact-argument memoization (2026-10-21)
 
 - [x] Gate automatic BASIC FN memoization and Lisp define-memo on actual

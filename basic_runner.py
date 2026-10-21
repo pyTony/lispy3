@@ -67,6 +67,7 @@ def run_python_basic(source, write, *, cwd, executable=None, package_root='', di
         process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+        process.stdout.reconfigure(newline='')  # Preserve ANSI carriage returns.
         messages = queue.Queue()
 
         def read_output():

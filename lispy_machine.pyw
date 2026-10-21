@@ -1385,6 +1385,8 @@ class LispMachine(tk.Tk):
         self.settings = load_settings()
         backend = self.settings.get('basic_backend', 'lispy')
         self.basic_backend = tk.StringVar(self, value=backend if backend in ('lispy', 'python') else 'lispy')
+        output = self.settings.get('basic_output', 'listener')
+        self.basic_output = tk.StringVar(self, value=output if output in ('listener', 'ansi') else 'listener')
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         if plain_repl is None:
             plain_repl = bool(self.settings.get("plain_repl", False))
@@ -1530,6 +1532,10 @@ class LispMachine(tk.Tk):
         basic_m.add_command(label='Python mini_basic directory…', command=self._choose_basic_directory)
         basic_m.add_command(label='Python executable…', command=self._choose_basic_python)
         eval_m.add_cascade(label='BASIC backend', menu=basic_m)
+        output_m = tk.Menu(eval_m, tearoff=0)
+        output_m.add_radiobutton(label='Listener', variable=self.basic_output, value='listener', command=self._save_basic_settings)
+        output_m.add_radiobutton(label='ANSI terminal', variable=self.basic_output, value='ansi', command=self._save_basic_settings)
+        eval_m.add_cascade(label='BASIC output', menu=output_m)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
@@ -2256,6 +2262,7 @@ class LispMachine(tk.Tk):
     def _save_basic_settings(self):
         self.settings['basic_backend'] = self.basic_backend.get()
         self.settings['basic_pygame'] = self.basic_pygame.get()
+        self.settings['basic_output'] = self.basic_output.get()
         save_settings(self.settings)
 
     def _choose_basic_directory(self):
@@ -2282,7 +2289,7 @@ class LispMachine(tk.Tk):
         error.lineno, error.offset, error.whole_line = line, 1, True
         LispMachine._highlight_source_error(self, tab, error)
 
-    def _run_python_basic_buffer(self, tab, source, source_line):
+    def _run_python_basic_buffer(self, tab, source, source_line, terminal=False):
         original = tab.get_content()
         settings = dict(getattr(self, 'settings', {}))
         graphics = getattr(self, 'basic_pygame', None)
@@ -2294,13 +2301,19 @@ class LispMachine(tk.Tk):
         def work():
             started = time.perf_counter() if timed else None
             def write(line):
-                self._ui_post(self.listener_write, line, 'result')
+                if terminal:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                else:
+                    self._ui_post(self.listener_write, line, 'result')
                 if re.match(r'^\s*(?:\?|error\b|[A-Za-z_]*(?:Error|Exception)\b)', line, re.IGNORECASE):
                     self._ui(LispMachine._basic_error_highlight, self, tab, source, line, source_line, original, True)
             try:
-                status = BR.run_python_basic(source, write, cwd=cwd,
-                    executable=settings.get('basic_python'),
-                    package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
+                output = lispy_terminal.ansi_terminal_output() if terminal else contextlib.nullcontext()
+                with output:
+                    status = BR.run_python_basic(source, write, cwd=cwd,
+                        executable=settings.get('basic_python'),
+                        package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
                 self._ui(self.listener_write, f';; Python mini_basic exited with status {status}.\n', 'info' if status == 0 else 'error')
             except Exception as error:
                 self._ui(self._report_form_error, error)
@@ -2309,10 +2322,13 @@ class LispMachine(tk.Tk):
                     self._ui(self.listener_write, f';; Buffer elapsed time: {time.perf_counter()-started:.3f} s\n', 'info')
         self._start(work)
 
-    def _eval_forms_in_terminal(self, forms):
+    def _eval_forms_in_terminal(self, forms, on_error=None):
         try:
             with lispy_terminal.ansi_terminal_output():
-                self._eval_forms(forms)
+                if on_error is not None:
+                    self._eval_forms(forms, on_error=on_error)
+                else:
+                    self._eval_forms(forms)
         except Exception as error:
             self._ui(self._report_form_error, error)
 
@@ -2329,10 +2345,13 @@ class LispMachine(tk.Tk):
         if not tab or self._busy():
             return
         content = tab.get_content() if source is None else source
+        if basic:
+            output = getattr(self, 'basic_output', None)
+            terminal = terminal or (output is not None and output.get() == 'ansi')
         backend = getattr(self, 'basic_backend', None)
         if basic and backend is not None and backend.get() == 'python':
             if content.strip():
-                LispMachine._run_python_basic_buffer(self, tab, content, source_line)
+                LispMachine._run_python_basic_buffer(self, tab, content, source_line, terminal=terminal)
             return
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)
@@ -2373,7 +2392,10 @@ class LispMachine(tk.Tk):
             started = time.perf_counter() if timed else None
             try:
                 if terminal:
-                    self._eval_forms_in_terminal(forms)
+                    if basic:
+                        LispMachine._eval_forms_in_terminal(self, forms, on_error=basic_error)
+                    else:
+                        self._eval_forms_in_terminal(forms)
                 else:
                     if basic:
                         self._eval_forms(forms, on_error=basic_error)

@@ -21,12 +21,14 @@ class BasicRunnerTest(TestCase):
             (package/'__init__.py').write_text('', encoding='utf-8')
             (package/'__main__.py').write_text(
                 'import sys, pathlib\np=pathlib.Path(sys.argv[-1])\n'
-                'print(p, flush=True)\nprint(p.read_text(encoding="utf-8"), flush=True)\n', encoding='utf-8')
+                'print(p, flush=True)\nprint(p.read_text(encoding="utf-8"), flush=True)\n'
+                'sys.stdout.write("\\rprogress\\r");sys.stdout.flush()\n', encoding='utf-8')
             output = []
             result = run_python_basic('PRINT "héllo"', output.append, cwd=folder, package_root=folder)
             self.assertEqual(result, 0)
             text = ''.join(output)
             self.assertIn('PRINT "héllo"', text)
+            self.assertIn('\rprogress\r', text)
             self.assertFalse(Path(text.splitlines()[0]).exists())
 
     def test_cancellation_terminates_child_process(self):

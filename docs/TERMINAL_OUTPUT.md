@@ -34,9 +34,17 @@ wrapper or temporary file is needed. Run a whole loop, procedure or multiline
 block together rather than an incomplete opening line.
 
 **Shift+F7** now inspects the symbol at the cursor. **F5/F6** retain their Lisp
-evaluation commands. BASIC runs use the current workspace and the normal
-Listener output, Stop action and **Time buffer runs** option. Only syntax
-implemented by lispy3 mini-basic is supported.
+evaluation commands. Lispy BASIC runs use the current workspace, Stop action
+and **Time buffer runs** option. Only syntax implemented by the selected BASIC
+backend is supported; the Python backend runs in a separate process.
+
+Choose **Eval → BASIC output → Listener** or **ANSI terminal** independently
+of **Eval → BASIC backend**. F7/F8 use the saved output destination for either
+Lispy mini-basic or Python mini_basic. ANSI output reuses an attached terminal
+or opens a window that waits for Enter after execution. Status, timing and
+located error highlights remain in the editor. This redirects output only;
+console input is not connected to the terminal viewer. Python SDL graphics
+remains a separate setting for graphical programs.
 
 ## Time the whole buffer
 

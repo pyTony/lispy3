@@ -369,12 +369,14 @@ or runtime errors. BASIC indentation is a layout helper, not a BASIC validator.
 
 **Eval → BASIC backend** selects **Lispy mini-basic** (the default, sharing the
 Lisp workspace) or **Python mini_basic** (a separate CLI process). F7/F8 use the
-selected backend. The choice is saved. For Python, select the project directory
+selected backend. Choose output separately: **Eval → BASIC output → Listener / ANSI terminal**
+applies to F7/F8 with either backend and is saved across restarts. New ANSI
+output windows wait for Enter before closing. For Python, select the directory
 containing `mini_basic/__main__.py` and optionally a Python executable with the
 package installed. A sibling `mini_basic` checkout is detected automatically.
 The adapter uses the same `python -m mini_basic` entry point as
 `mini_basic/tools/editor.py`, with BBC dialect selected. It runs unsaved source,
-streams output to the Listener, and Stop terminates its process. Enable
+streams output to the selected destination, and Stop terminates its process. Enable
 **Python SDL graphics (hold window)** for graphical programs; close that window
 when finished. Python buffer timing includes subprocess startup and window hold.
 Terminal INPUT is not connected to the Listener; use the standalone terminal

@@ -1,5 +1,7 @@
 """Run editor BASIC source through the actual mini-basic reader."""
 from unittest.mock import Mock, patch
+import contextlib
+import io
 from unittest import TestCase
 from test_machine_eval_buffer import _FakeMachine
 from test_machine_args import machine
@@ -79,3 +81,46 @@ class BasicBufferTest(TestCase):
         app.tab.text = Mock()
         machine.LispMachine.eval_buffer(app, basic=True, source='FOR', source_line=3)
         app.tab.text.tag_add.assert_called_with('syntax_error', '3.0', '3.end')
+
+    def test_lispy_backend_uses_selected_ansi_output(self):
+        app = _FakeMachine('PRINT "terminal-only"')
+        app.basic_output = Mock()
+        app.basic_output.get.return_value = 'ansi'
+        terminal = io.StringIO()
+        @contextlib.contextmanager
+        def output():
+            with contextlib.redirect_stdout(terminal), patch.object(machine.lispy_terminal, 'terminal_output_active', return_value=True):
+                yield
+        with patch.object(machine.lispy_terminal, 'ansi_terminal_output', output):
+            machine.LispMachine.eval_buffer(app, basic=True)
+        self.assertEqual(terminal.getvalue(), 'terminal-only\n')
+        self.assertNotIn('terminal-only\n', app.lines)
+
+    def test_python_backend_uses_selected_ansi_output(self):
+        app = _FakeMachine('PRINT "terminal-only"')
+        app.basic_output = Mock()
+        app.basic_output.get.return_value = 'ansi'
+        app.basic_backend = Mock()
+        app.basic_backend.get.return_value = 'python'
+        terminal = io.StringIO()
+        @contextlib.contextmanager
+        def output():
+            with contextlib.redirect_stdout(terminal):
+                yield
+        def run(source, write, **kwargs):
+            write('\x1b[31mterminal-only\x1b[0m\n')
+            return 0
+        with patch.object(machine.BR, 'run_python_basic', side_effect=run), patch.object(machine.lispy_terminal, 'ansi_terminal_output', output):
+            machine.LispMachine.eval_buffer(app, basic=True)
+        self.assertIn('\x1b[31mterminal-only\x1b[0m', terminal.getvalue())
+        self.assertNotIn('terminal-only', ''.join(app.lines))
+
+    def test_output_setting_is_persisted(self):
+        app = Mock()
+        app.settings = {}
+        app.basic_backend.get.return_value = 'lispy'
+        app.basic_pygame.get.return_value = False
+        app.basic_output.get.return_value = 'ansi'
+        with patch.object(machine, 'save_settings') as save:
+            machine.LispMachine._save_basic_settings(app)
+        self.assertEqual(save.call_args.args[0]['basic_output'], 'ansi')

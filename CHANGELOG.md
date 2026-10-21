@@ -4,6 +4,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Add a saved BASIC output selector independent of backend selection. F7/F8
+  route either Lispy or Python BASIC output to the Listener or a real ANSI
+  terminal while preserving timing, Stop and source error highlighting.
+
 - Restrict automatic BASIC FN caches and Lisp define-memo to calls whose
   argument values are all exact numbers. Bypass floating-point and other
   arguments before cache lookup, including float keys equal to cached integers.
