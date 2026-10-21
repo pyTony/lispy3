@@ -52,6 +52,9 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ### Editor checking, colouring and indentation (2026-10-21)
 
+- [x] Open/Save dialogs offer combined supported-source, language-specific and
+  all-file filters derived from syntax definitions, including uppercase suffixes.
+
 - [x] Add persistent Lispy/Python BASIC backend settings and reuse Python's CLI
   entry point from tools/editor.py. Stream output, support configured project
   and interpreter paths, optional SDL graphics, and child-process cancellation.

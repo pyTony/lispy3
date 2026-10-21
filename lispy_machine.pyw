@@ -97,6 +97,18 @@ COLORS = {
 # Syntax colours and rules come from syntax/*.json (see syntax_highlight.py).
 LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
 DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
+
+
+def source_filetypes(languages=LANGUAGES):
+    """Use the installed syntax definitions for source-file dialog filters."""
+    groups = []
+    for language in languages:
+        patterns = tuple(dict.fromkeys(pattern for extension in language.extensions
+                                      for pattern in ('*'+extension, '*'+extension.upper())))
+        if patterns:
+            groups.append((language.name, patterns))
+    supported = tuple(dict.fromkeys(pattern for _, patterns in groups for pattern in patterns))
+    return ([('Supported source files', supported)] if supported else []) + groups + [('All files', '*')]
 SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
 BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 # The name being typed at the end of a line, for completion (":name" keywords included)
@@ -1886,9 +1898,9 @@ class LispMachine(tk.Tk):
 
     def open_file(self):
         path = filedialog.askopenfilename(
-            title="Open Lisp file",
+            title="Open source file",
             initialdir=self._file_dialog_dir(),
-            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
+            filetypes=source_filetypes())
         if not path:
             return
         try:
@@ -1922,8 +1934,9 @@ class LispMachine(tk.Tk):
         path = filedialog.asksaveasfilename(
             title="Save as",
             initialdir=self._file_dialog_dir(tab),
-            defaultextension=".lisp",
-            filetypes=[("Lisp", "*.lisp"), ("Python", "*.py *.pyw"), ("All files", "*.*")])
+            initialfile=tab.name,
+            defaultextension=os.path.splitext(tab.name)[1] or '.lisp',
+            filetypes=source_filetypes())
         if not path:
             return
         tab.path = path

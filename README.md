@@ -356,6 +356,10 @@ string, number and REM-comment colouring. **Edit → Reindent selection or buffe
 indents common BASIC blocks or Lisp forms in two-space steps. Selection reindent
 operates on complete lines using the surrounding buffer's nesting.
 
+Open and Save As offer a combined supported-source filter, individual Lisp,
+BBC BASIC and Python filters, and All files. Filters follow the installed
+`syntax/*.json` definitions and include uppercase extensions such as `.BAS`.
+
 **Edit → Check Lisp syntax** checks brackets, strings and reader syntax without
 executing code or expanding macros. Errors report the filename, line and column
 and move the cursor to the location. Lisp reindent checks first and leaves an
