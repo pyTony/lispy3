@@ -50,6 +50,16 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Editor save and close fixes (2026-10-21)
+
+- [x] Bind save/close directly on editor widgets and consume shortcuts before
+  Tk class bindings. Track dirty state through real Modified events.
+- [x] Fix Save As tab lookup/order/name bookkeeping, failed-save identity and
+  duplicate basenames; close by tab identity. Preserve tabs on Cancel/failure.
+- [x] Reproduce failures first; nine regressions pass, including writing and
+  reopening BASIC with REM WAIT intact and saving edits before close.
+- [x] Full isolated validation: 509 passed, 4 skipped, 353 subtests passed.
+
 ### Language-aware editor execution (2026-10-21)
 
 - [x] Keep BASIC Settings open for visible radio/check state and saved feedback.

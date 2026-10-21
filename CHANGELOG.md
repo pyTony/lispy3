@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Fix editor Ctrl+S/Ctrl+W handling, track real text modifications and preserve
+  saved state on navigation/shortcut release. Save As updates tab identities
+  only after writing successfully and keeps duplicate basenames distinct.
+  Closing edited tabs offers Save/Discard/Cancel and stays open on save failure.
+
 - Keep BASIC settings in a persistent window with visible option state and
   saved feedback. Treat Python mini_basic console-hold exit code 10 as normal
   completion; retain nonzero error reporting for regular Python scripts.

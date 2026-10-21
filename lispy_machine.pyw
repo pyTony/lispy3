@@ -607,6 +607,11 @@ class EditorTab(tk.Frame):
         t.bind("<Control-space>", self._complete)
         t.bind("<Control-Key-space>", self._complete)  # Added fallback for Windows/Linux window managers
         t.bind("<Control-slash>", self._toggle_comment)
+        t.bind("<<Modified>>", self._on_modified)
+        # Widget bindings precede Tk Text's class bindings and global bindings.
+        t.bind("<Control-s>", lambda e: (self.app.save_current(), 'break')[1])
+        t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(), 'break')[1])
+        t.bind("<Control-w>", lambda e: (self.app.close_current(), 'break')[1])
 
         # Eval bindings
         t.bind("<F5>",                      lambda e: (self.app.eval_form_at_cursor(), "break")[1])
@@ -627,8 +632,12 @@ class EditorTab(tk.Frame):
     def _on_key(self, event=None):
         self._schedule_highlight()
         self._match_paren()
+
+    def _on_modified(self, event=None):
         if not self._suppress_modified:
-            self.text.edit_modified(True)
+            self.dirty = bool(self.text.edit_modified())
+            self.app._refresh_buffer_list()
+            self._schedule_highlight()
 
     def _schedule_highlight(self):
         if self._highlight_job:
@@ -1811,9 +1820,9 @@ class LispMachine(tk.Tk):
         self.bind_all("<Control-Break>", self.stop)
         self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
         self.bind_all("<Control-o>", lambda e: self.open_file())
-        self.bind_all("<Control-s>", lambda e: self.save_current())
-        self.bind_all("<Control-Shift-S>", lambda e: self.save_current_as())
-        self.bind_all("<Control-w>", lambda e: self.close_current())
+        self.bind_all("<Control-s>", lambda e: (self.save_current(), 'break')[1])
+        self.bind_all("<Control-Shift-S>", lambda e: (self.save_current_as(), 'break')[1])
+        self.bind_all("<Control-w>", lambda e: (self.close_current(), 'break')[1])
         self.bind_all("<Control-q>", lambda e: self._on_close())
         self.bind_all("<Control-e>", lambda e: self._focus_listener())
         self.bind_all("<Control-f>",  lambda e: (self.search_bar.show_bar(False), "break")[1])
@@ -1882,13 +1891,17 @@ class LispMachine(tk.Tk):
         tab = self.current_tab()
         if not tab:
             return
-        if tab.dirty:
-            if not messagebox.askyesno("Unsaved changes",
-                                       f"Discard unsaved changes in {tab.name}?"):
+        if tab.dirty or tab.text.edit_modified():
+            save = messagebox.askyesnocancel('Unsaved changes', f'Save changes to {tab.name} before closing?')
+            if save is None:
                 return
+            if save and not self.save_current():
+                return
+        key = next((name for name, value in self.tabs.items() if value is tab), tab.name)
         self.notebook.forget(tab)
-        self.tabs.pop(tab.name, None)
-        self.tab_order.remove(tab.name)
+        self.tabs.pop(key, None)
+        if key in self.tab_order:
+            self.tab_order.remove(key)
         tab.destroy()
         self._refresh_buffer_list()
 
@@ -1917,38 +1930,55 @@ class LispMachine(tk.Tk):
     def save_current(self):
         tab = self.current_tab()
         if not tab:
-            return
+            return False
         if not tab.path:
             return self.save_current_as()
+        if not LispMachine._save_tab_to_path(self, tab, tab.path):
+            return False
+        self._refresh_buffer_list()
+        return True
+
+    def _save_tab_to_path(self, tab, path):
         try:
-            with open(tab.path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(tab.get_content())
             tab.dirty = False
             tab.text.edit_modified(False)
-            self._refresh_buffer_list()
-            self.status_right.configure(text=f"saved: {tab.path}")
+            self.status_right.configure(text=f"saved: {path}")
+            return True
         except OSError as e:
             messagebox.showerror("Save failed", str(e))
+            return False
 
     def save_current_as(self):
         tab = self.current_tab()
         if not tab:
-            return
+            return False
         path = filedialog.asksaveasfilename(
             title="Save as",
             initialdir=self._file_dialog_dir(tab),
-            initialfile=tab.name,
-            defaultextension=os.path.splitext(tab.name)[1] or '.lisp',
+            initialfile=os.path.basename(tab.path) if tab.path else re.sub(r' <\d+>$', '', tab.name),
+            defaultextension=os.path.splitext(tab.path or re.sub(r' <\d+>$', '', tab.name))[1] or '.lisp',
             filetypes=source_filetypes())
         if not path:
-            return
+            return False
+        if not LispMachine._save_tab_to_path(self, tab, path):
+            return False
+        old_key = next((name for name, value in self.tabs.items() if value is tab), tab.name)
+        base = os.path.basename(path)
+        name, number = base, 1
+        while name in self.tabs and self.tabs[name] is not tab:
+            number += 1
+            name = f'{base} <{number}>'
         tab.path = path
-        tab.name = os.path.basename(path)
-        self.tab_order = [tab.name if n == tab.name else n for n in self.tab_order]
+        tab.name = name
+        self.tabs.pop(old_key, None)
+        self.tabs[name] = tab
+        self.tab_order = [name if key == old_key else key for key in self.tab_order]
         self.notebook.tab(tab, text=tab.name)
         tab.set_language()
-        self.save_current()
         self._refresh_buffer_list()
+        return True
 
     # =========================================================================
     # Evaluation
