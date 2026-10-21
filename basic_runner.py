@@ -155,3 +155,39 @@ def run_bbcsdl(source, *, cwd, executable='', helper=''):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
+
+
+def detokenize_bbc(path, *, executable=None, package_root=''):
+    """Reuse Python mini_basic's Wilson/Russell decoder; never run the BASIC."""
+    import json
+    from lispy_terminal import console_python
+    path = str(Path(path).resolve())
+    package_root = package_root or default_package_root()
+    env = dict(os.environ, PYTHONUTF8='1')
+    if package_root:
+        if not (Path(package_root)/'mini_basic'/'__init__.py').is_file():
+            raise RuntimeError('Select the Python mini_basic project directory in BASIC Settings.')
+        env['PYTHONPATH'] = package_root+os.pathsep+env.get('PYTHONPATH', '')
+    script = ("import json, sys; from pathlib import Path; "
+              "from mini_basic.bbc_detokenize import bbc_binary_to_source; "
+              "print(json.dumps(bbc_binary_to_source(Path(sys.argv[1]).read_bytes())))")
+    try:
+        result = subprocess.run([executable or console_python(), '-c', script, path],
+            env=env, cwd=str(Path(path).parent), capture_output=True, text=True,
+            encoding='utf-8', errors='replace', timeout=30,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(f'Cannot read tokenised BASIC with Python mini_basic: {error}') from error
+    if result.returncode:
+        if 'ModuleNotFoundError' in result.stderr or 'ImportError' in result.stderr:
+            raise RuntimeError('Tokenised .bbc input requires Python mini_basic. Select its project directory '
+                               'and Python executable in BASIC Settings.')
+        detail = result.stderr.strip().splitlines()
+        raise RuntimeError('Cannot detokenise BBC program: '+(detail[-1] if detail else 'decoder failed'))
+    try:
+        lines = json.loads(result.stdout)
+        if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
+            raise ValueError('expected source lines')
+    except (ValueError, TypeError) as error:
+        raise RuntimeError('Invalid response from the Python mini_basic detokenizer.') from error
+    return '\n'.join(lines)+('\n' if lines else '')

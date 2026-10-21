@@ -406,3 +406,18 @@ passed. Normal Lisp/plain and NumPy BASIC/colour CLI smoke checks each rendered
 
 Validation: exact staged tree passed 525 tests, 4 skipped, 353 subtests.
 Native desktop smoke check passed with the user-saved helper on 2026-10-21.
+
+### Tokenised BBC input and Lisp memo verification (2026-10-22)
+
+- [x] Establish five failing editor regressions, then reuse Python mini_basic's
+  public binary decoder for .bbc/.BBC input; do not duplicate token tables.
+- [x] Open as editable unsaved .bas, retain the origin directory and reject
+  text saves to .bbc. Add configured-decoder and clear-error adapter tests.
+- [x] Decode the user-saved BASRUN.bbc (28 lines) and reference jumping.bbc
+  (118 lines) with the real mini_basic decoder without running their source.
+- [x] Confirm Lisp define-memo factorial caching: 60 body evaluations on the
+  first (fact 60), none on the second call or cached (fact 59). Plain define
+  remains an ordinary procedure; no memoization implementation change needed.
+
+Tokenised input validation: exact staged tree passed 535 tests, 4 skipped,
+353 subtests. Local graphics/demo changes remain excluded.

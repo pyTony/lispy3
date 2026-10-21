@@ -58,3 +58,14 @@ class BasicMemoIntegrationTest(LispyTestCase):
             self.ev('(bbc-run "DEF FNdouble(n) = n*2")')
         self.ev('(bbc-run "A=FNdouble(1):B=FNdouble(1):C=FNdouble(1.0):D=FNdouble(1.0)")')
         self.assertEqual(calls, [(1,), (1.0,), (1.0,)])
+
+    def test_recursive_lisp_factorial_reuses_exact_calls(self):
+        from math import factorial
+        self.ev('(define body-calls 0)')
+        self.ev('(define-memo (fact n) (set! body-calls (+ body-calls 1)) (if (< n 2) 1 (* n (fact (- n 1)))))')
+        self.assertEqual(self.ev('(fact 60)'), factorial(60))
+        self.assertEqual(self.ev('body-calls'), 60)
+        self.assertEqual(self.ev('(fact 60)'), factorial(60))
+        self.assertEqual(self.ev('body-calls'), 60)
+        self.assertEqual(self.ev('(fact 59)'), factorial(59))
+        self.assertEqual(self.ev('body-calls'), 60)

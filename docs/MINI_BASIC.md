@@ -206,3 +206,18 @@ python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/
 [TODO.md](../TODO.md) records completed fixes and remaining compatibility work.
 The reference directory records native BBCSDL observations separately from
 lispy3 tests. Prioritize demonstrated errors over expanding the language.
+
+### Lisp factorial and memoization
+
+A normal Lisp `(define fact (lambda (n) ...))` creates an ordinary procedure.
+Unlike automatic pure BASIC `FN` handling, it does not request a cache. Use:
+
+```lisp
+(define-memo (fact n)
+  (if (< n 2) 1 (* n (fact (- n 1)))))
+```
+
+Repeated `(fact 60)` calls then reuse exact-argument results, including the
+recursive values for 1 through 59. `60.0` bypasses that automatic cache.
+A regression counts 60 body evaluations on the first integer call and zero
+on the second call or a later `(fact 59)`.

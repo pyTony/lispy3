@@ -34,3 +34,19 @@ the helper treats all remaining command-line text as that filename.
 
 Only real BBCSDL syntax works here. The mini-basic extension `ANSI` is not a
 BBCSDL keyword; use BBCSDL's supported terminal/VDU statements for those demos.
+
+## Open tokenised programs for editing
+
+Open a `.bbc`/`.BBC` file normally, from the Open dialog, a quoted filename
+(F4/Ctrl+click), or the editor command line. Python mini_basic's existing
+`bbc_binary_to_source` decodes Wilson and Russell/BBCSDL formats in a separate
+Python process without executing BASIC statements. The Python executable and
+project directory come from BASIC Settings; a sibling checkout is detected.
+A missing decoder or invalid file gives an Open error without a partial buffer.
+
+The result is an unsaved `.bas` buffer with BASIC highlighting. Ctrl+S asks for
+a text filename; writing text over a `.bbc` file is rejected. Native tokenised
+output is not implemented. Relative file access and filename navigation retain
+the original program directory until the imported buffer is saved elsewhere.
+Reopening the same binary selects the existing imported buffer and preserves
+its edits. Reading `.bbc` does not change which interpreter runs its source.

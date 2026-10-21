@@ -570,3 +570,8 @@ Everything the plain REPL can do, the editor can do — plus a place to keep you
 Quoted filenames can be opened with **F4**, **Ctrl+click** (Command+click on macOS),
 or the editor context menu. Relative paths resolve from the source directory,
 then the working/editor/library directories. Already-open buffers retain their edits.
+
+Tokenised **`.bbc` / `.BBC` input** is decoded by Python mini_basic when opened,
+including from the command line. It becomes an unsaved BASIC `.bas` buffer;
+Ctrl+S uses Save As, preserving the original binary. Configure the Python
+mini_basic location in BASIC Settings. See [BBC input details](docs/BBCSDL.md).
