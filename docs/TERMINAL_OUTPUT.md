@@ -39,7 +39,7 @@ and **Time buffer runs** option. Only syntax implemented by the selected BASIC
 backend is supported; the Python backend runs in a separate process.
 
 Choose **Eval → BASIC output → Listener** or **ANSI terminal** independently
-of **Eval → BASIC backend**. F7/F8 use the saved output destination for either
+of **Eval → BASIC Settings**. F7/F8 use the saved output destination for either
 Lispy mini-basic or Python mini_basic. ANSI output reuses an attached terminal
 or opens a window that waits for Enter after execution. Status, timing and
 located error highlights remain in the editor. This redirects output only;

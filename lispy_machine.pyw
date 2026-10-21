@@ -1531,7 +1531,7 @@ class LispMachine(tk.Tk):
         basic_m.add_checkbutton(label='Python SDL graphics (hold window)', variable=self.basic_pygame, command=self._save_basic_settings)
         basic_m.add_command(label='Python mini_basic directory…', command=self._choose_basic_directory)
         basic_m.add_command(label='Python executable…', command=self._choose_basic_python)
-        eval_m.add_cascade(label='BASIC backend', menu=basic_m)
+        eval_m.add_cascade(label='BASIC Settings', menu=basic_m)
         output_m = tk.Menu(eval_m, tearoff=0)
         output_m.add_radiobutton(label='Listener', variable=self.basic_output, value='listener', command=self._save_basic_settings)
         output_m.add_radiobutton(label='ANSI terminal', variable=self.basic_output, value='ansi', command=self._save_basic_settings)

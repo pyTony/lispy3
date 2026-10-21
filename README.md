@@ -367,7 +367,7 @@ invalid buffer unchanged. Formatting preserves strings/comments and is grouped
 as one undo operation. These are reader checks, not checks for undefined names
 or runtime errors. BASIC indentation is a layout helper, not a BASIC validator.
 
-**Eval → BASIC backend** selects **Lispy mini-basic** (the default, sharing the
+**Eval → BASIC Settings** selects **Lispy mini-basic** (the default, sharing the
 Lisp workspace) or **Python mini_basic** (a separate CLI process). F7/F8 use the
 selected backend. Choose output separately: **Eval → BASIC output → Listener / ANSI terminal**
 applies to F7/F8 with either backend and is saved across restarts. New ANSI
