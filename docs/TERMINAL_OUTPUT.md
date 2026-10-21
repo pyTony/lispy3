@@ -26,21 +26,28 @@ macOS uses Terminal. Missing emulators and connection failures report errors.
 
 ## Run BASIC source from the editor
 
-Use **F7** (**Run BASIC selection or line**) to execute selected BASIC text,
-or the current line when there is no selection. Use **F8** (**Run whole BASIC
-buffer**) for a complete program, including unsaved buffers. These commands
-automatically import mini-basic's reader with a private editor prefix; no Lisp
-wrapper or temporary file is needed. Run a whole loop, procedure or multiline
-block together rather than an incomplete opening line.
+For a BASIC buffer, **F5/F6** run selected text/current line or the whole
+buffer using **Lispy mini-basic**. **F7/F8** explicitly use **Python mini_basic**
+for the same two scopes. No backend selection is needed. Run a complete loop,
+procedure or multiline block together rather than an incomplete opening line.
 
-**Shift+F7** now inspects the symbol at the cursor. **F5/F6** retain their Lisp
-evaluation commands. BASIC runs use the current workspace and the normal
-Listener output, Stop action and **Time buffer runs** option. Only syntax
-implemented by lispy3 mini-basic is supported.
+**Shift+F7** inspects a symbol. For Lisp buffers F5/F6 retain form/buffer
+execution in the workspace. For Python buffers they run selected text/current
+line or the buffer in a fresh Python process with output, timing and Stop.
+Python traceback lines map back to the buffer; Python definitions do not persist
+between runs. The configured Python executable is shared with the external
+BASIC runner. Only syntax implemented by the chosen interpreter is supported.
+
+Choose **Eval → BASIC Settings…** and select **Listener** or **ANSI terminal** for either BASIC
+interpreter. New ANSI windows wait for Enter after execution. Status, timing
+and located error highlights stay in the editor. This redirects output only;
+console input is not connected to the terminal viewer. **BASIC Settings** keeps
+Python location and SDL graphics options. Disable SDL for terminal-only BASIC
+programs to avoid drawing/mirroring through a second output window.
 
 ## Time the whole buffer
 
-Enable **Eval → Time buffer runs**, then use either **Eval whole buffer (F6)**
+Enable **Eval → Time buffer runs**, then use either **Run whole buffer (F6)**
 or **Eval buffer in ANSI terminal**. The Listener reports, for example:
 
 ```text

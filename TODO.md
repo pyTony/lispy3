@@ -50,6 +50,51 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Startup visibility and execution (2026-10-21)
+
+- [x] Add independent saved show-buffer and run-at-startup options in a
+  persistent View → Startup Settings window. Keep show-only defaults.
+- [x] Run the saved startup source once via the Lisp worker after UI setup,
+  even when hidden, with visible errors and existing Stop support.
+- [x] Respect explicit files and hidden startup on Restart. Five initial
+  regressions failed first; 29 focused startup/file/worker checks now pass.
+- [x] Full isolated validation: 516 passed, 4 skipped, 353 subtests passed.
+
+- [x] Python BASIC adapter respects file dialect hints: remove the default
+  forced BBC flag; retain an explicit dialect override for adapter callers.
+  Regression first failed with --dialect bbc in the captured child arguments.
+
+### Editor save and close fixes (2026-10-21)
+
+- [x] Bind save/close directly on editor widgets and consume shortcuts before
+  Tk class bindings. Track dirty state through real Modified events.
+- [x] Fix Save As tab lookup/order/name bookkeeping, failed-save identity and
+  duplicate basenames; close by tab identity. Preserve tabs on Cancel/failure.
+- [x] Reproduce failures first; nine regressions pass, including writing and
+  reopening BASIC with REM WAIT intact and saving edits before close.
+- [x] Full isolated validation: 509 passed, 4 skipped, 353 subtests passed.
+
+### Language-aware editor execution (2026-10-21)
+
+- [x] Keep BASIC Settings open for visible radio/check state and saved feedback.
+  Recognize Python mini_basic's normal console-hold status 10 separately from
+  regular Python script exit codes.
+
+- [x] Remove BASIC backend radio buttons and ignore the old saved backend key.
+  F5/F6 follow the highlighting language, BASIC defaulting to Lispy mini-basic;
+  F7/F8 explicitly run Python mini_basic. Retain location/SDL/output settings.
+- [x] Run unsaved Python source in a fresh process, retaining selection source
+  lines in tracebacks and using the shared Stop-safe subprocess transport.
+- [x] Initial dispatch tests failed before implementation; 39 focused tests pass.
+- [x] Full language-dispatch suite: 497 passed, 4 skipped, 351 subtests passed.
+  Subsequent settings-feedback and exit-status fixes: 42 focused tests passed.
+
+### BASIC output destination (2026-10-21)
+
+- [x] Add saved Eval → BASIC output → Listener / ANSI terminal selection for
+  both BASIC backends. Keep error navigation, timing and Stop; reuse terminal
+  hold behaviour. Three new checks failed first; 30 focused checks now pass.
+
 ### Exact-argument memoization (2026-10-21)
 
 - [x] Gate automatic BASIC FN memoization and Lisp define-memo on actual

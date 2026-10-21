@@ -42,7 +42,7 @@ def default_package_root():
     return ''
 
 
-def run_python_basic(source, write, *, cwd, executable=None, package_root='', dialect='bbc', pygame=False):
+def run_python_basic(source, write, *, cwd, executable=None, package_root='', dialect=None, pygame=False):
     """Stream a CLI subprocess; always stop/reap it on cancellation or errors.
 
     INPUT has no console here; programs needing interactive input should use
@@ -58,43 +58,67 @@ def run_python_basic(source, write, *, cwd, executable=None, package_root='', di
     with tempfile.TemporaryDirectory(prefix='lispy-basic-') as folder:
         path = Path(folder)/'buffer.bas'
         path.write_text(source, encoding='utf-8')
-        command = [executable, '-u', '-m', 'mini_basic', '-q', '--dialect', dialect]
+        command = [executable, '-u', '-m', 'mini_basic', '-q']
+        if dialect:
+            command += ['--dialect', dialect]
         if pygame:
             command += ['--pygame', '--tee-terminal', '--hold']
         else:
             command += ['--display', 'terminal']
         command.append(str(path))
-        process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
-        messages = queue.Queue()
+        return _stream_command(command, write, cwd, env)
 
-        def read_output():
-            try:
-                for line in process.stdout:
-                    messages.put(line)
-            finally:
-                messages.put(None)
 
-        reader = threading.Thread(target=read_output, daemon=True)
+def _stream_command(command, write, cwd, env):
+    process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+    process.stdout.reconfigure(newline='')  # Preserve ANSI carriage returns.
+    messages = queue.Queue()
+
+    def read_output():
         try:
-            reader.start()
-            while True:
-                try:
-                    line = messages.get(timeout=0.05)
-                except queue.Empty:
-                    continue
-                if line is None:
-                    break
-                write(line)
-            return process.wait()
+            for line in process.stdout:
+                messages.put(line)
         finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-            reader.join(timeout=2)
-            process.stdout.close()
+            messages.put(None)
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    try:
+        reader.start()
+        while True:
+            try:
+                line = messages.get(timeout=0.05)
+            except queue.Empty:
+                continue
+            if line is None:
+                break
+            write(line)
+        return process.wait()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        reader.join(timeout=2)
+        process.stdout.close()
+
+
+def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>', source_line=1):
+    """Run unsaved Python in a fresh process, retaining source traceback lines."""
+    import textwrap
+    from lispy_terminal import console_python
+    env = dict(os.environ, PYTHONUTF8='1', PYTHONUNBUFFERED='1')
+    with tempfile.TemporaryDirectory(prefix='lispy-python-') as folder:
+        path = Path(folder)/'buffer.py'
+        path.write_text('\n'*(source_line-1)+textwrap.dedent(source), encoding='utf-8')
+        wrapper = ("import pathlib,sys,types; p=sys.argv[1]; filename=sys.argv[2]; "
+                   "sys.path[0]=sys.argv[3]; sys.argv=[filename]; "
+                   "module=types.ModuleType('__main__'); module.__file__=filename; "
+                   "sys.modules['__main__']=module; "
+                   "exec(compile(pathlib.Path(p).read_text(encoding='utf-8'),filename,'exec'),module.__dict__)")
+        command = [executable or console_python(), '-u', '-c', wrapper, str(path), filename, cwd]
+        return _stream_command(command, write, cwd, env)
