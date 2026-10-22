@@ -16,8 +16,10 @@ Programs can request the same output destination:
 
 An attached terminal is reused. Otherwise a terminal output window opens and
 stays open after execution until you press Enter. Nested requests reuse the
-current output destination. Input is not redirected. Stop still interrupts
-evaluation, and terminal attributes are reset when evaluation finishes or fails.
+current output destination. BASIC `INPUT` / `INPUT LINE` and Lisp `read-line`
+read replies in that terminal. Stop still interrupts evaluation and input waits,
+and terminal attributes are reset when evaluation finishes or fails. Closing the
+terminal during input reports an error in the editor instead of hanging.
 The body of `with-ansi-terminal` has the scope of a lambda body.
 
 The existing **View → Open terminal** command opens an ordinary shell.
@@ -43,8 +45,10 @@ Use **F6 → Listener** or **Shift+F6 → ANSI terminal** for the whole buffer.
 The last destination is saved and reused by F5/F7/F8 and Listener evaluation;
 there is no separate output selection in BASIC Settings. New ANSI windows wait
 for Enter after execution. Status, timing and error highlights stay in the editor.
-Input is not connected to the terminal viewer. BASIC Settings keeps Python
-locations and SDL graphics options. Disable SDL for terminal-only BASIC programs.
+Lispy mini-basic `INPUT` / `INPUT LINE` accepts replies in the selected output
+destination, including the ANSI viewer. The Python mini_basic subprocess adapter
+still has no interactive input bridge. BASIC Settings keeps Python locations
+and SDL graphics options. Disable SDL for terminal-only BASIC programs.
 The [real BBCSDL command](BBCSDL.md) uses its own window independently.
 
 ## Time the whole buffer

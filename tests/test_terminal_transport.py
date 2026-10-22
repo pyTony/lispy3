@@ -5,9 +5,12 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import socket
+import threading
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 import lispy_terminal as terminal
+import basic_io
 
 
 def which_of(*names):
@@ -15,6 +18,130 @@ def which_of(*names):
 
 
 class TerminalTransportTest(TestCase):
+    def test_closed_terminal_during_input_reports_error(self):
+        server, client = socket.socketpair()
+        try:
+            client.close()
+            with self.assertRaisesRegex(terminal.TerminalError, 'closed.*input'):
+                terminal._read_terminal_line(server, terminal._messages(server, interruptible=True))
+        finally:
+            server.close()
+
+    def test_terminal_eof_during_input_is_reported(self):
+        server, client = socket.socketpair()
+        try:
+            terminal._send_message(client, 'eof')
+            with self.assertRaises(EOFError):
+                terminal._read_terminal_line(server, terminal._messages(server, interruptible=True))
+        finally:
+            server.close()
+            client.close()
+
+    def test_viewer_input_notices_close_after_terminal_reset(self):
+        server, client = socket.socketpair()
+        try:
+            terminal._send_message(server, 'output', '\x1b[0m')
+            server.close()
+            keyboard = MagicMock()
+            keyboard.kbhit.return_value = False
+            with patch.object(sys.stdin, 'isatty', return_value=True), patch.object(sys, 'platform', 'win32'), patch.dict(sys.modules, {'msvcrt': keyboard}), patch.object(sys, 'stdout', MagicMock()):
+                with self.assertRaises(terminal._ViewerDisconnected):
+                    terminal._console_read_line(client)
+        finally:
+            server.close()
+            client.close()
+
+    def test_stop_interrupts_terminal_input_wait_on_worker(self):
+        from test_machine_stop import _FakeMachine
+        app = _FakeMachine()
+        requested, closed = threading.Event(), threading.Event()
+        threads = []
+        def launch(port, token, cwd):
+            def peer():
+                with socket.create_connection(('127.0.0.1', port), timeout=5) as connection:
+                    connection.sendall(token.encode('ascii')+b'\n')
+                    for message in terminal._messages(connection):
+                        if message['type'] == 'input':
+                            requested.set()
+                closed.set()
+            thread = threading.Thread(target=peer, daemon=True)
+            thread.start()
+            threads.append(thread)
+        def evaluate():
+            with terminal.ansi_terminal_output():
+                return basic_io.read_line()
+        with patch.object(terminal, 'launch_viewer', launch), patch.object(sys, '__stdout__', None):
+            app._start(lambda: app._eval_with_turtle(evaluate), app.done)
+            app.loop(seconds=0.3)
+            self.assertTrue(requested.is_set(), 'worker did not request terminal input')
+            app.stop()
+            self.assertTrue(app.loop(), 'Stop did not interrupt terminal input')
+        for thread in threads:
+            thread.join(timeout=2)
+        self.assertTrue(closed.is_set(), 'cancelled input left the connection open')
+        self.assertTrue(app.results[-1][1])
+
+    def test_real_viewer_returns_unicode_and_empty_input(self):
+        processes = []
+        def launch(port, token, cwd):
+            process = subprocess.Popen([sys.executable, terminal.__file__, '--connect', str(port), '--token', token],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=dict(os.environ, PYTHONIOENCODING='utf-8'))
+            process.stdin.write('héllo, world\n\n'.encode('utf-8'))
+            process.stdin.flush()
+            processes.append(process)
+            return process
+        try:
+            with patch.object(terminal, 'launch_viewer', launch), patch.object(sys, '__stdout__', None), contextlib.redirect_stdout(io.StringIO()), patch('builtins.input', side_effect=AssertionError('INPUT used the parent console')):
+                with terminal.ansi_terminal_output():
+                    print('Name? ', end='', flush=True)
+                    first = basic_io.read_line()
+                    print('Press Enter', end='', flush=True)
+                    second = basic_io.read_line()
+                    print('reply=['+first+']['+second+']')
+            stdout, stderr = processes[0].communicate(timeout=10)
+            self.assertEqual(processes[0].returncode, 0, stderr)
+            self.assertEqual((first, second), ('héllo, world', ''))
+            self.assertIn('reply=[héllo, world][]'.encode('utf-8'), stdout)
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
+
+    def test_existing_terminal_reads_from_its_input(self):
+        stream = io.StringIO()
+        stream.isatty = lambda: True
+        with patch.object(terminal, 'launch_viewer') as launch, contextlib.redirect_stdout(stream), patch.object(sys.stdin, 'isatty', return_value=False), patch('builtins.input', return_value='45'):
+            with terminal.ansi_terminal_output():
+                self.assertEqual(basic_io.read_line(), '45')
+            launch.assert_not_called()
+
+    def test_gui_basic_input_uses_real_viewer_instead_of_listener(self):
+        from test_machine_basic_buffer import _FakeMachine
+        from test_machine_args import machine
+        app = _FakeMachine('INPUT "LIMIT ",L\nPRINT ;L\nINPUT "PRESS ENTER",pause$\nPRINT "finished"')
+        processes = []
+        def launch(port, token, cwd):
+            process = subprocess.Popen([sys.executable, terminal.__file__, '--connect', str(port), '--token', token],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=dict(os.environ, PYTHONIOENCODING='utf-8'))
+            process.stdin.write(b'45\n\n')
+            process.stdin.flush()
+            processes.append(process)
+        try:
+            with patch.object(terminal, 'launch_viewer', launch), patch.object(sys, '__stdout__', None), contextlib.redirect_stdout(io.StringIO()), patch.object(machine.LispMachine, '_begin_basic_input', side_effect=AssertionError('ANSI INPUT opened Listener input')):
+                machine.LispMachine.eval_buffer(app, basic=True, terminal=True)
+            stdout, stderr = processes[0].communicate(timeout=10)
+            self.assertEqual(processes[0].returncode, 0, stderr)
+            self.assertIn(b'LIMIT ?45\nPRESS ENTER?finished\n', stdout)
+            self.assertNotIn('Error:', ''.join(app.lines))
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
+
     def test_real_viewer_receives_ansi_and_unicode(self):
         processes = []
         def launch(port, token, cwd):

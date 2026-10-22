@@ -92,7 +92,8 @@ INPUT "PRESS ENTER", pause$
 In the editor, type replies in the BASIC CLI and press Enter. Replies are
 program data, including text such as `RUN`. Stop interrupts an input wait.
 The standalone `python basic_repl.py` reads replies from its terminal. In the
-editor, replies use the BASIC CLI even when output goes to the ANSI terminal.
+editor, ANSI terminal output also reads replies in that terminal; Listener
+output reads replies in the BASIC CLI. Stop interrupts either input wait.
 
 As in the [BBC BASIC INPUT manual](https://www.bbcbasic.co.uk/bbcbasic/mancpm/bbckey2.html#input),
 a comma or semicolon after a prompt adds `?`; omitting the separator suppresses

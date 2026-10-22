@@ -3109,6 +3109,8 @@ class LispMachine(tk.Tk):
 
     def _basic_read_line(self):
         """Wait on the worker while Tk accepts a raw program reply; Stop stays active."""
+        if lispy_terminal.terminal_output_active():
+            return lispy_terminal.read_line()
         replies = queue.Queue()
         try:
             self._ui(LispMachine._begin_basic_input, self, replies)

@@ -491,3 +491,13 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
   preserve pending input and keep ANSI terminal output unchanged.
 - [x] Add failing stream regressions and a real Tk CLS/PRINT/INPUT test,
   including the following command and preservation of a typed command.
+
+### ANSI terminal input (2026-10-23)
+
+- [x] Add input requests and replies to the authenticated terminal viewer
+  transport. INPUT/INPUT LINE now read where Lispy BASIC output is displayed.
+- [x] Keep input waits interruptible by Stop; handle terminal EOF and closure,
+  and release the viewer if evaluation stops while it is waiting for a reply.
+- [x] Verify the actual viewer subprocess with Unicode and empty replies,
+  BASIC editor execution, terminal reuse, EOF, closure and worker cancellation.
+- [ ] Add interactive input bridging for the external Python mini_basic runner.
