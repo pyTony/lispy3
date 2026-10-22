@@ -1022,7 +1022,11 @@
                  (let [vars (list (bbc-var (bbc-p-variable)))]
                    (while (bbc-accept! :op ",") (bbc-push! vars (bbc-var (bbc-p-variable))))
                    (cons 'LOCAL vars)))
-                ((or (equal? value "END") (equal? value "STOP")) (bbc-advance!) (list 'END))
+                ((or (equal? value "END") (equal? value "STOP"))
+                 (if (and (equal? value "END")
+                          (bbc-tok? (nth bbc-toks (+ bbc-pos 1)) :kw "DEF"))
+                     (bbc-fail "END DEF is not BBC BASIC; return a function value with =expression; procedures use ENDPROC"))
+                 (bbc-advance!) (list 'END))
                 ((equal? value "ENDPROC") (bbc-advance!) (list 'ENDPROC))
                 ((equal? value "EXIT")
                  (bbc-advance!)

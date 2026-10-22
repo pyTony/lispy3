@@ -99,7 +99,7 @@ LANGUAGES, SYNTAX_ERRORS = SH.load_languages()
 DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"name": "Plain text"})
 
 
-def source_filetypes(languages=LANGUAGES):
+def source_filetypes(languages=LANGUAGES, *, tokenized=True):
     """Use the installed syntax definitions for source-file dialog filters."""
     groups = []
     for language in languages:
@@ -107,6 +107,8 @@ def source_filetypes(languages=LANGUAGES):
                                       for pattern in ('*'+extension, '*'+extension.upper())))
         if patterns:
             groups.append((language.name, patterns))
+    if tokenized:
+        groups.append(('Tokenised BBC BASIC', ('*.bbc', '*.BBC')))
     supported = tuple(dict.fromkeys(pattern for _, patterns in groups for pattern in patterns))
     return ([('Supported source files', supported)] if supported else []) + groups + [('All files', '*')]
 
@@ -639,7 +641,8 @@ class EditorTab(tk.Frame):
         if reference is None:
             self.app.listener_write(';; No quoted filename at cursor.\n', 'info')
             return 'break'
-        roots = [os.path.dirname(self.path)] if self.path else []
+        origin = buffer_source_path(self)
+        roots = [os.path.dirname(origin)] if origin else []
         roots += [os.getcwd(), APP_DIR, L.LISP_DIR]
         for root in roots:
             path = os.path.abspath(os.path.join(root, reference))
@@ -1101,16 +1104,35 @@ class SearchBar(tk.Frame):
 # =============================================================================
 # Main application
 # =============================================================================
-def read_file_arg(arg: str):
+def buffer_source_path(tab):
+    path = getattr(tab, 'path', None)
+    if isinstance(path, str) and path:
+        return path
+    origin = getattr(tab, 'source_path', None)
+    return origin if isinstance(origin, str) else None
+
+
+def source_arg_path(arg):
+    path = os.path.abspath(arg)
+    if not os.path.dirname(arg) and not os.path.exists(path):
+        path = os.path.join(L.LISP_DIR, 'programs', arg)
+    return path
+
+
+def read_file_arg(arg: str, settings=None):
     """Return (buffer name, content, path) for a file named on the command line.
 
     A bare file name that is not in the current folder means the file in
     lisp/programs. A file that does not exist yet gives an empty buffer that saves to
-    that path; any other read error is raised as OSError.
+    that path. Tokenised .bbc input returns an unsaved .bas buffer; decoder
+    failures raise RuntimeError and text read failures raise OSError.
     """
-    path = os.path.abspath(arg)
-    if not os.path.dirname(arg) and not os.path.exists(path):
-        path = os.path.join(L.LISP_DIR,"programs", arg)
+    path = source_arg_path(arg)
+    if os.path.splitext(path)[1].lower() == '.bbc':
+        settings = settings or {}
+        content = BR.detokenize_bbc(path, executable=settings.get('basic_python'),
+                                   package_root=settings.get('basic_directory', ''))
+        return os.path.splitext(os.path.basename(path))[0]+'.bas', content, None
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -1482,11 +1504,13 @@ class LispMachine(tk.Tk):
         errors = []
         for arg in files:
             try:
-                name, content, path = read_file_arg(arg)
-            except (OSError, UnicodeDecodeError) as error:
+                name, content, path = read_file_arg(arg, self.settings if isinstance(getattr(self, 'settings', None), dict) else None)
+            except (OSError, UnicodeDecodeError, RuntimeError) as error:
                 errors.append(f'{arg}: {error}')
                 continue
-            self.new_buffer(name, content, path=path)
+            tab = self.new_buffer(name, content, path=path)
+            if os.path.splitext(arg)[1].lower() == '.bbc':
+                tab.source_path = source_arg_path(arg)
         if not self.tabs:
             if self.startup_show_buffer.get():
                 name, content, path = read_startup()
@@ -1999,8 +2023,8 @@ class LispMachine(tk.Tk):
 
     def _file_dialog_dir(self, tab=None):
         """Where Open and Save as start: the buffer's own folder, else lisp/."""
-        if tab is not None and tab.path:
-            return os.path.dirname(tab.path)
+        if tab is not None and buffer_source_path(tab):
+            return os.path.dirname(buffer_source_path(tab))
         os.makedirs(L.LISP_DIR, exist_ok=True)
         return L.LISP_DIR
 
@@ -2014,17 +2038,26 @@ class LispMachine(tk.Tk):
         self._open_source_path(path)
 
     def _open_source_path(self, path):
+        path = os.path.abspath(path)
         for tab in self.tabs.values():
-            if tab.path and os.path.normcase(os.path.abspath(tab.path)) == os.path.normcase(os.path.abspath(path)):
+            origin = buffer_source_path(tab)
+            if origin and os.path.normcase(os.path.abspath(origin)) == os.path.normcase(path):
                 self.notebook.select(tab)
                 return
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except (OSError, UnicodeError) as e:
-            messagebox.showerror("Open failed", str(e))
+            if os.path.splitext(path)[1].lower() == '.bbc':
+                name, content, target = read_file_arg(path, self.settings)
+            else:
+                with open(path, 'r', encoding='utf-8') as source:
+                    content = source.read()
+                name, target = os.path.basename(path), path
+        except (OSError, UnicodeError, RuntimeError) as error:
+            messagebox.showerror('Open failed', str(error))
             return
-        self.new_buffer(os.path.basename(path), content, path=path)
+        tab = self.new_buffer(name, content, path=target)
+        if target is None:
+            tab.source_path = path
+            self.listener_write(f';; Detokenised {path}; Save As .bas to keep editable text.\n', 'info')
 
     def save_current(self):
         tab = self.current_tab()
@@ -2038,6 +2071,9 @@ class LispMachine(tk.Tk):
         return True
 
     def _save_tab_to_path(self, tab, path):
+        if os.path.splitext(path)[1].lower() == '.bbc':
+            messagebox.showerror('Save failed', 'BBC files contain tokenised BASIC. Save editable text as .bas; native tokenised output is not supported.')
+            return False
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(tab.get_content())
@@ -2058,7 +2094,7 @@ class LispMachine(tk.Tk):
             initialdir=self._file_dialog_dir(tab),
             initialfile=os.path.basename(tab.path) if tab.path else re.sub(r' <\d+>$', '', tab.name),
             defaultextension=os.path.splitext(tab.path or re.sub(r' <\d+>$', '', tab.name))[1] or '.lisp',
-            filetypes=source_filetypes())
+            filetypes=source_filetypes(tokenized=False))
         if not path:
             return False
         if not LispMachine._save_tab_to_path(self, tab, path):
@@ -2406,7 +2442,8 @@ class LispMachine(tk.Tk):
             return
         source = tab.get_content()
         settings = dict(self.settings)
-        cwd = os.path.dirname(tab.path) if tab.path else APP_DIR
+        origin = buffer_source_path(tab)
+        cwd = os.path.dirname(origin) if origin else APP_DIR
         def run():
             try:
                 self.listener_write(';; Running real BBC BASIC for SDL in its own window.\n', 'info')
@@ -2526,7 +2563,8 @@ class LispMachine(tk.Tk):
         pygame = graphics is not None and graphics.get()
         timing = getattr(self, 'time_buffer_runs', None)
         timed = timing is not None and timing.get()
-        cwd = os.path.dirname(os.path.abspath(tab.path)) if getattr(tab, 'path', None) else os.getcwd()
+        origin = buffer_source_path(tab)
+        cwd = os.path.dirname(os.path.abspath(origin)) if origin else os.getcwd()
         filename = getattr(tab, 'path', None) or tab.name
         label = 'Python' if python_source else 'Python mini_basic'
 
