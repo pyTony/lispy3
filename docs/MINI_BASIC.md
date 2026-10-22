@@ -58,11 +58,17 @@ lispy3's Lisp loader.
 | Output | PRINT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
-| Jumps | Labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE |
+| Jumps | Labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE; implicit `IF condition THEN 100 ELSE 200` |
 | Data | DATA/READ/RESTORE; DIM arrays with inclusive upper bounds |
 | Timing | Assignable TIME in whole centiseconds |
 
 PROC/FN parameters and LOCAL variables restore their previous values on return.
+
+A numeric destination immediately after single-line `THEN` or `ELSE` is an
+implicit `GOTO`, as in [BBC BASIC](https://www.bbcbasic.co.uk/bbcbasic/manual/bbckey4.html#then).
+For example, `10 IF n<3 THEN 50` jumps to line 50 when true and otherwise
+continues to the next line. Unknown destinations report the normal GOTO error.
+Bare numeric statements elsewhere remain invalid.
 Use structured exits where possible. Jumps into inactive structured bodies are
 outside the supported control-flow model. BBCSDL's shared-stack edge cases do
 not imply equivalent behavior here; see the
