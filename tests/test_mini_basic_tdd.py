@@ -8,7 +8,7 @@ Run: python -m pytest tests/test_mini_basic_tdd.py -q
 
 Priority and progress are tracked in TODO.md. Nested jumps, numbered CASE,
 and the subroutine acceptance tests are now green.
-Numeric-label variants were run on BBCSDL 1.44a; see compare/reference/README.md.
+Numeric-label variants were run on BBCSDL 1.44a; see basic/reference/README.md.
 The immediate-exit case does not establish compatible loop-stack cleanup.
 """
 from test_mini_basic_reader import ReaderTestCase

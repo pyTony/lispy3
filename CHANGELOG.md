@@ -99,7 +99,7 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   and source-label preservation.
 - mini-basic: capture all 14 jump/subroutine reference cases on BBCSDL 1.44a
   using the supplied tokenised fixture in isolated processes. Raw results and
-  documented stack restrictions are in `compare/reference/`; successful
+  documented stack restrictions are in `basic/reference/`; successful
   exit-only cases are not treated as proof of compatible stack cleanup.
 - mini-basic: fix GOTO label lookup within active structured bodies, including
   FOR, WHILE, IF / ELSE, REPEAT and CASE. Jumps preserve the surrounding

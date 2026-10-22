@@ -36,9 +36,9 @@ What the comparison shows:
 
 ## BBC BASIC text
 
-[`basic/`](basic) holds BBC BASIC programs as text, read by the reader in
-`lisp/mini-basic.lisp` (lispy3 only for now) with `(bbc-load "compare/basic/structure.bas")`.
-`(pretty-print (bbc-expand (slurp "compare/basic/fact.bas")))` shows the macro
+[`basic/examples/`](../basic/examples) holds BBC BASIC programs as text, read by the reader in
+`lisp/mini-basic.lisp` (lispy3 only for now) with `(bbc-load "basic/examples/structure.bas")`.
+`(pretty-print (bbc-expand (slurp "basic/examples/fact.bas")))` shows the macro
 forms a program becomes. Their `.out` files were checked against
 `python -m mini_basic` (each file starts with `REM dialect: bbc`, so mini_basic picks its bbc dialect on its own). `structure.bas` matches exactly, and its output was also checked on real BBC BASIC. Three things
 differ in mini_basic and follow BBC BASIC here:
@@ -49,16 +49,16 @@ differ in mini_basic and follow BBC BASIC here:
 
 ## Speed against mini_basic
 
-[`bench/`](bench) holds two programs for a first timing against
+[`basic/bench/`](../basic/bench) holds two programs for a first timing against
 `python -m mini_basic`. Wall-clock seconds on one machine; mini_basic's time
 includes its start-up of about 0.1 s:
 
 | Program | mini_basic | lispy3 | SBCL | Clojure |
 |---|---|---|---|---|
-| [`primes.bas`](bench/primes.bas): primes below 5000 by trial division | 5.1 | 2.8 | 0.15 | 1.1 |
-| [`fib.bas`](bench/fib.bas): recursive `FNfib(22)` | 0.12 | 0.02 | 0.15 | 1.9 |
+| [`primes.bas`](../basic/bench/primes.bas): primes below 5000 by trial division | 5.1 | 2.8 | 0.15 | 1.1 |
+| [`fib.bas`](../basic/bench/fib.bas): recursive `FNfib(22)` | 0.12 | 0.02 | 0.15 | 1.9 |
 
-The SBCL and Clojure times are `(time (run-sbcl (slurp "compare/bench/primes.bas")))`
+The SBCL and Clojure times are `(time (run-sbcl (slurp "basic/bench/primes.bas")))`
 from lispy3, so they include starting the other Lisp: about 0.1 s for SBCL
 and 1 s for Clojure. mini_basic and lispy3 remember the results of a pure
 `DEF FN`, so `FNfib` runs once for each `n` there; without the cache lispy3
@@ -66,11 +66,11 @@ takes 2.5 s. The classic sieve (mini_basic's `examples/SIEVE.bbc`) needs
 `DIM`, `GOTO` and `TIME`, which the reader does not have yet.
 
 ```lisp
-(time (run-lispy (slurp "compare/bench/primes.bas")))   ; also run-sbcl, run-clojure
+(time (run-lispy (slurp "basic/bench/primes.bas")))   ; also run-sbcl, run-clojure
 ```
 
 ```sh
-cd ../mini_basic && time python -m mini_basic -q ../lispy3/compare/bench/primes.bas
+cd ../mini_basic && time python -m mini_basic -q ../lispy3/basic/bench/primes.bas
 ```
 
 ## Running
@@ -79,8 +79,8 @@ From lispy3, with `(load "mini-basic")`, one BBC BASIC program in all three Lisp
 Each takes the program text; `slurp` reads a file:
 
 ```lisp
-(run-lispy (slurp "compare/basic/structure.bas"))
-(run-sbcl (slurp "compare/basic/structure.bas"))
+(run-lispy (slurp "basic/examples/structure.bas"))
+(run-sbcl (slurp "basic/examples/structure.bas"))
 (run-clojure "FOR i=1 TO 3 : PRINT i : NEXT")
 ```
 

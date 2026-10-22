@@ -29,7 +29,7 @@ class TerminalMandelbrotTest(LispyTestCase):
     def load_renderers(self):
         lispy3.load_workspace(str(PROGRAMS/'mandelbrot-terminal-lib.lisp'))
         self.ev('(import (only mini-basic bbc-load bbc-run))')
-        self.ev('(bbc-load "'+(PROGRAMS/'mandelbrot-terminal.bas').as_posix()+'")')
+        self.ev('(bbc-load "'+(Path(REPO_DIR)/'basic'/'examples'/'mandelbrot-terminal.bas').as_posix()+'")')
 
     def render(self, language, colour):
         if language == 'lisp':
