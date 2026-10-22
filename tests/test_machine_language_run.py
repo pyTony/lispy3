@@ -76,4 +76,4 @@ class LanguageRunTest(TestCase):
             getattr(machine.LispMachine, name)(app)
             app.basic_output.set.assert_called_once_with(destination)
             app._save_basic_settings.assert_called_once()
-            app.eval_buffer.assert_called_once_with(terminal=terminal)
+            app.eval_buffer.assert_called_once_with(terminal=terminal, fresh=True)
