@@ -671,8 +671,8 @@ class EditorTab(tk.Frame):
         t.bind("<<Modified>>", self._on_modified)
         # Widget bindings precede Tk Text's class bindings and global bindings.
         t.bind("<Control-o>", lambda e: (self.app.open_file(), 'break')[1])
-        t.bind("<Control-s>", lambda e: (self.app.save_current(), 'break')[1])
-        t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(), 'break')[1])
+        t.bind("<Control-s>", lambda e: (self.app.save_current(confirm=True), 'break')[1])
+        t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(confirm=True), 'break')[1])
         t.bind("<Control-w>", lambda e: (self.app.close_current(), 'break')[1])
 
         t.bind('<F4>', self._open_file_at_cursor)
@@ -1690,8 +1690,8 @@ class LispMachine(tk.Tk):
         file_m.add_command(label="New buffer",       accelerator="Ctrl+N", command=self.new_buffer_dialog)
         file_m.add_command(label="Load library silently…", command=self.load_library_silently)
         file_m.add_command(label="Open…",            accelerator="Ctrl+O", command=self.open_file)
-        file_m.add_command(label="Save",             accelerator="Ctrl+S", command=self.save_current)
-        file_m.add_command(label="Save as…",         accelerator="Ctrl+Shift+S", command=self.save_current_as)
+        file_m.add_command(label="Save",             accelerator="Ctrl+S", command=lambda: self.save_current(confirm=True))
+        file_m.add_command(label="Save as…",         accelerator="Ctrl+Shift+S", command=lambda: self.save_current_as(confirm=True))
         file_m.add_separator()
         file_m.add_command(label="Close buffer",     accelerator="Ctrl+W", command=self.close_current)
         file_m.add_command(label="Quit",             accelerator="Ctrl+Q", command=self._on_close)
@@ -2031,8 +2031,10 @@ class LispMachine(tk.Tk):
         # Handle Open at the widget first, including while BASIC waits for INPUT.
         for widget in (self.listener_text, self.listener_input, self.inspector):
             widget.bind("<Control-o>", lambda e: (self.open_file(), 'break')[1])
-        self.bind_all("<Control-s>", lambda e: (self.save_current(), 'break')[1])
-        self.bind_all("<Control-Shift-S>", lambda e: (self.save_current_as(), 'break')[1])
+            widget.bind("<Control-s>", lambda e: (self.save_current(confirm=True), 'break')[1])
+            widget.bind("<Control-Shift-S>", lambda e: (self.save_current_as(confirm=True), 'break')[1])
+        self.bind_all("<Control-s>", lambda e: (self.save_current(confirm=True), 'break')[1])
+        self.bind_all("<Control-Shift-S>", lambda e: (self.save_current_as(confirm=True), 'break')[1])
         self.bind_all("<Control-w>", lambda e: (self.close_current(), 'break')[1])
         self.bind_all("<Control-q>", lambda e: self._on_close())
         self.bind_all("<Control-e>", lambda e: self._focus_listener())
@@ -2154,15 +2156,17 @@ class LispMachine(tk.Tk):
             tab.source_path = path
             self.listener_write(f';; Detokenised {path}; Save As .bas to keep editable text.\n', 'info')
 
-    def save_current(self):
+    def save_current(self, confirm=False):
         tab = self.current_tab()
         if not tab:
             return False
         if not tab.path:
-            return self.save_current_as()
+            return self.save_current_as(confirm=confirm)
         if not LispMachine._save_tab_to_path(self, tab, tab.path):
             return False
         self._refresh_buffer_list()
+        if confirm:
+            messagebox.showinfo('File saved', f'Saved to:\n{os.path.abspath(tab.path)}', parent=self)
         return True
 
     def _save_tab_to_path(self, tab, path):
@@ -2181,7 +2185,7 @@ class LispMachine(tk.Tk):
             messagebox.showerror("Save failed", str(e))
             return False
 
-    def save_current_as(self):
+    def save_current_as(self, confirm=False):
         tab = self.current_tab()
         if not tab:
             return False
@@ -2209,6 +2213,8 @@ class LispMachine(tk.Tk):
         self.notebook.tab(tab, text=tab.name)
         tab.set_language()
         self._refresh_buffer_list()
+        if confirm:
+            messagebox.showinfo('File saved', f'Saved to:\n{os.path.abspath(tab.path)}', parent=self)
         return True
 
     # =========================================================================

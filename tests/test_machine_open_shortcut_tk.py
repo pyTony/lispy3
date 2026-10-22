@@ -8,7 +8,8 @@ from unittest import TestCase
 class OpenShortcutTkTest(TestCase):
     def test_ctrl_o_opens_once_without_editing_text(self):
         script = r'''
-import importlib.machinery, importlib.util, sys, tkinter as tk
+import importlib.machinery, importlib.util, sys, tkinter as tk, tempfile
+from pathlib import Path
 from unittest.mock import patch
 loader=importlib.machinery.SourceFileLoader('machine_probe','lispy_machine.pyw')
 spec=importlib.util.spec_from_loader(loader.name,loader)
@@ -51,6 +52,34 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         app._select_listener_mode()
         app.listener_input.insert(0,'pending Lisp input')
         check(app.listener_input)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'saved.bas'
+            tab.path=str(path)
+            for widget in (tab.text,app.listener_text,app.listener_input,app.inspector):
+                widget.focus_force()
+                app.update()
+                before=tab.get_content()
+                tab.dirty=True
+                def saved(title,message,**kwargs):
+                    assert title == 'File saved', title
+                    assert str(path.resolve()) in message, message
+                    assert path.read_text(encoding='utf-8') == before
+                with patch.object(module.messagebox,'showinfo',side_effect=saved) as notice:
+                    widget.event_generate('<Control-s>')
+                    app.update()
+                    assert notice.call_count == 1, (str(widget),notice.call_count)
+                assert not tab.dirty
+                assert tab.get_content() == before
+            tab.path=None
+            path=Path(directory)/'first-save.bas'
+            with patch.object(module.filedialog,'asksaveasfilename',return_value=str(path)) as choose, patch.object(module.messagebox,'showinfo',side_effect=saved) as notice:
+                tab.text.focus_force()
+                app.update()
+                tab.text.event_generate('<Control-s>')
+                app.update()
+                assert choose.call_count == 1
+                assert notice.call_count == 1
+                assert tab.path == str(path)
     finally:
         app.basic_repl.close()
         app.destroy()

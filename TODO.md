@@ -509,3 +509,12 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
   Open in the Listener entry and Inspector as well.
 - [x] Reproduce the missing widget binding and unwanted newline first; verify
   actual Tk key events open the dialog once without modifying text.
+
+### Visible save confirmation (2026-10-23)
+
+- [x] Confirm successful Ctrl+S, Ctrl+Shift+S and File-menu saves with a
+  File saved dialog showing the full destination path. Confirm only after the
+  file has been written; cancelled/failed saves never report success.
+- [x] Bind save shortcuts directly on Listener and Inspector widgets too.
+  Verify actual Ctrl+S writes the file once and confirms once without altering
+  buffer text, including the first save of an unnamed buffer.
