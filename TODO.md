@@ -445,3 +445,11 @@ Tokenised input validation: exact staged tree passed 535 tests, 4 skipped,
 Workspace validation: exact staged implementation passed **595 tests**,
 **4 skipped**, and **355 subtests**. GUI checks use headless editor harnesses;
 no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
+
+### Conditional jumps and local update detection (2026-10-22)
+
+- [x] Reproduce six failures for implicit THEN/ELSE numeric jumps; translate to existing GOTO machinery. BASIC parser/control-flow suite: 98 passed.
+- [x] Help > Update detects changed runtime source contents since startup, including local edits, and offers restart even when pull fails. Existing unsaved-buffer safeguards remain.
+- [x] Update/startup/control-flow integration: 61 passed, 3 subtests passed.
+
+- [x] Update refreshes externally changed open text buffers without evaluating them; dirty buffers require confirmation. Tokenized imports remain editable copies saved separately.

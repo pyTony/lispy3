@@ -899,6 +899,14 @@
           (bbc-push! stmts (bbc-p-statement))))
     stmts))
 
+(define (bbc-p-if-branch)
+  ;; A number immediately after THEN/ELSE is an implicit GOTO, not a
+  ;; general numeric statement. Keep the normal jump/loop continuation code.
+  (let [jump (if (bbc-at? :num #f)
+                (list (list 'GOTO (nth (bbc-advance!) 1)))
+                (list))]
+    (append jump (bbc-p-line-stmts))))
+
 (define (bbc-p-if)
   (let [test (bbc-cond (bbc-p-expr))]
     (bbc-accept! :kw "THEN")
@@ -911,9 +919,9 @@
               (begin
                 (bbc-expect! :kw "ENDIF" "ENDIF")
                 (append (list 'IF test) then-part))))
-        (let [then-part (bbc-p-line-stmts)]
+        (let [then-part (bbc-p-if-branch)]
           (if (bbc-accept! :kw "ELSE")
-              (append (list 'IF test) then-part (list 'ELSE) (bbc-p-line-stmts))
+              (append (list 'IF test) then-part (list 'ELSE) (bbc-p-if-branch))
               (append (list 'IF test) then-part))))))
 
 (define (bbc-p-for)

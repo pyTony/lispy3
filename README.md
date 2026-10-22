@@ -591,3 +591,8 @@ removes them. Legacy `load` still uses the shared workspace. Registered cleanup
 releases managed resources; external side effects are not undone. See the
 [workspace and module guide](docs/WORKSPACES.md) for scope, Python import analogies,
 cleanup limits, and comparison with Racket, Clojure and Common Lisp.
+
+Help → Update also checks local Python/runtime-library changes since startup,
+even if Git reports no new commits or pull fails, and offers a restart. It
+refreshes open text-file buffers changed on disk; unsaved edits require confirmation
+before replacement. Refreshing a buffer does not execute or reload its definitions.

@@ -28,6 +28,8 @@ Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
       files, startup.lisp beside the editor opens by default; configure it in Startup Settings.
 """
 import io
+import hashlib
+from pathlib import Path
 import contextlib
 import ctypes
 import json
@@ -174,6 +176,22 @@ def color_code(widget, start: str, text: str):
         widget.tag_add(tag, f"{start}+{a}c", f"{start}+{b}c")
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def runtime_fingerprint(folder=APP_DIR):
+    """Content of runtime sources, independent of Git or modification times."""
+    root = Path(folder)
+    paths = set(root.glob('*.py')) | set(root.glob('*.pyw'))
+    paths |= set((root / 'lisp').glob('*.lisp')) | set((root / 'lisp').glob('*.sld'))
+    paths |= set((root / 'syntax').glob('*.json'))
+    result = {}
+    for path in paths:
+        try:
+            result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            result[path.relative_to(root).as_posix()] = None
+    return result
+
+RUNTIME_FINGERPRINT = runtime_fingerprint()
 
 __version__ = "1.0"
 
@@ -546,6 +564,7 @@ class EditorTab(tk.Frame):
         self.app = app
         self.name = name
         self.path = path
+        self.disk_content = content if path else None
         self.language = DEFAULT_LANGUAGE
         self.dirty = False
         self._highlight_job = None
@@ -2090,6 +2109,7 @@ class LispMachine(tk.Tk):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(tab.get_content())
+            tab.disk_content = tab.get_content()
             tab.dirty = False
             tab.text.edit_modified(False)
             self.status_right.configure(text=f"saved: {path}")
@@ -3308,6 +3328,30 @@ class LispMachine(tk.Tk):
         tab.text.tag_remove("search_current", "1.0", "end")
         tab.text.tag_remove("sel",            "1.0", "end")
 
+    def _refresh_changed_buffers(self):
+        """Refresh opened text files; never evaluate them or overwrite dirty edits silently."""
+        for tab in list(self.tabs.values()):
+            if not tab.path or getattr(tab, 'disk_content', None) is None:
+                continue
+            try:
+                with open(tab.path, encoding='utf-8') as source:
+                    content = source.read()
+            except (OSError, UnicodeError) as error:
+                self.listener_write(f';; Cannot check {tab.path}: {error}\n', 'error')
+                continue
+            if content == tab.disk_content:
+                continue
+            if tab.dirty and not messagebox.askyesno('File changed on disk',
+                    f'{tab.path}\n\nThis buffer also has unsaved edits. Replace them with the disk version?'):
+                continue
+            cursor = tab.text.index('insert')
+            tab.set_content(content)
+            tab.text.mark_set('insert', cursor)
+            tab.dirty = False
+            tab.disk_content = content
+            self.listener_write(f';; Reloaded buffer from disk: {tab.path}\n', 'info')
+        self._refresh_buffer_list()
+
     def _update(self):
         """Help > Update: git pull in the program's folder, without blocking the window."""
         dirty = [t.name for t in self.tabs.values() if t.dirty]
@@ -3327,16 +3371,23 @@ class LispMachine(tk.Tk):
         threading.Thread(target=work, daemon=True).start()
 
     def _update_done(self, result: str, output: str):
+        LispMachine._refresh_changed_buffers(self)
         if output:
             self.listener_write(output + "\n", "error" if result == "failed" else "info")
         if result == "failed":
             messagebox.showerror("Update failed", output or "git pull failed.")
-            return
+        current = runtime_fingerprint()
+        changed = sorted(name for name in current.keys() | RUNTIME_FINGERPRINT.keys()
+                         if current.get(name) != RUNTIME_FINGERPRINT.get(name))
+        if changed:
+            self.update_pending = True
+            self.listener_write(';; Runtime files changed on disk:\n  ' + '\n  '.join(changed) + '\n', 'info')
         if result == "updated":
             self.update_pending = True
         if not self.update_pending:
-            messagebox.showinfo("Update", "Lispy3 is already up to date.")
-        elif messagebox.askyesno("Update", "Lispy3 was updated. The new version is used "
+            if result != "failed":
+                messagebox.showinfo("Update", "Lispy3 is already up to date.")
+        elif messagebox.askyesno("Update", "Lispy3 runtime files have changed. The new version is used "
                                  "after a restart.\n\nRestart Lispy3 Machine now?"):
             self.restart()
         else:
