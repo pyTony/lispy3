@@ -499,17 +499,47 @@ class _ListenerWriter(io.TextIOBase):
     """A stdout replacement that streams text straight into the Listener pane."""
     def __init__(self, app):
         self.app = app
+        self._pending_control = ''
+        self._home_after_cls = False
 
     def write(self, s):                       # noqa: D401
-        if s:
-            self.app._ui_post(self.app.listener_write, s, "result")
+        data = self._pending_control + s
+        self._pending_control = ''
+        text = []
+        while data:
+            if data.startswith('\x1b[2J'):
+                if text:
+                    self.app._ui_post(self.app.listener_write, ''.join(text), 'result')
+                    text.clear()
+                self.app._ui_post(self.app._clear_listener_screen)
+                self._home_after_cls = True
+                data = data[4:]
+            elif self._home_after_cls and data.startswith('\x1b[H'):
+                self._home_after_cls = False
+                data = data[3:]
+            elif '\x1b[2J'.startswith(data) or (self._home_after_cls and '\x1b[H'.startswith(data)):
+                self._pending_control = data
+                break
+            else:
+                # Keep unrelated ANSI and ordinary output unchanged. Only the
+                # clear-screen/home pair emitted by CLS is interpreted here.
+                end = data.find('\x1b', 1)
+                if end < 0:
+                    end = len(data)
+                text.append(data[:end])
+                self._home_after_cls = False
+                data = data[end:]
+        if text:
+            self.app._ui_post(self.app.listener_write, ''.join(text), 'result')
         return len(s)
 
     def writable(self):
         return True
 
     def flush(self):
-        pass
+        if self._pending_control:
+            self.app._ui_post(self.app.listener_write, self._pending_control, 'result')
+            self._pending_control = ''
         
 # =============================================================================
 # Running Lisp off the Tk thread
@@ -3458,6 +3488,18 @@ class LispMachine(tk.Tk):
         tab = self.new_buffer("listener.lisp", code)
         tab.dirty = True
         self._refresh_buffer_list()
+
+    def _clear_listener_screen(self):
+        """Program CLS clears output without injecting a prompt into a running job."""
+        t = self.listener_text
+        t.configure(state='normal')
+        if getattr(self, '_basic_input_queue', None) is not None:
+            end = 'input'
+        else:
+            end = 'prompt_start' if self.console_ready else 'end'
+        t.delete('1.0', end)
+        if not self.plain_repl.get():
+            t.configure(state='disabled')
 
     def clear_listener(self):
         self.listener_text.configure(state="normal")

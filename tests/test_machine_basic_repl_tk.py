@@ -102,6 +102,34 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
             app.update(); time.sleep(.005)
         assert app._job is None
         assert 'after stop\n' in app.listener_text.get('1.0','end')
+        tab.text.delete('1.0','end')
+        tab.text.insert('1.0','PRINT "before CLS"\nCLS\nPRINT "after CLS"\nINPUT "Enter: " pause$\n')
+        app.eval_buffer()
+        deadline=time.monotonic()+10
+        while getattr(app,'_basic_input_queue',None) is None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert getattr(app,'_basic_input_queue',None) is not None
+        output=app.listener_text.get('1.0','end-1c')
+        assert output == 'after CLS\nEnter: ', repr(output)
+        app._console_return()
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None
+        output=app.listener_text.get('1.0','end-1c')
+        assert output == 'after CLS\nEnter: \nBASIC> ', repr(output)
+        app._set_console_input('PRINT "next command"')
+        app._console_return()
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None
+        assert 'next command\n' in app.listener_text.get('1.0','end')
+        app._set_console_input('PRINT "pending command"')
+        writer=module._ListenerWriter(app)
+        writer.write('\x1b[2J\x1b[H')
+        assert app.listener_text.get('1.0','end-1c') == 'BASIC> PRINT "pending command"'
+        assert app.console_ready
         app.listener_mode.set('lisp')
         app._select_listener_mode()
         assert app._prompt_text() == 'lispy3>'

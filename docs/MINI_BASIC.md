@@ -109,8 +109,10 @@ File-channel statements such as `INPUT#` and `PRINT#` remain separate work.
 ## Terminal output: VDU and ANSI
 
 These commands target an ANSI-capable terminal. The Lispy Machine's Tk Listener
-captures text but does not emulate a terminal, so control bytes will not produce
-the same screen there. Windows console configuration also affects rendering.
+handles `CLS` by clearing previous output; it preserves any active prompt and
+typed input. It does not otherwise emulate a terminal, so other control bytes
+will not produce the same screen there. Windows console configuration also
+affects rendering.
 
 VDU and ANSI are separate languages. **VDU interprets BBC control bytes and
 translates the supported operations; ANSI sends raw bytes/strings unchanged.**

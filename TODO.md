@@ -483,3 +483,11 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [ ] Extend INPUT to interleaved prompts and TAB/SPC positioning.
 - [ ] Add file-channel I/O (OPENIN/OPENOUT, CLOSE#, INPUT#/PRINT# and EOF#),
   starting from failing tests for a small documented subset.
+
+### BASIC CLS in the Listener (2026-10-22)
+
+- [x] Interpret CLS clear/home output in the Tk Listener, including sequences
+  split across writes. Clear previous output without injecting an extra prompt;
+  preserve pending input and keep ANSI terminal output unchanged.
+- [x] Add failing stream regressions and a real Tk CLS/PRINT/INPUT test,
+  including the following command and preservation of a typed command.
