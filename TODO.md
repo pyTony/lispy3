@@ -427,3 +427,21 @@ Tokenised input validation: exact staged tree passed 535 tests, 4 skipped,
 - [x] Reproduce misleading next-line DEF error after END DEF. Reject this
   non-BBC syntax at its own source line, explain =expression / ENDPROC, and
   retain numbered recursive FN definitions using their normal value return.
+
+### Workspace and module lifecycle (2026-10-22)
+
+- [x] Establish failing state-restoration, stale-variable and fresh-run tests.
+- [x] Add independent environments, macros and module registries with exact
+  object-preserving push/pop, New, labels, saved depth and managed cleanup.
+- [x] Fresh program runs on F6/Shift+F6; current-workspace Eval on F5,
+  Ctrl+Shift+Enter and Listener. Preserve buffers and GUI dispatch/Stop hooks.
+- [x] Explicit private .lisp modules through import; prefix/only/rename,
+  unload/reload, staged binding refresh, dependency checks and cleanup hooks.
+- [x] Keep legacy load shared and document side effects, copied references,
+  host graphics limits, Python import analogies and other Lisp practices.
+- [ ] Disk serialization of workspace stacks and module registries.
+- [ ] Automatic dependency-graph reload and host-resource suspension.
+
+Workspace validation: exact staged implementation passed **595 tests**,
+**4 skipped**, and **355 subtests**. GUI checks use headless editor harnesses;
+no visual desktop smoke test was performed. Local SDL/demo edits were excluded.

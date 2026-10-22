@@ -1,8 +1,9 @@
 # ANSI terminal output and buffer timing
 
-In Lispy Machine, choose **Eval → Run buffer → ANSI terminal (Shift+F6)** to send a
-buffer's printed output to a real terminal. Evaluation uses the current Lisp
-workspace, so definitions and changes to existing variables remain available.
+In Lispy Machine, choose **Eval → Run program → ANSI terminal (Shift+F6)** to send a
+program's printed output to a real terminal. F6/Shift+F6 start a fresh Lisp
+workspace; definitions and results remain available afterward for inspection.
+Use F5, Ctrl+Shift+Enter or Listener input to evaluate in the current workspace.
 Results, errors and Inspector updates still appear in the GUI.
 
 Programs can request the same output destination:
@@ -48,8 +49,8 @@ The [real BBCSDL command](BBCSDL.md) uses its own window independently.
 
 ## Time the whole buffer
 
-Enable **Eval → Time buffer runs**, then use either **Run buffer → Listener (F6)**
-or **Run buffer → ANSI terminal (Shift+F6)**. The Listener reports, for example:
+Enable **Eval → Time buffer runs**, then use either **Run program → Listener (F6)**
+or **Run program → ANSI terminal (Shift+F6)**. The Listener reports, for example:
 
 ```text
 ;; Buffer elapsed time: 0.946 s
@@ -73,3 +74,5 @@ Use Lisp call syntax for paths; Python's `r"..."` prefix is not supported:
 ```lisp
 (load """C:\Users\admin\lispy3-main\lisp\programs\mandelbrot-basic-terminal-colour.lisp""")
 ```
+
+See [workspaces](WORKSPACES.md) for Run/Eval isolation and explicit push/pop.

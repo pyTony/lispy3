@@ -7,7 +7,8 @@ Features
   * Persistent Listener (REPL) with history, coloured output
   * Inspector pane showing the last evaluated value (pretty-printed)
   * F5 / Ctrl+Enter : run Lisp form or BASIC/Python selection/current line
-  * F6 / Ctrl+Shift+Enter : run buffer in Listener; Shift+F6 in ANSI terminal
+  * F6 / Shift+F6 : fresh program run in Listener / ANSI terminal
+  * Ctrl+Shift+Enter : evaluate buffer in current workspace
   * F7 / F8 : Python mini_basic selection/current line / whole BASIC buffer
   * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
@@ -225,7 +226,8 @@ def about_text(folder: str = APP_DIR) -> str:
         + ABOUT_CREDITS + "\n\n"
         "F1  Lispy guide\n"
         "F5  run form / selection / line\n"
-        "F6  run buffer in Listener; Shift+F6 in ANSI terminal\n"
+        "F6  fresh program in Listener; Shift+F6 in ANSI terminal\n"
+        "Ctrl+Shift+Enter  Eval buffer in current workspace\n"
         "F7  Python BASIC selection or line\n"
         "F8  Python BASIC whole buffer\n"
         "Shift+F7  inspect symbol at cursor\n"
@@ -629,7 +631,7 @@ class EditorTab(tk.Frame):
         t.bind("<Control-Return>",          lambda e: (self.app.eval_form_at_cursor(), "break")[1])
         t.bind("<Shift-F6>", lambda e: (self.app.eval_buffer_in_terminal(), "break")[1])
         t.bind("<F6>",                      lambda e: (self.app.eval_buffer_listener(), "break")[1])
-        t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer_listener(), "break")[1])
+        t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer(), "break")[1])
 
     def _open_file_at_cursor(self, event=None):
         text = self.text
@@ -1474,6 +1476,7 @@ class LispMachine(tk.Tk):
         L.global_env['help'] = self.lisp_help
         L.global_env['sleep'] = self._sleep
         self._gui_builtins_on_main()
+        L.workspaces.add_initializer(self._initialize_workspace_env)
 
         self._setup_style()
         self._build_menu()
@@ -1651,8 +1654,9 @@ class LispMachine(tk.Tk):
         self.time_buffer_runs = tk.BooleanVar(value=False)
         eval_m.add_checkbutton(label="Time buffer runs", variable=self.time_buffer_runs)
         eval_m.add_command(label="Run form / selection / line", accelerator="F5", command=self.eval_form_at_cursor)
-        eval_m.add_command(label="Run buffer → ANSI terminal", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
-        eval_m.add_command(label="Run buffer → Listener", accelerator="F6", command=self.eval_buffer_listener)
+        eval_m.add_command(label="Run program → ANSI terminal (fresh workspace)", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
+        eval_m.add_command(label="Run program → Listener (fresh workspace)", accelerator="F6", command=self.eval_buffer_listener)
+        eval_m.add_command(label="Eval buffer in current workspace", accelerator="Ctrl+Shift+Enter", command=self.eval_buffer)
         eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
         eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
         eval_m.add_command(label="Real BBC BASIC for SDL buffer", command=self.eval_bbcsdl_buffer)
@@ -1665,6 +1669,15 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Listener to buffer",  command=self.listener_to_buffer)
         eval_m.add_command(label="Clear listener",      accelerator="Ctrl+L", command=self.clear_listener)
         bar.add_cascade(label="Eval", menu=eval_m)
+
+        workspace_m = tk.Menu(bar, tearoff=0)
+        workspace_m.add_command(label='New workspace', command=lambda: self._workspace_action('new'))
+        workspace_m.add_command(label='Push workspace (enter fresh)', command=lambda: self._workspace_action('push'))
+        workspace_m.add_command(label='Pop workspace (restore)', command=lambda: self._workspace_action('pop'))
+        workspace_m.add_separator()
+        workspace_m.add_command(label='Unload module…', command=lambda: self._workspace_module_action('unload'))
+        workspace_m.add_command(label='Reload module…', command=lambda: self._workspace_module_action('reload'))
+        bar.add_cascade(label='Workspace', menu=workspace_m)
 
         view_m = tk.Menu(bar, tearoff=0)
         view_m.add_command(label='Startup Settings…', command=self._open_startup_settings)
@@ -2118,6 +2131,38 @@ class LispMachine(tk.Tk):
     # =========================================================================
     # Evaluation
     # =========================================================================
+    def _initialize_workspace_env(self, env):
+        env['help'] = self.lisp_help
+        env['sleep'] = self._sleep
+        self._gui_builtins_on_main(env)
+
+    def _workspace_action(self, action):
+        if self._busy():
+            return
+        def work():
+            try:
+                getattr(L.workspaces, action)()
+                self._ui(self.listener_write, f';; Workspace: {L.workspaces.current.name or "Listener"}; saved: {L.workspaces.depth}\n', 'info')
+                self._ui(self.set_inspector, '(fresh workspace)' if action == 'new' else '(workspace changed)')
+                self._ui(LispMachine._show_workspace_status, self)
+                self._ui(self.refresh_definitions)
+            except Exception as error:
+                self._ui(self._report_form_error, error)
+        self._start(work)
+
+    def _workspace_module_action(self, action):
+        if self._busy():
+            return
+        path = filedialog.askopenfilename(title=action.capitalize()+' imported module',
+            initialdir=self._file_dialog_dir(), filetypes=[('Lisp module', '*.lisp *.sld'), ('All files', '*')])
+        if path:
+            self._run_silent('('+action+' '+L.lisp_str(L.String(path))+')')
+
+    def _show_workspace_status(self):
+        label = getattr(self, 'status_left', None)
+        if label is not None:
+            label.configure(text=f'{L.workspaces.current.name or "Listener"} · saved {L.workspaces.depth}')
+
     def _gui_builtins_on_main(self, env=None):
         """Make the turtle and window built-ins run on the Tk thread, whichever thread calls them."""
         env = L.global_env if env is None else env
@@ -2247,6 +2292,7 @@ class LispMachine(tk.Tk):
         self.stop_button.configure(state="normal" if running else "disabled",
                                    bg=COLORS["error"] if running else COLORS["side_bg"])
         self.status_right.configure(text="Running..." if running else "Ready")
+        LispMachine._show_workspace_status(self)
         try:
             self.eval_menu.entryconfigure("Stop", state="normal" if running else "disabled")
         except tk.TclError:
@@ -2429,12 +2475,12 @@ class LispMachine(tk.Tk):
     def eval_buffer_listener(self):
         self.basic_output.set('listener')
         self._save_basic_settings()
-        self.eval_buffer(terminal=False)
+        self.eval_buffer(terminal=False, fresh=True)
 
     def eval_buffer_in_terminal(self):
         self.basic_output.set('ansi')
         self._save_basic_settings()
-        self.eval_buffer(terminal=True)
+        self.eval_buffer(terminal=True, fresh=True)
 
     def eval_bbcsdl_buffer(self):
         tab = self.current_tab()
@@ -2627,7 +2673,7 @@ class LispMachine(tk.Tk):
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
     def eval_buffer(self, terminal=None, basic=False, source=None, source_line=1,
-                    basic_backend='lispy', python_source=False):
+                    basic_backend='lispy', python_source=False, fresh=False):
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -2685,6 +2731,13 @@ class LispMachine(tk.Tk):
         def run_buffer():
             started = time.perf_counter() if timed else None
             try:
+                if fresh:
+                    try:
+                        L.workspaces.new('Run: '+tab.name)
+                        self._ui(LispMachine._show_workspace_status, self)
+                    except Exception as error:
+                        self._ui(self._report_form_error, error)
+                        return
                 if terminal:
                     if basic:
                         LispMachine._eval_forms_in_terminal(self, forms, on_error=basic_error)

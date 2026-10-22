@@ -142,3 +142,18 @@ Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE
 `cond`, `and`, `or`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.
+
+## Workspace lifecycle
+
+| Form | Effect |
+|---|---|
+| `(new-workspace [name])` | Fresh state; editor buffers and saved stack remain |
+| `(workspace-push [name])` | Preserve exact state; enter fresh state |
+| `(workspace-pop)` | Clean temporary resources; restore saved state |
+| `(workspace-name)` / `(workspace-depth)` | Current label / saved count |
+| `(workspace-on-discard cleanup)` | Register managed workspace cleanup |
+| `(module-on-unload cleanup)` | Register cleanup inside module/library |
+| `(unload "file.lisp")` / `(reload "file.lisp")` | Detach / replace an explicit imported file module |
+
+F6/Shift+F6 run a fresh program; F5, Ctrl+Shift+Enter and Listener Eval reuse
+current state. See [WORKSPACES.md](WORKSPACES.md) for effects and limitations.
