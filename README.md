@@ -596,3 +596,7 @@ Help → Update also checks local Python/runtime-library changes since startup,
 even if Git reports no new commits or pull fails, and offers a restart. It
 refreshes open text-file buffers changed on disk; unsaved edits require confirmation
 before replacement. Refreshing a buffer does not execute or reload its definitions.
+
+Pytest defaults to this repository's `tests/` directory (`python -m pytest -q`).
+A local `mini_basic` link points to a separate project and is excluded from
+recursive discovery; run that project's tests from its own repository.

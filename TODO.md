@@ -453,3 +453,8 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Update/startup/control-flow integration: 61 passed, 3 subtests passed.
 
 - [x] Update refreshes externally changed open text buffers without evaluating them; dirty buffers require confirmation. Tokenized imports remain editable copies saved separately.
+
+### WSL pytest discovery (2026-10-22)
+
+- [x] Restrict default discovery to tests/ and exclude the linked Python mini_basic checkout, preventing cross-project collection and unknown-marker warnings.
+- Validation: Windows default pytest run: 607 passed, 4 skipped, 355 subtests; WSL Debian existing virtual environment: 611 passed, 371 subtests. Both default collections found exactly 611 lispy3 tests.
