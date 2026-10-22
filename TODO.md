@@ -460,3 +460,10 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Retain Lisp implementation/library files under lisp/ and cross-Lisp backends under compare/.
 - [x] Update tests, launchers, documentation links and reproduction commands; preserve historical evidence unchanged.
 - Validation: 607 passed, 4 skipped, 355 subtests; 132 moved source/evidence files byte-identical. Both reference command-line tools still show help from their new paths.
+
+### Turtle close and Tk cyclic cleanup (2026-10-22)
+
+- [x] Reproduce unsafe collection timing with a real Tk/turtle child-process probe on WSL; main-thread collector regressions failed before implementation.
+- [x] Disable automatic cyclic GC only during the GUI lifetime; collect on the Tk thread every second and at exit, restoring the previous GC state. Normal reference counting stays active.
+- [x] Verify three repeated turtle closes with cyclic PhotoImage finalizers and allocating workers; subprocess isolation prevents native Tk failures from aborting pytest.
+- Validation: Windows 611 passed, 4 skipped, 355 subtests; WSL 615 passed, 371 subtests. Real Tk regression passed on both.

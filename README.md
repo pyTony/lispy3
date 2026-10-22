@@ -600,3 +600,8 @@ before replacement. Refreshing a buffer does not execute or reload its definitio
 BASIC examples, timing programs and BBCSDL reference checks are collected in
 [basic/](basic/README.md). Lisp implementation files remain in lisp/; cross-Lisp
 implementations and Lisp-form fixtures remain in compare/.
+
+Lispy Machine schedules cyclic garbage collection on its Tk main thread. This
+keeps closed turtle-window/image cycles from being finalized by the Lisp worker.
+Cycles are collected periodically while the GUI runs and at exit; normal reference
+counting is unchanged, and the prior automatic-GC setting is restored on exit.

@@ -3489,8 +3489,14 @@ def main():
         print(version_text())
         return
     plain_repl, files = parse_args(sys.argv[1:])
-    app = LispMachine(files, plain_repl=True if plain_repl else None)
-    app.mainloop()
+    from gui_gc import GuiGarbageCollector
+    with GuiGarbageCollector() as collector:
+        app = LispMachine(files, plain_repl=True if plain_repl else None)
+        collector.schedule(app)
+        try:
+            app.mainloop()
+        finally:
+            del app
 
 
 if __name__ == "__main__":
