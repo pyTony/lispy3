@@ -56,6 +56,7 @@ lispy3's Lisp loader.
 |------|-------------|
 | Values | Numeric and string variables; `%` integer and `$` string suffixes |
 | Output | PRINT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
+| Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
 | Jumps | Labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE; implicit `IF condition THEN 100 ELSE 200` |
@@ -74,9 +75,36 @@ outside the supported control-flow model. BBCSDL's shared-stack edge cases do
 not imply equivalent behavior here; see the
 [reference checks](../basic/reference/README.md) for recorded results and limits.
 
-Graphics, INPUT, file I/O and general BBCSDL compatibility remain outside the
+Graphics, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
 feature set; lispy3 support does not establish backend parity.
+
+## Console input
+
+```basic
+INPUT "Name: " name$
+INPUT "Age", age%
+INPUT x,y
+INPUT LINE "Message: " message$
+INPUT "PRESS ENTER", pause$
+```
+
+In the editor, type replies in the BASIC CLI and press Enter. Replies are
+program data, including text such as `RUN`. Stop interrupts an input wait.
+The standalone `python basic_repl.py` reads replies from its terminal. In the
+editor, replies use the BASIC CLI even when output goes to the ANSI terminal.
+
+As in the [BBC BASIC INPUT manual](https://www.bbcbasic.co.uk/bbcbasic/mancpm/bbckey2.html#input),
+a comma or semicolon after a prompt adds `?`; omitting the separator suppresses
+it. Bare `INPUT x` displays `?`. Supply multiple values separated by commas,
+or continue on another line. Quote strings containing commas. Numeric input
+uses a number prefix, not expression evaluation: `12tail` gives 12 and `1+9`
+gives 1; nonnumeric or empty input gives zero. `%` variables truncate to integers.
+`INPUT LINE` preserves spaces, commas and quotes and requires string targets.
+
+This initial subset supports one optional literal prompt per statement. Prompt
+positioning with TAB/SPC and interleaved prompt strings are not implemented.
+File-channel statements such as `INPUT#` and `PRINT#` remain separate work.
 
 ## Terminal output: VDU and ANSI
 

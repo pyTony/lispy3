@@ -67,6 +67,41 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         assert app._job is None, 'worker did not complete'
         ranges=tuple(str(index) for index in tab.text.tag_ranges('syntax_error'))
         assert ranges == ('3.0','3.3'), ranges
+        tab.text.delete('1.0','end')
+        tab.text.insert('1.0','INPUT "Name: " n$\nPRINT "reply=[";n$;"]"\n')
+        app.eval_buffer()
+        deadline=time.monotonic()+10
+        while getattr(app,'_basic_input_queue',None) is None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert getattr(app,'_basic_input_queue',None) is not None, app.listener_text.get('1.0','end')
+        assert app.console_ready and app._job is not None
+        app.listener_text.insert('end','RUN')
+        app._console_return()
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None, 'INPUT did not resume'
+        output=app.listener_text.get('1.0','end')
+        assert 'reply=[RUN]\n' in output, output
+        assert app.console_ready
+        app.eval_buffer()
+        deadline=time.monotonic()+10
+        while getattr(app,'_basic_input_queue',None) is None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._basic_input_queue is not None, 'second RUN did not wait for input'
+        app.stop()
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None, 'Stop did not interrupt INPUT'
+        assert app._basic_input_queue is None
+        assert app.console_ready
+        app._basic_feed(['PRINT "after stop"'])
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None
+        assert 'after stop\n' in app.listener_text.get('1.0','end')
         app.listener_mode.set('lisp')
         app._select_listener_mode()
         assert app._prompt_text() == 'lispy3>'

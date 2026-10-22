@@ -471,3 +471,15 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Validate real Tk mode switching and execution in isolated child processes. Full Windows suite: 626 passed, 4 skipped, 355 subtests; WSL: 630 passed, 371 subtests.
 - [ ] Multiline immediate-input accumulation; use stored program lines or LOAD/RUN for blocks for now.
 - [x] Use project basic/ as the shared default for BASIC LOAD/SAVE and GUI/CLI filename completion; Lisp path resolution remains unchanged. Follow-up: 20 focused tests passed on Windows and WSL.
+
+### BASIC console input (2026-10-22)
+
+- [x] Add INPUT for numeric/string scalars and array elements, literal prompts,
+  comma-separated replies, numeric prefix conversion and integer coercion.
+- [x] Add INPUT LINE for complete string replies. Accept replies in the BASIC
+  CLI while the worker waits; Stop cancels input and restores the prompt.
+- [x] Restore the INPUT pause in basic/examples/primes_visual.bas and cover it
+  with a reduced-limit smoke test. Add reader, standalone CLI and real Tk tests.
+- [ ] Extend INPUT to interleaved prompts and TAB/SPC positioning.
+- [ ] Add file-channel I/O (OPENIN/OPENOUT, CLOSE#, INPUT#/PRINT# and EOF#),
+  starting from failing tests for a small documented subset.

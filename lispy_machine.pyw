@@ -2329,6 +2329,10 @@ class LispMachine(tk.Tk):
             self.set_inspector("Stopped")
         if on_done is not None:
             on_done(result, stopped)
+        if getattr(self, '_basic_input_used', False):
+            self._basic_input_used = False
+            if not self.console_ready:
+                self._show_prompt()
 
     def stop(self, event=None):
         """Stop button / Ctrl+Break: end the Lisp code that is running."""
@@ -2370,14 +2374,14 @@ class LispMachine(tk.Tk):
 
         try:
             output = LispMachine._evaluation_stdout(self)
-            with output:
+            with output, L.basic_io.input_from(lambda: LispMachine._basic_read_line(self)):
                 return evaluate(), None
         except _turtle.Terminator:
             # Same transient condition; the window is actually alive.
             _turtle.TurtleScreen._RUNNING = True
             try:
                 output = LispMachine._evaluation_stdout(self)
-                with output:
+                with output, L.basic_io.input_from(lambda: LispMachine._basic_read_line(self)):
                     return evaluate(), None
             except _turtle.Terminator:
                 # A genuine close — invite the user to reopen.
@@ -3053,6 +3057,39 @@ class LispMachine(tk.Tk):
     def _get_basic_buffer_text(self):
         return getattr(self, '_cached_basic_buffer', '')
 
+    def _begin_basic_input(self, replies):
+        self._basic_input_queue = replies
+        self._basic_input_used = True
+        self.plain_repl.set(True)
+        self.basic_repl_mode.set(True)
+        self.listener_mode.set('basic')
+        self.input_row.pack_forget()
+        t = self.listener_text
+        t.configure(state='normal')
+        t.mark_set('input', 'end-1c')
+        t.mark_gravity('input', 'left')
+        self.console_ready = True
+        self._focus_listener()
+        t.see('end')
+
+    def _end_basic_input(self, replies):
+        if getattr(self, '_basic_input_queue', None) is replies:
+            self._basic_input_queue = None
+            self.console_ready = False
+
+    def _basic_read_line(self):
+        """Wait on the worker while Tk accepts a raw program reply; Stop stays active."""
+        replies = queue.Queue()
+        try:
+            self._ui(LispMachine._begin_basic_input, self, replies)
+            while True:
+                try:
+                    return replies.get(timeout=0.05)
+                except queue.Empty:
+                    pass
+        finally:
+            self._ui(LispMachine._end_basic_input, self, replies)
+
     def _cache_current_buffer_for_basic(self):
         tab = self.current_tab()
         self._cached_basic_buffer = tab.get_content() if tab is not None else ''
@@ -3167,6 +3204,14 @@ class LispMachine(tk.Tk):
         t = self.listener_text
         if not self.console_ready:
             return "break"
+        replies = getattr(self, '_basic_input_queue', None)
+        if replies is not None:
+            line = self._console_input()
+            t.insert('end', '\n')
+            self.console_ready = False
+            self._basic_input_queue = None
+            replies.put(line)
+            return 'break'
         self._console_recolor()
         line = self._console_input()
         t.insert("end", "\n")

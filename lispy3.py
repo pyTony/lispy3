@@ -18,6 +18,7 @@ import time
 import turtle
 from contextvars import ContextVar
 import lispy_terminal
+import basic_io
 from lispy_libraries import LibrarySystem, LibraryReference
 
 # --- Types and Data Structures ---
@@ -1191,6 +1192,10 @@ def standard_env() -> Env:
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
         'help': lisp_help,
         'read': lambda text: parse(_unwrap_str(text)),
+        'read-line': lambda: String(basic_io.read_line()),
+        'basic-input-values': lambda kinds, reader, line_mode=False, question=True: [
+            String(value) if isinstance(value, str) else value
+            for value in basic_io.read_values(kinds, lambda: _unwrap_str(reader()), line_mode, question)],
         'string->symbol': lambda text: Symbol(_unwrap_str(text)),
         'symbol->string': lambda sym: String(str(sym)),
         'vector': lambda *x: Vector(x),
