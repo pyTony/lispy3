@@ -13,9 +13,11 @@ class MachineWorkspaceTest(TestCase):
     def tearDown(self):
         L.global_env, L.macro_table, L.library_system, L.workspaces = self.saved
     def test_fresh_basic_run_does_not_reuse_old_loop_counter(self):
-        app = _FakeMachine('FOR I=1 TO 3:NEXT:PRINT I')
+        from test_machine_basic_buffer import _FakeMachine as BasicMachine
+        app = BasicMachine('FOR I=1 TO 3:NEXT:PRINT I')
         machine.LispMachine.eval_buffer(app, basic=True, fresh=True)
-        self.assertEqual(L.eval_exp(L.parse('I')), 4)
+        self.assertIn('4\n', ''.join(app.lines))
+        with self.assertRaises(NameError): L.eval_exp(L.parse('I'))
         app.tab.content = 'PRINT I'
         app.lines.clear()
         machine.LispMachine.eval_buffer(app, basic=True, fresh=True)

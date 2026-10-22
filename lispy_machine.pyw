@@ -1492,7 +1492,7 @@ class LispMachine(tk.Tk):
         self.basic_repl_mode = tk.BooleanVar(self, value=bool(self.settings.get('basic_repl', False)))
         if self.basic_repl_mode.get():
             self.plain_repl.set(True)
-        self.basic_repl = BasicRepl(L, self._read_basic_repl_source)
+        self.basic_repl = BasicRepl(L, self._read_basic_repl_source, get_current_source=self._get_basic_buffer_text)
         self.listener_mode = tk.StringVar(self, value='basic' if self.basic_repl_mode.get() else
                                          'lisp' if self.plain_repl.get() else 'listener')
         self.repl_pending = ""      # lines of an unfinished form in the plain REPL
@@ -2741,6 +2741,24 @@ class LispMachine(tk.Tk):
                 LispMachine._run_python_basic_buffer(self, tab, content, source_line,
                     terminal=terminal, python_source=python_source)
             return
+        if basic and not terminal and basic_backend == 'lispy':
+            if not self.basic_repl_mode.get():
+                self.listener_mode.set('basic')
+                self._select_listener_mode()
+            self._focus_listener()
+            if source is None:
+                cmd_lines = ['RUN']
+                echo_text = 'RUN'
+            else:
+                cmd_lines = [ln for ln in source.splitlines() if ln.strip()]
+                echo_text = ' : '.join(cmd_lines)
+            if self.console_ready:
+                self.listener_text.insert('end', echo_text + '\n')
+                self.console_ready = False
+            else:
+                self.listener_write(f'BASIC> {echo_text}\n', 'prompt')
+            self._basic_feed(cmd_lines, source=source, source_line=source_line)
+            return
         self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)
         if closers:
@@ -3032,25 +3050,58 @@ class LispMachine(tk.Tk):
                             if self.basic_repl_mode.get() else ';; Lisp listener mode restored.\n', 'info')
         self._focus_listener()
 
-    def _basic_feed(self, lines):
+    def _get_basic_buffer_text(self):
+        return getattr(self, '_cached_basic_buffer', '')
+
+    def _cache_current_buffer_for_basic(self):
+        tab = self.current_tab()
+        self._cached_basic_buffer = tab.get_content() if tab is not None else ''
+
+    def _basic_feed(self, lines, source=None, source_line=1):
         if self._busy():
             self._show_prompt()
             return
+        self._cache_current_buffer_for_basic()
         lines = list(lines)
+        tab = self.current_tab()
+        original = self._get_basic_buffer_text()
+        error_source = source
+        if source is None and any(line.strip().upper() == 'RUN' for line in lines):
+            error_source = original
+        timing = getattr(self, 'time_buffer_runs', None)
+        timed = error_source is not None and timing is not None and timing.get()
         def work():
             def evaluate():
+                if source is not None:
+                    # Execute selections as one program, preserving physical
+                    # line numbers, labels and multiline control flow.
+                    try:
+                        if source.strip():
+                            self.basic_repl._execute(source)
+                    except SystemExit:
+                        pass
+                    return
                 for line in lines:
                     if line.strip():
                         self.listener_history.append(line)
                         self.listener_hist_idx = len(self.listener_history)
                         self.basic_repl.submit(line)
-            return self._eval_with_turtle(evaluate)
+            started = time.perf_counter() if timed else None
+            try:
+                return self._eval_with_turtle(evaluate)
+            finally:
+                if started is not None:
+                    self._ui(self.listener_write,
+                             f';; Buffer elapsed time: {time.perf_counter()-started:.3f} s\n', 'info')
         def done(result, stopped):
             if not stopped:
                 _, error = result
                 if error is not None:
                     self.listener_write(f'Error: {error}\n', 'error')
                     self.set_inspector(f'Error: {error}')
+                    if tab is not None and error_source is not None:
+                        LispMachine._basic_error_highlight(
+                            self, tab, error_source, str(error), source_line, original)
             self._show_prompt()
         self._start(work, done)
 

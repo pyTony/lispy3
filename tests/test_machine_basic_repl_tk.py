@@ -26,7 +26,8 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         app.listener_mode.set('basic')
         app._select_listener_mode()
         assert app._prompt_text() == 'BASIC>'
-        app._basic_feed(['20 PRINT "second"','10 PRINT "first"','RUN'])
+        tab=app.new_buffer('current.bas', 'PRINT "first"\nPRINT "second"\n')
+        app.eval_buffer()
         deadline=time.monotonic()+10
         while app._job is not None and time.monotonic()<deadline:
             app.update(); time.sleep(.005)
@@ -34,6 +35,38 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         output=app.listener_text.get('1.0','end')
         assert 'first\nsecond\n' in output, output
         assert 'Error:' not in output, output
+        tab.text.delete('1.0','end')
+        tab.text.insert('1.0','PRINT "edited buffer"\n')
+        app._basic_feed(['10 PRINT "stale CLI program"', 'RUN'])
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None, 'worker did not complete'
+        output=app.listener_text.get('1.0','end')
+        assert 'edited buffer\n' in output, output
+        assert 'stale CLI program\n' not in output, output
+        for cli_run in (False, True):
+            tab.text.delete('1.0','end')
+            tab.text.insert('1.0','10 PRINT "before error"\n100 FOR\n')
+            if cli_run:
+                app._basic_feed(['RUN'])
+            else:
+                app.eval_buffer()
+            deadline=time.monotonic()+10
+            while app._job is not None and time.monotonic()<deadline:
+                app.update(); time.sleep(.005)
+            assert app._job is None, 'worker did not complete'
+            ranges=tuple(str(index) for index in tab.text.tag_ranges('syntax_error'))
+            assert ranges == ('2.0','2.7'), ranges
+        tab.text.delete('1.0','end')
+        tab.text.insert('1.0','REM before\nREM before\nFOR\n')
+        app.eval_buffer(source='FOR',source_line=3)
+        deadline=time.monotonic()+10
+        while app._job is not None and time.monotonic()<deadline:
+            app.update(); time.sleep(.005)
+        assert app._job is None, 'worker did not complete'
+        ranges=tuple(str(index) for index in tab.text.tag_ranges('syntax_error'))
+        assert ranges == ('3.0','3.3'), ranges
         app.listener_mode.set('lisp')
         app._select_listener_mode()
         assert app._prompt_text() == 'lispy3>'

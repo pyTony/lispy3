@@ -13,6 +13,9 @@ class BasicListenerTest(LispyTestCase):
 
     def test_feed_runs_on_worker_and_uses_private_session(self):
         app=_FakeMachine()
+        app.current_tab=Mock(return_value=None)
+        app._cache_current_buffer_for_basic=lambda: machine.LispMachine._cache_current_buffer_for_basic(app)
+        app._get_basic_buffer_text=lambda: machine.LispMachine._get_basic_buffer_text(app)
         app.basic_repl=BasicRepl(L)
         self.addCleanup(app.basic_repl.close)
         app.listener_history=[]

@@ -14,7 +14,8 @@ class LanguageRunTest(TestCase):
         fresh_global_env()
 
     def test_f6_basic_defaults_to_lispy_even_with_old_python_setting(self):
-        app = _FakeMachine('PRINT "lispy-default"')
+        from test_machine_basic_buffer import _FakeMachine as BasicMachine
+        app = BasicMachine('PRINT "lispy-default"')
         app.tab.name = 'example.bas'
         app.settings = {'basic_backend': 'python'}
         with patch.object(machine.BR, 'run_python_basic') as external:

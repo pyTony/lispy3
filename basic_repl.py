@@ -4,8 +4,9 @@ from pathlib import Path
 
 
 class BasicRepl:
-    def __init__(self, runtime, read_source=None, directory=None):
+    def __init__(self, runtime, read_source=None, directory=None, get_current_source=None):
         self.runtime = runtime
+        self.get_current_source = get_current_source
         self.manager = runtime.workspaces
         self.workspace = None
         self.lines = {}
@@ -78,7 +79,13 @@ class BasicRepl:
                 self._fresh()
             else:
                 self._fresh()
-                if self.lines: self._execute(self.source())
+                src = (self.get_current_source() if self.get_current_source is not None
+                       else self.source()) or ''
+                if src.strip():
+                    try:
+                        self._execute(src)
+                    except SystemExit:
+                        pass
             return
         if command in ('LOAD', 'SAVE'):
             path = self._filename(argument)
@@ -109,7 +116,10 @@ class BasicRepl:
                     previous = number
                 self.lines = lines
             return
-        self._execute(line)
+        try:
+            self._execute(line)
+        except SystemExit:
+            pass
 
 
 def setup_completion(directory=None):

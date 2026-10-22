@@ -2,10 +2,40 @@
 from unittest.mock import Mock, patch
 import contextlib
 import io
+import itertools
 from unittest import TestCase
-from test_machine_eval_buffer import _FakeMachine
+from test_machine_eval_buffer import _FakeMachine as _EvalMachine
 from test_machine_args import machine
 from support import fresh_global_env
+from basic_repl import BasicRepl
+
+
+class _FakeMachine(_EvalMachine):
+    _basic_feed = machine.LispMachine._basic_feed
+    _cache_current_buffer_for_basic = machine.LispMachine._cache_current_buffer_for_basic
+    _get_basic_buffer_text = machine.LispMachine._get_basic_buffer_text
+
+    def __init__(self, content):
+        super().__init__(content)
+        self.basic_repl_mode = Mock()
+        self.basic_repl_mode.get.return_value = True
+        self._focus_listener = Mock()
+        self._show_prompt = Mock()
+        self.console_ready = False
+        self.listener_history = []
+        self.basic_repl = BasicRepl(machine.L, get_current_source=self._get_basic_buffer_text)
+        # Initialize outside timing assertions, as the BASIC library itself
+        # reads perf_counter for TIME during initialization.
+        self.basic_repl._fresh()
+
+    def _start(self, work, on_done=None):
+        try:
+            result = work()
+            if on_done is not None:
+                on_done(result, False)
+        finally:
+            self.basic_repl.close()
+        return True
 
 
 class BasicBufferTest(TestCase):
@@ -52,7 +82,8 @@ class BasicBufferTest(TestCase):
         app.tab.text = Mock()
         app.time_buffer_runs = Mock()
         app.time_buffer_runs.get.return_value = True
-        with patch.object(machine.time, 'perf_counter', side_effect=[1.0, 1.25]):
+        with patch.object(machine.time, 'perf_counter',
+                          side_effect=itertools.chain([1.0], itertools.repeat(1.25))):
             machine.LispMachine.eval_buffer(app, basic=True)
         out = ''.join(app.lines)
         self.assertIn('Error:', out)
@@ -79,6 +110,34 @@ class BasicBufferTest(TestCase):
         app.tab.text = Mock()
         machine.LispMachine.eval_buffer(app, basic=True, source='FOR', source_line=3)
         app.tab.text.tag_add.assert_called_with('syntax_error', '3.0', '3.end')
+
+    def test_cli_run_highlights_current_buffer_error(self):
+        app = _FakeMachine('10 PRINT "ok"\n100 FOR')
+        app.tab.text = Mock()
+        app._basic_feed(['RUN'])
+        self.assertIn('Error:', ''.join(app.lines))
+        app.tab.text.tag_add.assert_called_with('syntax_error', '2.0', '2.end')
+
+    def test_multiline_numbered_selection_executes_as_program(self):
+        app = _FakeMachine('REM before\n10 GOTO 30\n20 PRINT "wrong"\n30 PRINT "selected"')
+        machine.LispMachine.eval_buffer(app, basic=True,
+            source='10 GOTO 30\n20 PRINT "wrong"\n30 PRINT "selected"', source_line=2)
+        self.assertIn('selected\n', ''.join(app.lines))
+        self.assertNotIn('wrong\n', ''.join(app.lines))
+        self.assertNotIn('Error:', ''.join(app.lines))
+
+    def test_error_does_not_highlight_changed_buffer(self):
+        app = _FakeMachine('FOR')
+        app.tab.text = Mock()
+        evaluate = app._eval_with_turtle
+        def edit_before_completion(callback):
+            result = evaluate(callback)
+            app.tab.content = 'PRINT "fixed"'
+            return result
+        app._eval_with_turtle = edit_before_completion
+        machine.LispMachine.eval_buffer(app, basic=True)
+        self.assertIn('Error:', ''.join(app.lines))
+        app.tab.text.tag_add.assert_not_called()
 
     def test_lispy_backend_uses_selected_ansi_output(self):
         app = _FakeMachine('PRINT "terminal-only"')
