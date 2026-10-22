@@ -23,7 +23,7 @@ class SaveCloseTest(TestCase):
         callbacks = {}
         tab.text.bind.side_effect = lambda event, callback: callbacks.update({event: callback})
         machine.EditorTab._setup_bindings(tab)
-        for event, action in [('<Control-s>', 'save_current'), ('<Control-w>', 'close_current')]:
+        for event, action in [('<Control-o>', 'open_file'), ('<Control-s>', 'save_current'), ('<Control-w>', 'close_current')]:
             self.assertIn(event, callbacks)
             self.assertEqual(callbacks[event](None), 'break')
             getattr(tab.app, action).assert_called_once()

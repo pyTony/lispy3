@@ -670,6 +670,7 @@ class EditorTab(tk.Frame):
         t.bind("<Control-slash>", self._toggle_comment)
         t.bind("<<Modified>>", self._on_modified)
         # Widget bindings precede Tk Text's class bindings and global bindings.
+        t.bind("<Control-o>", lambda e: (self.app.open_file(), 'break')[1])
         t.bind("<Control-s>", lambda e: (self.app.save_current(), 'break')[1])
         t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(), 'break')[1])
         t.bind("<Control-w>", lambda e: (self.app.close_current(), 'break')[1])
@@ -2025,7 +2026,11 @@ class LispMachine(tk.Tk):
         self.bind_all("<Control-Cancel>", self.stop)
         self.bind_all("<Control-Break>", self.stop)
         self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
-        self.bind_all("<Control-o>", lambda e: self.open_file())
+        self.bind_all("<Control-o>", lambda e: (self.open_file(), 'break')[1])
+        # Tk Text gives Ctrl+O its own editing behavior before bind_all runs.
+        # Handle Open at the widget first, including while BASIC waits for INPUT.
+        for widget in (self.listener_text, self.listener_input, self.inspector):
+            widget.bind("<Control-o>", lambda e: (self.open_file(), 'break')[1])
         self.bind_all("<Control-s>", lambda e: (self.save_current(), 'break')[1])
         self.bind_all("<Control-Shift-S>", lambda e: (self.save_current_as(), 'break')[1])
         self.bind_all("<Control-w>", lambda e: (self.close_current(), 'break')[1])

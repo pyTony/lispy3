@@ -501,3 +501,11 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Verify the actual viewer subprocess with Unicode and empty replies,
   BASIC editor execution, terminal reuse, EOF, closure and worker cancellation.
 - [ ] Add interactive input bridging for the external Python mini_basic runner.
+
+### Open shortcut in editor and Listener (2026-10-23)
+
+- [x] Bind Ctrl+O before Tk text class editing behavior and consume the event.
+  Preserve editor text, pending BASIC commands and INPUT replies, and handle
+  Open in the Listener entry and Inspector as well.
+- [x] Reproduce the missing widget binding and unwanted newline first; verify
+  actual Tk key events open the dialog once without modifying text.
