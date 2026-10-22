@@ -48,5 +48,15 @@ class ExtrasHelp(unittest.TestCase):
         self.assertTrue(shown[2].startswith("(sum v)"), shown[2])
 
 
+class WorkspaceNumpyTest(unittest.TestCase):
+    def test_switches_use_current_environment_and_keep_numpy_builtins(self):
+        shown = run_numpy_repl('(define old 7)', '(workspace-push)',
+            '(sum (make-num-vector [1 2 3]))', '(define old 99)', '(workspace-pop)', 'old',
+            '(new-workspace)', '(sum (make-num-vector [3 4]))')
+        self.assertEqual(shown[2], '6')
+        self.assertEqual(shown[5], '7')
+        self.assertEqual(shown[7], '7')
+
+
 if __name__ == "__main__":
     unittest.main()

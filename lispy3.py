@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import turtle
+from contextvars import ContextVar
 import lispy_terminal
 from lispy_libraries import LibrarySystem, LibraryReference
 
@@ -161,6 +162,15 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("with-ansi-terminal", "(with-ansi-terminal body...) - send output to a real terminal, sharing workspace state; the terminal stays open"),
         ("define-library", "(define-library name (export names...) (begin definitions...)) - isolated library; see docs/LIBRARIES.md"),
         ("import", "(import (only library a b)) - selected exports; prefix and rename also supported"),
+        ("new-workspace", "(new-workspace [name]) - discard current definitions, imports and managed resources; editor buffers remain"),
+        ("workspace-push", "(workspace-push [name]) - preserve current state and enter a fresh workspace"),
+        ("workspace-pop", "(workspace-pop) - discard temporary state and restore the last pushed workspace"),
+        ("workspace-name", "(workspace-name) - current workspace label"),
+        ("workspace-depth", "(workspace-depth) - number of saved workspaces"),
+        ("workspace-on-discard", "(workspace-on-discard cleanup) - register a zero-argument managed-resource cleanup"),
+        ("module-on-unload", "(module-on-unload cleanup) - register cleanup inside a module or library"),
+        ("unload", "(unload filename-or-name) - remove an imported module and its owned bindings; refuse live dependents"),
+        ("reload", "(reload filename-or-name) - fresh module instance and import bindings; external effects are not undone"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
@@ -1008,6 +1018,15 @@ def _dissoc(d: dict, *keys: Any) -> dict:
         new_d.pop(k, None)
     return new_d
 
+_dynamic_eval = ContextVar('lispy_dynamic_eval', default=False)
+
+def evaluate_code(code):
+    token = _dynamic_eval.set(True)
+    try:
+        return eval_exp(expand(code, toplevel=True), global_env)
+    finally:
+        _dynamic_eval.reset(token)
+
 # --- Standard Environment Definitions ---
 def standard_env() -> Env:
     """Create a global environment where ALL operations are wrapped inside Procedure objects."""
@@ -1140,13 +1159,17 @@ def standard_env() -> Env:
 
         # Meta, I/O, Error & Workspace
         'gensym': gensym,
-        'eval': lambda x: eval_exp(expand(x, toplevel=True), global_env),
+        'eval': evaluate_code,
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
         'memoize': memoize,
         'memoize-exact': lambda proc: memoize(proc, exact_arguments_only=True),
+        'workspace-name': lambda: String(workspaces.current.name or 'workspace'),
+        'workspace-depth': lambda: workspaces.depth,
+        'workspace-on-discard': lambda callback: workspaces.on_discard(callback),
+        'module-on-unload': lambda callback: library_system.on_unload(callback),
         'run-program': run_program,
         'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
@@ -1281,6 +1304,17 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     head = x[0]
 
+    if isinstance(head, str) and head in ('new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'):
+        if not toplevel or library_system.current.get() is not None:
+            raise SyntaxError(f'{head} only allowed at top-level')
+        if head in ('new-workspace', 'workspace-push', 'workspace-pop'):
+            maximum = 1 if head == 'workspace-pop' else 2
+            if not 1 <= len(x) <= maximum:
+                raise SyntaxError(f'{head}: unexpected arguments')
+        elif len(x) != 2:
+            raise SyntaxError(f'{head} needs a module name or filename')
+        return [head] + [expand(item, False) for item in x[1:]]
+
     if head in ('define-library', 'import'):
         if not toplevel:
             raise SyntaxError(f"{head} only allowed at top-level")
@@ -1396,9 +1430,16 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return ['let', expanded_bindings, expand(body, False)]
 
     if head == 'begin':
+        if any(isinstance(item, list) and item and item[0] in
+               ('new-workspace', 'workspace-push', 'workspace-pop') for item in x[1:]):
+            raise SyntaxError('workspace transitions must be standalone top-level commands')
         if len(x) == 1:
             return None
-        return ['begin'] + [expand(e, toplevel) for e in x[1:]]
+        expanded = [expand(e, toplevel) for e in x[1:]]
+        if any(isinstance(item, list) and item and item[0] in
+               ('new-workspace', 'workspace-push', 'workspace-pop') for item in expanded):
+            raise SyntaxError('workspace transitions must be standalone top-level commands')
+        return ['begin'] + expanded
 
     # Macro invocation
     if isinstance(head, str) and head in library_system.macros(head):
@@ -1408,11 +1449,12 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
     return [expand(e, False) for e in x]
 
 SPECIAL_FORMS = frozenset({'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
-                           'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import'})
+                           'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import', 'new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'})
 
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
-def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
+def eval_exp(x: Exp, env: 'Env' = None) -> Any:
     """Evaluate an expression in an environment with TCO loop and Structural Pattern Matching."""
+    env = global_env if env is None else env
     while True:
         # Fast path for the commonest cases: variables and numbers
         kind = type(x)
@@ -1672,6 +1714,30 @@ def eval_exp(x: Exp, env: 'Env' = global_env) -> Any:
                     else:
                         x = clause
                         continue
+
+            # Workspace transitions are standalone commands: a running closure
+            # must never silently continue against the environment just replaced.
+            case [str(command), *arguments] if command in ('new-workspace', 'workspace-push', 'workspace-pop'):
+                if env is not global_env or _dynamic_eval.get():
+                    raise LispyError('workspace transitions require a standalone top-level command')
+                name = eval_exp(arguments[0], env) if arguments else None
+                if name is not None:
+                    name = name.value if isinstance(name, String) else str(name)
+                try:
+                    if command == 'workspace-pop':
+                        workspaces.pop()
+                    elif command == 'workspace-push':
+                        workspaces.push(name)
+                    else:
+                        workspaces.new(name)
+                except Exception as error:
+                    raise LispyError(str(error)) from error
+                return String(workspaces.current.name or 'workspace')
+
+            case [str(command), module_exp] if command in ('unload', 'reload'):
+                spec = eval_exp(module_exp, env)
+                result = getattr(library_system, command)(spec)
+                return String(str(getattr(result, 'name', result))) if result is not None else None
 
             # 14. Workspace save and load hooks
             case ['save', filename_exp]:
@@ -1998,6 +2064,19 @@ def auto_close(text: str) -> tuple[str, str]:
     return text[:pos] + closers + text[pos:], closers
 
 library_system = LibrarySystem(sys.modules[__name__])
+from lispy_workspaces import WorkspaceManager
+workspaces = WorkspaceManager(sys.modules[__name__])
+
+def _workspace_library_cleanup(env):
+    system = library_system
+    def cleanup():
+        close = getattr(system, 'cleanup_all', None)
+        if close is not None:
+            close()
+    workspaces.on_discard(cleanup)
+
+workspaces.add_initializer(_workspace_library_cleanup)
+_workspace_library_cleanup(global_env)
 
 # --- Interaction and REPL Printing ---
 def lisp_str(exp: Any) -> str:
@@ -2050,8 +2129,9 @@ RUNTIME_ERRORS = (SyntaxError, NameError, TypeError, ZeroDivisionError, FileNotF
 # Characters that end a name when completing: brackets, quotes, spaces and comments.
 COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 
-def completion_candidates(env: 'Env' = global_env) -> set[str]:
+def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
+    env = global_env if env is None else env
     names = set(SPECIAL_FORMS) | {'defun', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
@@ -2059,7 +2139,7 @@ def completion_candidates(env: 'Env' = global_env) -> set[str]:
             names.update(k for k in value if isinstance(k, str) and k.startswith(':'))
     return names
 
-def complete_names(prefix: str, env: 'Env' = global_env) -> list[str]:
+def complete_names(prefix: str, env: 'Env' = None) -> list[str]:
     """The sorted names that start with `prefix`, e.g. "str" gives ["str", "string->symbol", ...]."""
     return sorted(n for n in completion_candidates(env) if n.startswith(prefix))
 
@@ -2149,7 +2229,7 @@ def repl(prompt: str = "lispy3> ") -> None:
             buffer = ""
             for form in forms:
                 # Earlier definitions/imports must exist when later macros expand.
-                val = eval_exp(expand(form, toplevel=True), env)
+                val = eval_exp(expand(form, toplevel=True), global_env)
                 if val is not None:
                     print(f"{COLOR_RESULT}{repl_str(val)}{COLOR_RESET}")
         except turtle.Terminator:

@@ -14,6 +14,38 @@ The immediate-exit case does not establish compatible loop-stack cleanup.
 from test_mini_basic_reader import ReaderTestCase
 
 
+class ImplicitIfGotoTest(ReaderTestCase):
+    def test_true_then_line_number_jumps(self):
+        self.assertEqual(self.run_bbc(
+            '10 IF TRUE THEN 30\n20 PRINT "wrong"\n30 PRINT "hit"'), 'hit\n')
+
+    def test_false_then_line_number_falls_through(self):
+        self.assertEqual(self.run_bbc(
+            '10 IF FALSE THEN 40\n20 PRINT "fall"\n30 END\n40 PRINT "wrong"'), 'fall\n')
+
+    def test_else_line_number_jumps(self):
+        self.assertEqual(self.run_bbc(
+            '10 IF FALSE THEN 40 ELSE 50\n20 PRINT "wrong"\n30 END\n'
+            '40 PRINT "wrong":END\n50 PRINT "else"'), 'else\n')
+
+    def test_statement_then_else_line_number(self):
+        self.assertEqual(self.run_bbc(
+            '10 IF FALSE THEN PRINT "wrong" ELSE 30\n20 PRINT "wrong"\n30 PRINT "else"'), 'else\n')
+
+    def test_backward_jump_in_active_loop(self):
+        self.assertEqual(self.run_bbc(
+            '10 n=0\n20 WHILE n<3\n30 n+=1\n40 IF n<3 THEN 30\n'
+            '50 PRINT ;n\n60 ENDWHILE'), '3\n')
+
+    def test_missing_target_reports_goto_error(self):
+        with self.assertRaisesRegex(Exception, 'GOTO: unknown label 999'):
+            self.run_bbc('10 IF TRUE THEN 999')
+
+    def test_bare_number_is_not_a_general_statement(self):
+        with self.assertRaisesRegex(Exception, 'expected a statement'):
+            self.run_bbc('10 PRINT "ok":42')
+
+
 class ExistingExtensionsTest(ReaderTestCase):
     """Green controls for features the upcoming changes must preserve."""
 

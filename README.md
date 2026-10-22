@@ -333,8 +333,9 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 |-----|--------|
 | `F1` | Open the Lispy guide (in the guide: `Ctrl+F` search, `Enter`/`F3` next match, `Alt+Left` back, `Esc` close) |
 | `F5` / `Ctrl+Enter` | Run Lisp form, or BASIC/Python selection/current line |
-| `F6` / `Ctrl+Shift+Enter` | Run the buffer in Listener; BASIC uses Lispy mini-basic |
-| `Shift+F6` | Run the buffer in a real ANSI terminal |
+| `F6` | Run the whole program in a fresh workspace, output to Listener |
+| `Ctrl+Shift+Enter` | Eval the buffer in the current workspace |
+| `Shift+F6` | Run the whole program in a fresh workspace, output to ANSI terminal |
 | `F4` / `Ctrl+click` | Open the quoted filename at the cursor (Command+click on macOS) |
 | `F7` | Run selected BASIC text or the current BASIC line through Python mini_basic |
 | `F8` | Run the whole BASIC buffer through Python mini_basic |
@@ -372,7 +373,7 @@ or runtime errors. BASIC indentation is a layout helper, not a BASIC validator.
 **F5/F6 follow the buffer's highlighting language.** Lisp runs in the workspace;
 BASIC uses Lispy mini-basic in that workspace; Python runs in a fresh process.
 F5 runs an enclosing Lisp form, or selected BASIC/Python text (the current line
-when nothing is selected). F6 runs the whole buffer. Python selections are
+when nothing is selected). F6 runs the whole buffer in a fresh workspace. F5 and Ctrl+Shift+Enter keep the current workspace. Python selections are
 unindented for execution; traceback line numbers still refer to the buffer.
 Python definitions do not persist between runs. Use the configured Python
 executable under **Eval → BASIC Settings…** for both external Python runners.
@@ -507,7 +508,7 @@ If you ever want a frozen interpreter inside the editor, the change is a one-lin
 
 ### Routing `display` output into the Listener
 
-The default destination is the Listener. **Eval → Run buffer → ANSI terminal (Shift+F6)**
+The default destination is the Listener. **Eval → Run program → ANSI terminal (Shift+F6)**
 and `(with-ansi-terminal body...)` select a real terminal instead. Enable
 **Eval → Time buffer runs** for timing with either destination. See
 [terminal output and timing](docs/TERMINAL_OUTPUT.md).
@@ -575,3 +576,23 @@ Tokenised **`.bbc` / `.BBC` input** is decoded by Python mini_basic when opened,
 including from the command line. It becomes an unsaved BASIC `.bas` buffer;
 Ctrl+S uses Save As, preserving the original binary. Configure the Python
 mini_basic location in BASIC Settings. See [BBC input details](docs/BBCSDL.md).
+
+### Workspaces and file modules
+
+**F6 / Shift+F6 run fresh; F5, Ctrl+Shift+Enter and Listener Eval retain state.**
+Results remain available after a run, and editor buffers survive Workspace →
+New / Push / Pop. Use `(workspace-push)` / `(workspace-pop)` to preserve and
+restore variables, closures, macros, module instances and memo caches in memory.
+`(new-workspace)` starts clean.
+
+Explicit `(import (prefix "file.lisp" file:))` keeps file definitions in a private
+module. `(reload "file.lisp")` refreshes its recorded imports; `(unload "file.lisp")`
+removes them. Legacy `load` still uses the shared workspace. Registered cleanup
+releases managed resources; external side effects are not undone. See the
+[workspace and module guide](docs/WORKSPACES.md) for scope, Python import analogies,
+cleanup limits, and comparison with Racket, Clojure and Common Lisp.
+
+Help → Update also checks local Python/runtime-library changes since startup,
+even if Git reports no new commits or pull fails, and offers a restart. It
+refreshes open text-file buffers changed on disk; unsaved edits require confirmation
+before replacement. Refreshing a buffer does not execute or reload its definitions.

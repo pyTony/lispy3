@@ -234,7 +234,8 @@ macro_table = lp.macro_table
 Procedure = lp.Procedure
 is_true = lp.is_true
 
-def fast_eval_exp(x: Any, env: lp.Env = lp.global_env) -> Any:
+def fast_eval_exp(x: Any, env: lp.Env = None) -> Any:
+    env = lp.global_env if env is None else env
     while True:
         kind = type(x)
         if isinstance(x, str):
