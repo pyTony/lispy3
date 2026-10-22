@@ -145,6 +145,15 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 - [x] Preserve source quoting, automatic reader import, timing, and errors.
   Four new tests failed before implementation; 19 focused checks now pass.
 
+### Local SDL Mandelbrot window close fix (2026-10-21)
+
+- [x] Reproduce discarded Quit/Escape events with failing regression tests.
+- [x] Close the SDL display before rendering another frame; later presents
+  remain harmless until reopened. Keep both demos polling after drawing.
+- [x] Close regressions and existing Stop checks: 10 passed.
+- The SDL backend and demos were already local, untracked work when this fix
+  started; this entry does not claim they have been published to GitHub.
+
 ### Terminal output and buffer timing (2026-10-21)
 
 - [x] Route program output to a real ANSI terminal from Lisp or the GUI while

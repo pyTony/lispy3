@@ -1273,6 +1273,10 @@ def standard_env() -> Env:
         else:
             env[key] = value
 
+    # Optional SDL graphics: separate Python module, shared with mini_basic later.
+    from lispy_graphics_bindings import install as _install_graphics
+    _install_graphics(env, Procedure, String)
+
     return env
 
 global_env = standard_env()

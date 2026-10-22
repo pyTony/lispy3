@@ -1,6 +1,8 @@
 REM Terminal Mandelbrot procedures for lispy3 mini-basic; no MODE/graphics.
 REM Load this file, then call PROCmandelbrot(FALSE,79,25,40) or TRUE for colour.
 REM Width/height must be integers >=2; iterations must be a positive integer.
+PROCmandelbrot(TRUE,79,25,16)
+END
 DEF PROCmandelbrot(colour%,width%,height%,limit%)
 LOCAL ramp$,last%,row%,col%,cx,cy,n%,ink%,glyph$
 ramp$=".,:;ox%#@"

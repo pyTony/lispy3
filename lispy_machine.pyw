@@ -515,7 +515,8 @@ class _ListenerWriter(io.TextIOBase):
 # can end an endless loop. Tk (and so turtle) may only be used from the main
 # thread, so these built-ins are handed over to it and waited for.
 GUI_BUILTINS = frozenset(turtle.__all__) | {
-    'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help', 'onscroll'}
+    'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help', 'onscroll',
+    'graphics-mode', 'graphics-rgb-mode', 'graphics-open', 'graphics-present', 'graphics-close'}
 
 
 class Stopped(BaseException):
