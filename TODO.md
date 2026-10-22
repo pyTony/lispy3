@@ -158,6 +158,20 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
   to the two native Lisp demo launchers were preserved; their extra output
   makes the unchanged 25-row demo assertions fail in the working checkout.
 
+### mini-basic: PRINT/VDU and call cleanup (2026-10-22)
+
+- [x] Reproduce PRINT control-code and parameter/LOCAL leaks with failing tests.
+- [x] Share PRINT/VDU decoding, preserving Unicode and raw ANSI isolation.
+- [x] Restore PROC/FN dynamic bindings on runtime errors and END, including
+  nested calls; retain normal/early return behavior. Host interrupts are not
+  covered by this Exception-based cleanup.
+- [x] Correct the guide's raw PRINT escape example and stale numbered-WHEN
+  restriction in the BBCSDL reference notes.
+- Validation: `python -m unittest discover -s tests` ran **623 tests**,
+  **OK (4 skipped)**. The new file contains 12 passing regressions.
+- [ ] Retain runtime source spans through expansion for precise BASIC error
+  navigation; current reader syntax locations are not a complete runtime map.
+
 ### mini-basic: fixes before improvements
 
 Progress recorded 2026-10-20. Fix demonstrated errors before adding features.
