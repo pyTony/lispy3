@@ -135,3 +135,18 @@ syntax-rules and portable serialization remain future work. Both the normal
 interpreter and the optional NumPy evaluator support the import forms.
 
 Regression checks: `python -m pytest tests/test_libraries.py -q`.
+
+## Plain file modules and lifecycle
+
+A string import naming a plain `.lisp` file now creates a private module without
+requiring a define-library wrapper. Its actual definitions/macros are exported;
+standard builtins and imported dependencies are not automatically exported.
+Existing only/prefix/rename modifiers apply. `load` remains the legacy shared
+script operation.
+
+Use `(unload "file.lisp")` or `(reload "file.lisp")` for explicit module
+lifecycle; named declarations can use `(unload 'name)`. Reload refreshes recorded
+imports, keeping aliases and selections, and drops removed exports. Live library
+dependents must be unloaded first. Register managed cleanup with
+`(module-on-unload cleanup)` inside the module. See [WORKSPACES.md](WORKSPACES.md)
+for atomic binding replacement, side-effect limits and cleanup behavior.

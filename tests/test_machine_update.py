@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
+from pathlib import Path
 
 from test_machine_args import machine
 
@@ -102,6 +104,59 @@ class GitPull(unittest.TestCase):
         os.environ["PATH"] = ""
         self.addCleanup(os.environ.__setitem__, "PATH", saved)
         self.assertEqual(machine.git_branch(self.clone), "not a git checkout")
+
+
+class LocalRuntimeChanges(unittest.TestCase):
+    def test_changed_saved_buffer_reloads_without_evaluating(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'demo.lisp'
+            path.write_text('new')
+            tab = Mock(path=str(path), disk_content='old', dirty=False, name='demo.lisp')
+            app = Mock(tabs={'demo': tab})
+            machine.LispMachine._refresh_changed_buffers(app)
+            tab.set_content.assert_called_once_with('new')
+            self.assertEqual(tab.disk_content, 'new')
+
+    def test_unsaved_buffer_is_kept_when_reload_declined(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'demo.lisp'
+            path.write_text('external')
+            tab = Mock(path=str(path), disk_content='old', dirty=True, name='demo.lisp')
+            app = Mock(tabs={'demo': tab})
+            with patch.object(machine.messagebox, 'askyesno', return_value=False):
+                machine.LispMachine._refresh_changed_buffers(app)
+            tab.set_content.assert_not_called()
+            self.assertEqual(tab.disk_content, 'old')
+
+    def test_content_change_detected_even_if_timestamp_is_preserved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'lispy3.py'
+            path.write_text('old')
+            before = machine.runtime_fingerprint(folder)
+            stamp = path.stat()
+            path.write_text('new')
+            os.utime(path, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            self.assertNotEqual(before, machine.runtime_fingerprint(folder))
+
+    def test_failed_pull_still_offers_restart_for_local_changes(self):
+        app = Mock(update_pending=False, tabs={})
+        with patch.object(machine, 'RUNTIME_FINGERPRINT', {'lispy3.py': 'old'}), \
+             patch.object(machine, 'runtime_fingerprint', return_value={'lispy3.py': 'new'}), \
+             patch.object(machine.messagebox, 'showerror') as error, \
+             patch.object(machine.messagebox, 'askyesno', return_value=True):
+            machine.LispMachine._update_done(app, 'failed', 'no upstream')
+        error.assert_called_once()
+        app.restart.assert_called_once()
+
+    def test_unchanged_runtime_does_not_offer_restart(self):
+        app = Mock(update_pending=False, tabs={})
+        with patch.object(machine, 'RUNTIME_FINGERPRINT', {'lispy3.py': 'same'}), \
+             patch.object(machine, 'runtime_fingerprint', return_value={'lispy3.py': 'same'}), \
+             patch.object(machine.messagebox, 'showinfo') as info, \
+             patch.object(machine.messagebox, 'askyesno') as ask:
+            machine.LispMachine._update_done(app, 'current', '')
+        info.assert_called_once()
+        ask.assert_not_called()
 
 
 class RestartCommand(unittest.TestCase):

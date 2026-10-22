@@ -5,7 +5,8 @@ use-site symbols in their arguments. This is not a syntax-rules implementation.
 """
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from copy import deepcopy
 from pathlib import Path
 
 
@@ -32,6 +33,8 @@ class Library:
     macros: dict
     directory: Path
     exports: dict
+    definitions: set = field(default_factory=set)
+    cleanup: list = field(default_factory=list)
 
 
 class ImportedMacro:
@@ -53,6 +56,8 @@ class LibrarySystem:
         self.registry = {}
         self.files = {}
         self.loading = set()
+        self.imports = []
+        self.cleaning = False
         self.current = ContextVar('lispy_library', default=None)
         self.directory = ContextVar('lispy_library_directory', default=None)
 
@@ -61,6 +66,7 @@ class LibrarySystem:
                 any(isinstance(value, ImportedMacro) for value in self.runtime.macro_table.values()))
 
     def reset(self):
+        self.imports.clear()
         self.registry.clear()
         self.files.clear()
         self.loading.clear()
@@ -96,6 +102,8 @@ class LibrarySystem:
         macros = library.macros if library else self.runtime.macro_table
         if isinstance(dict.get(env, name), LibraryReference) or isinstance(macros.get(name), ImportedMacro):
             raise self.runtime.LispyError(f'import binding is read-only: {name}')
+        if library and env is library.env:
+            library.definitions.add(name)
 
     def expand_in(self, code, env, toplevel=False):
         library = self.owner(env)
@@ -206,6 +214,7 @@ class LibrarySystem:
         raise SyntaxError('library: expected a name or a list of name components')
 
     def define(self, form):
+        self._check_cleanup()
         r = self.runtime
         if len(form) < 3:
             raise SyntaxError('define-library needs a name and declarations')
@@ -217,7 +226,7 @@ class LibrarySystem:
         library.env['eval'] = lambda code: self.evaluate(code, library)
         library.env['read'] = lambda text: self.read(text, library)
         exports = []
-        with self.scope(library):
+        with self._construction(library):
             for declaration in form[2:]:
                 if not isinstance(declaration, list) or not declaration:
                     raise SyntaxError('define-library: expected export, import, begin or include declaration')
@@ -236,25 +245,25 @@ class LibrarySystem:
                         self.load_source(filename.value, library)
                 else:
                     raise SyntaxError(f'define-library: unsupported declaration {kind}')
-        for export in exports:
-            if type(export) is str:
-                internal = external = export
-            elif type(export) is list and len(export) == 3 and export[0] == 'rename':
-                _, internal, external = export
-                if type(internal) is not str or type(external) is not str:
-                    raise SyntaxError('export rename needs two names')
-            else:
-                raise SyntaxError('export: expected name or (rename internal external)')
-            if external in library.exports:
-                raise r.LispyError(f'duplicate export: {external}')
-            if internal in library.macros:
-                proc = library.macros[internal]
-                library.exports[external] = proc if isinstance(proc, ImportedMacro) else ImportedMacro(self, library, proc)
-            elif internal in library.env:
-                library.exports[external] = LibraryReference(library.env, internal)
-            else:
-                raise r.LispyError(f'export missing definition: {internal}')
-        self.registry[name] = library
+            for export in exports:
+                if type(export) is str:
+                    internal = external = export
+                elif type(export) is list and len(export) == 3 and export[0] == 'rename':
+                    _, internal, external = export
+                    if type(internal) is not str or type(external) is not str:
+                        raise SyntaxError('export rename needs two names')
+                else:
+                    raise SyntaxError('export: expected name or (rename internal external)')
+                if external in library.exports:
+                    raise r.LispyError(f'duplicate export: {external}')
+                if internal in library.macros:
+                    proc = library.macros[internal]
+                    library.exports[external] = proc if isinstance(proc, ImportedMacro) else ImportedMacro(self, library, proc)
+                elif internal in library.env:
+                    library.exports[external] = LibraryReference(library.env, internal)
+                else:
+                    raise r.LispyError(f'export missing definition: {internal}')
+            self.registry[name] = library
 
     def read(self, text, library):
         with self.scope(library):
@@ -301,6 +310,7 @@ class LibrarySystem:
         return f'Library source loaded from {path}'
 
     def resolve(self, spec):
+        self._check_cleanup()
         r = self.runtime
         if isinstance(spec, r.String):
             path = Path(spec.value)
@@ -313,6 +323,7 @@ class LibrarySystem:
             if name in self.registry:
                 return self.registry[name].exports
             path = Path(r.LISP_DIR) / (name + '.sld')
+        path = path.resolve()
         key = str(path)
         if key in self.files:
             return self.registry[self.files[key]].exports
@@ -322,13 +333,30 @@ class LibrarySystem:
             raise r.LispyError(f'library not found: {name or path}')
         self.loading.add(key)
         before = set(self.registry)
+        imports_before = list(self.imports)
         try:
             token = self.directory.set(path.parent)
             try:
                 tokens = r.tokenize(path.read_text(encoding='utf-8'))
-                if not tokens:
+                form = r.read_from_tokens(tokens) if tokens else None
+                wrapped = isinstance(form, list) and form and form[0] == 'define-library'
+                if isinstance(spec, r.String) and path.suffix.lower() == '.lisp' and not wrapped:
+                    library = Library(key, r.Env(outer=r.standard_env()), {}, path.parent, {})
+                    library.env.library = library
+                    library.env['eval'] = lambda code: self.evaluate(code, library)
+                    library.env['read'] = lambda text: self.read(text, library)
+                    with self._construction(library):
+                        self.load_source(str(path), library)
+                    for export in library.definitions:
+                        if export in library.macros:
+                            library.exports[export] = ImportedMacro(self, library, library.macros[export])
+                        elif export in library.env:
+                            library.exports[export] = LibraryReference(library.env, export)
+                    self.registry[key] = library
+                    self.files[key] = key
+                    return library.exports
+                if form is None:
                     raise SyntaxError('library file is empty')
-                form = r.read_from_tokens(tokens)
                 if tokens or not isinstance(form, list) or not form or form[0] != 'define-library':
                     raise SyntaxError('library file must contain one define-library form')
                 declared = self.name(form[1])
@@ -339,29 +367,40 @@ class LibrarySystem:
                 return self.registry[declared].exports
             finally:
                 self.directory.reset(token)
-        except BaseException:
-            for added in set(self.registry) - before:
-                del self.registry[added]
+        except BaseException as exc:
+            exc.add_note(f"while importing library file {path}")
+            self.imports = imports_before
+            added = [lib for name, lib in self.registry.items() if name not in before]
+            try:
+                self._cleanup(reversed(added), committed=False)
+            except BaseException as cleanup_error:
+                exc.add_note(str(cleanup_error))
+            for lib in added:
+                del self.registry[lib.name]
             self.files = {path: name for path, name in self.files.items() if name in self.registry}
+            if isinstance(exc, (OSError, SyntaxError)):
+                raise r.LispyError(f"library file {path}: {exc}") from exc
+            if isinstance(exc, (NameError, r.LispyError)):
+                exc.args = (f'library file {path}: {exc}',)
             raise
         finally:
             self.loading.remove(key)
 
-    def selection(self, spec):
+    def selection(self, spec, refreshing=False):
         r = self.runtime
         if isinstance(spec, list) and spec and spec[0] in ('only', 'prefix', 'rename'):
             kind = spec[0]
             if len(spec) < 2:
                 raise SyntaxError(f'import {kind}: missing import set')
-            exports = self.selection(spec[1])
+            exports = self.selection(spec[1], refreshing)
             if kind == 'only':
                 names = spec[2:]
                 if any(type(n) is not str for n in names) or len(names) != len(set(names)):
                     raise SyntaxError('import only: expected distinct names')
                 for name in names:
-                    if name not in exports:
+                    if name not in exports and not refreshing:
                         raise r.LispyError(f'import: missing export {name}')
-                return {name: exports[name] for name in names}
+                return {name: exports[name] for name in names if name in exports}
             if kind == 'prefix':
                 if len(spec) != 3 or type(spec[2]) is not str:
                     raise SyntaxError('import prefix: expected one prefix symbol')
@@ -373,6 +412,8 @@ class LibrarySystem:
             sources = [p[0] for p in pairs]
             if len(set(sources)) != len(sources):
                 raise SyntaxError('import rename: duplicate source')
+            if refreshing:
+                pairs = [pair for pair in pairs if pair[0] in exports]
             for old, new in pairs:
                 if old not in exports:
                     raise r.LispyError(f'import: missing export {old}')
@@ -385,11 +426,20 @@ class LibrarySystem:
         return self.resolve(spec)
 
     def import_sets(self, sets):
+        self._check_cleanup()
         r = self.runtime
         env, macros = self.env(), self.macros()
         selected = {}
+        records = []
         for spec in sets:
-            for name, value in self.selection(spec).items():
+            exports = self.selection(spec)
+            leaf = spec
+            while isinstance(leaf, list) and leaf and leaf[0] in ("only", "prefix", "rename"):
+                leaf = leaf[1]
+            base = self.resolve(leaf)
+            library = next(lib for lib in self.registry.values() if lib.exports is base)
+            records.append((library, self.current.get(), deepcopy(spec), dict(exports)))
+            for name, value in exports.items():
                 if name in r.SPECIAL_FORMS or name in ('define-library', 'import'):
                     raise r.LispyError(f'import reserved name: {name}')
                 if name in selected and selected[name] is not value:
@@ -404,3 +454,211 @@ class LibrarySystem:
                 macros[name] = value
             else:
                 env[name] = value
+
+        self.imports.extend(records)
+
+    def _target(self, importer):
+        # Resolve the workspace on every operation: workspace managers may swap it.
+        return ((importer.env, importer.macros) if importer else
+                (self.runtime.global_env, self.runtime.macro_table))
+
+    def _loaded(self, spec):
+        if isinstance(spec, self.runtime.String):
+            path = Path(spec.value)
+            if not path.is_absolute():
+                path = (self.directory.get() or Path.cwd()) / path
+            name = self.files.get(str(path.resolve()))
+        else:
+            name = self.name(spec)
+        if name not in self.registry:
+            raise self.runtime.LispyError(f'library is not loaded: {spec}')
+        return self.registry[name]
+
+    def _dependents(self, library):
+        names = sorted({owner.name for source, owner, _, _ in self.imports
+                        if source is library and owner is not None and
+                        self.registry.get(owner.name) is owner})
+        if names:
+            raise self.runtime.LispyError(
+                f'library {library.name} is imported by dependent libraries: {", ".join(names)}')
+
+    def _remove_bindings(self, records):
+        for _, owner, _, installed in records:
+            env, macros = self._target(owner)
+            for name, value in installed.items():
+                table = macros if isinstance(value, ImportedMacro) else env
+                if dict.get(table, name) is value:
+                    del table[name]
+
+    def unload(self, spec):
+        """Forget a loaded library and remove its still-owned imported bindings.
+
+        Refuse live library dependents. Explicitly registered cleanup callbacks
+        run once under the old library scope; no magic start/stop names are used.
+        Previously copied procedures/values are outside import binding ownership.
+        """
+        self._check_cleanup()
+        library = self._loaded(spec)
+        self._dependents(library)
+        self._remove_bindings([record for record in self.imports if record[0] is library])
+        self.imports = [record for record in self.imports
+                        if record[0] is not library and record[1] is not library]
+        del self.registry[library.name]
+        self.files = {path: name for path, name in self.files.items() if name != library.name}
+        self._cleanup([library])
+        return library.name
+
+    def reload(self, spec):
+        """Stage a fresh file instance, then atomically refresh import selections.
+
+        Missing selected exports disappear; wildcard selections gain new exports.
+        Registry/import failures retain the old instance. File side effects cannot
+        be rolled back. Live library dependents must be unloaded first.
+        """
+        self._check_cleanup()
+        library = self._loaded(spec)
+        self._dependents(library)
+        filename = next((path for path, name in self.files.items() if name == library.name), None)
+        if filename is None:
+            raise self.runtime.LispyError(f'library has no source file: {library.name}')
+        registry, files, imports = dict(self.registry), dict(self.files), list(self.imports)
+        records = [record for record in imports if record[0] is library]
+        try:
+            del self.registry[library.name]
+            self.files = {path: name for path, name in self.files.items() if name != library.name}
+            self.imports = [record for record in imports if record[1] is not library]
+            self.resolve(self.runtime.String(filename))
+            fresh = self._loaded(self.runtime.String(filename))
+            plans = []
+            pending = {}
+            for _, owner, selection, installed in records:
+                chosen = self.selection(selection, refreshing=True)
+                env, macros = self._target(owner)
+                # Preserve importer overrides, including across value/macro changes.
+                overridden = {name for name, value in installed.items()
+                              if dict.get(macros if isinstance(value, ImportedMacro) else env, name) is not value}
+                chosen = {name: value for name, value in chosen.items() if name not in overridden}
+                for name, value in chosen.items():
+                    if name in self.runtime.SPECIAL_FORMS or name in ('define-library', 'import'):
+                        raise self.runtime.LispyError(f'import reserved name: {name}')
+                    for table in (env, macros):
+                        existing = dict.get(table, name)
+                        if name in table and existing is not installed.get(name) and existing is not value:
+                            raise self.runtime.LispyError(f'import name collision: {name}')
+                    key = (id(env), name)
+                    if key in pending and pending[key] is not value:
+                        raise self.runtime.LispyError(f'import name collision: {name}')
+                    pending[key] = value
+                plans.append((fresh, owner, selection, chosen))
+        except BaseException as exc:
+            added = [lib for name, lib in self.registry.items()
+                     if registry.get(name) is not lib]
+            try:
+                self._cleanup(reversed(added), committed=False)
+            except BaseException as cleanup_error:
+                exc.add_note(str(cleanup_error))
+            self.registry.clear()
+            self.registry.update(registry)
+            self.files = files
+            self.imports = imports
+            raise
+        self._remove_bindings(records)
+        self.imports = [record for record in self.imports if record[0] is not library]
+        for record in plans:
+            _, owner, _, chosen = record
+            env, macros = self._target(owner)
+            for name, value in chosen.items():
+                (macros if isinstance(value, ImportedMacro) else env)[name] = value
+        self.imports.extend(plans)
+        self._cleanup([library])
+        return fresh
+
+    def _check_cleanup(self):
+        if self.cleaning:
+            raise self.runtime.LispyError('module lifecycle operation is forbidden during cleanup')
+
+    def on_unload(self, callback):
+        """Register a zero-argument callable in the active library/module scope.
+
+        Callbacks run once, in reverse registration order, under their old scope.
+        The runtime's module-on-unload builtin can delegate directly here.
+        """
+        self._check_cleanup()
+        library = self.current.get()
+        if library is None:
+            raise self.runtime.LispyError('module-on-unload requires an active library scope')
+        if not callable(callback):
+            raise self.runtime.LispyError('module-on-unload requires a callable procedure')
+        library.cleanup.append(callback)
+
+    def _cleanup(self, libraries, committed=True):
+        errors = []
+        previous = self.cleaning
+        self.cleaning = True
+        try:
+            for library in libraries:
+                callbacks = list(reversed(library.cleanup))
+                library.cleanup.clear()
+                with self.scope(library):
+                    for callback in callbacks:
+                        try:
+                            callback()
+                        except BaseException as exc:
+                            errors.append(f'{library.name}: {exc}')
+        finally:
+            self.cleaning = previous
+        if errors:
+            status = 'lifecycle change committed' if committed else 'staged instance discarded'
+            raise self.runtime.LispyError(
+                f'module cleanup failed ({status}): ' + '; '.join(errors))
+
+    def cleanup_all(self):
+        """Discard all imports/resources before the workspace manager swaps state.
+
+        Import bindings remain available throughout callbacks so dependents can
+        call dependency release functions. Dependents clean up first, with each
+        callback attempted once. Bindings and registry clear even on failure.
+        reset() remains the legacy registry reset without resource cleanup.
+        """
+        self._check_cleanup()
+        active = {id(library): library for library in self.registry.values()}
+        dependents = {key: [] for key in active}
+        for source, owner, _, _ in self.imports:
+            if id(source) in active and id(owner) in active:
+                dependents[id(source)].append(id(owner))
+        libraries, visited = [], set()
+
+        def visit(key):
+            # Identity-based traversal also terminates for accidental cycles or
+            # duplicate records; normal library imports form an acyclic graph.
+            if key in visited:
+                return
+            visited.add(key)
+            for dependent in dependents[key]:
+                visit(dependent)
+            libraries.append(active[key])
+
+        for key in active:
+            visit(key)
+        try:
+            self._cleanup(libraries)
+        finally:
+            try:
+                self._remove_bindings(self.imports)
+            finally:
+                self.imports.clear()
+                self.registry.clear()
+                self.files.clear()
+
+    @contextmanager
+    def _construction(self, library):
+        try:
+            with self.scope(library):
+                yield
+        except BaseException as exc:
+            self.imports = [record for record in self.imports if record[1] is not library]
+            try:
+                self._cleanup([library], committed=False)
+            except BaseException as cleanup_error:
+                exc.add_note(str(cleanup_error))
+            raise
