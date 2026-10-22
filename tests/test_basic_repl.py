@@ -21,6 +21,19 @@ class BasicReplTest(LispyTestCase):
         self.assertEqual(self.submit('n=7', 'PRINT ;n'), '7\n')
         self.assertNotIn('n', L.global_env)
 
+    def test_default_directory_and_relative_load_save(self):
+        from basic_repl import BasicRepl
+        self.assertEqual(self.repl.directory, Path(__file__).resolve().parents[1]/'basic')
+        with tempfile.TemporaryDirectory() as directory:
+            session=BasicRepl(L, directory=directory)
+            self.addCleanup(session.close)
+            session.submit('10 PRINT 42')
+            session.submit('SAVE "relative.bas"')
+            self.assertEqual((Path(directory)/'relative.bas').read_text(), '10 PRINT 42\n')
+            session.submit('NEW')
+            session.submit('LOAD "relative.bas"')
+            self.assertEqual(session.source(), '10 PRINT 42\n')
+
     def test_lines_replace_delete_sort_list_and_run(self):
         self.assertEqual(self.submit('30 PRINT "old"', '10 PRINT "first"',
             '20 PRINT "deleted"', '20', '30 PRINT "last"', 'LIST', 'RUN'),

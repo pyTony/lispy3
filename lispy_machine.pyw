@@ -3190,7 +3190,9 @@ class LispMachine(tk.Tk):
         if t.compare("insert", "<", "input"):
             t.mark_set("insert", "end-1c")
         before = t.get("input", "insert")
-        files = filename_completion(before, basic=LispMachine._basic_mode(self))
+        basic = LispMachine._basic_mode(self)
+        files = filename_completion(before, basic=basic,
+                                    cwd=self.basic_repl.directory if basic else None)
         if files is not None:
             start, matches = files
             if not matches:

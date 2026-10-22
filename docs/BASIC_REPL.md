@@ -47,7 +47,10 @@ keeps the old program. Read failures also preserve the old program.
 LOAD supports `.bbc` through the configured Python mini_basic decoder in
 **BASIC Settings**. SAVE writes plain text and refuses `.bbc`, which is a
 tokenised format. Filenames must be quoted; embedded BASIC quotes use `""`.
-Relative paths resolve from the current working directory. A successful LOAD
+Relative BASIC paths resolve from the project's `basic/` directory, also used
+by filename completion. For example, `LOAD "examples/structure.bas"` loads the
+included example. Absolute paths work as well; Lisp keeps its usual working
+directory. A successful LOAD
 changes program text; it does not reset already existing immediate variables
 until RUN or NEW.
 

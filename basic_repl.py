@@ -4,12 +4,13 @@ from pathlib import Path
 
 
 class BasicRepl:
-    def __init__(self, runtime, read_source=None):
+    def __init__(self, runtime, read_source=None, directory=None):
         self.runtime = runtime
         self.manager = runtime.workspaces
         self.workspace = None
         self.lines = {}
         self.read_source = read_source or self._read_source
+        self.directory = Path(directory).resolve() if directory is not None else Path(__file__).resolve().parent/'basic'
 
     @staticmethod
     def _read_source(path):
@@ -81,6 +82,8 @@ class BasicRepl:
             return
         if command in ('LOAD', 'SAVE'):
             path = self._filename(argument)
+            if not path.is_absolute():
+                path = self.directory / path
             if command == 'SAVE':
                 if path.suffix.lower() == '.bbc':
                     raise ValueError('SAVE writes text; choose a .bas filename, not .bbc')
@@ -109,7 +112,7 @@ class BasicRepl:
         self._execute(line)
 
 
-def setup_completion():
+def setup_completion(directory=None):
     try:
         import readline
     except ImportError:
@@ -124,7 +127,7 @@ def setup_completion():
         nonlocal matches
         if state == 0:
             before = readline.get_line_buffer()[:readline.get_endidx()]
-            files = filename_completion(before, basic=True)
+            files = filename_completion(before, basic=True, cwd=directory)
             if files is not None:
                 start, paths = files
                 matches = [before[:start]+path for path in paths]
@@ -142,7 +145,7 @@ def setup_completion():
 def main():
     import lispy3
     session = BasicRepl(lispy3)
-    setup_completion()
+    setup_completion(session.directory)
     print('Lispy mini-basic. HELP for commands; QUIT to exit.')
     try:
         while True:
