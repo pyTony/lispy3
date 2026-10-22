@@ -72,7 +72,7 @@ Bare numeric statements elsewhere remain invalid.
 Use structured exits where possible. Jumps into inactive structured bodies are
 outside the supported control-flow model. BBCSDL's shared-stack edge cases do
 not imply equivalent behavior here; see the
-[reference checks](../compare/reference/README.md) for recorded results and limits.
+[reference checks](../basic/reference/README.md) for recorded results and limits.
 
 Graphics, INPUT, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
@@ -172,7 +172,7 @@ terminal reset on END or an error: restore attributes explicitly when finished.
 The repository now includes matching plain and ANSI-coloured terminal renderers
 in BASIC and native Lisp. See [Terminal Mandelbrot](TERMINAL_MANDELBROT.md) for
 four one-command launchers, source locations and custom-size calls. The BASIC
-source is `lisp/programs/mandelbrot-terminal.bas`; it no longer requires the
+source is `basic/examples/mandelbrot-terminal.bas`; it no longer requires the
 external Python mini_basic checkout. The external demo below is still available.
 
 ## TIME and terminal Mandelbrot

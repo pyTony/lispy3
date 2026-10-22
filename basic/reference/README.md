@@ -21,7 +21,7 @@ the isolated runner below bypasses that UI problem.
 ## Run all cases without keyboard input
 
 ```powershell
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-run
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-run
 ```
 
 Use a new output directory for each run. The runner checks the supplied fixture's
@@ -129,8 +129,8 @@ Three additional BBCSDL 1.44a runs used case 14's original native target list:
 Reproduce using a new directory:
 
 ```powershell
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-range-probe --on-gosub-index 0
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-else-probe --on-gosub-index 0 --on-gosub-else
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-range-probe --on-gosub-index 0
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-else-probe --on-gosub-index 0 --on-gosub-else
 ```
 
 The shared lispy3 ON GOTO/GOSUB code now reports ON range instead of silently
@@ -175,7 +175,7 @@ not establish that an earlier abandoned frame was removed.
 Reproduce a probe with a new output directory:
 
 ```powershell
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-probe --exit-probe enclosing-while
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-probe --exit-probe enclosing-while
 ```
 
 If reusable tokenising support becomes necessary, implement it in mini-basic
@@ -202,7 +202,7 @@ All reported errors identify line 5081.
 are retained. Reproduce with:
 
 ```powershell
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-terminator-check --terminator-probe all
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-terminator-check --terminator-probe all
 ```
 
 These are observations about the precise probes, not a recommendation to jump

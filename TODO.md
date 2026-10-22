@@ -161,7 +161,7 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 ### mini-basic: fixes before improvements
 
 Progress recorded 2026-10-20. Fix demonstrated errors before adding features.
-Compatibility qualification: [the BBCSDL reference checks](compare/reference/README.md)
+Compatibility qualification: [the BBCSDL reference checks](basic/reference/README.md)
 now record all 14 observations on version 1.44a. The exact numeric-label cases
 match the expected normal outputs or missing-target error; this does not imply
 compatibility for arbitrary jumps or abandoned loop-stack continuations.
@@ -175,7 +175,7 @@ Do not skip or mark pending acceptance tests as expected failures.
 - [x] Verify existing mini-basic tests: **55 passed**.
 - [x] Prepare one plain-text BBCSDL reference program for manual tokenised save.
 - [x] Receive the user's tokenised `jumping.bbc`, preserve an unchanged copy in
-  `compare/reference/`, and verify BBCSDL 1.44a loads it and displays the menu.
+  `basic/reference/`, and verify BBCSDL 1.44a loads it and displays the menu.
   Individual case observations are recorded in the reference README.
 - [x] Run all 14 BBCSDL cases in isolated processes and preserve raw logs and
   JSON results: **13 normal outputs, 1 expected error, no crashes or timeouts**.
@@ -187,7 +187,7 @@ Do not skip or mark pending acceptance tests as expected failures.
 - [x] Probe small loops after the GOTO exit on BBCSDL 1.44a: a fresh FOR and a
   fresh WHILE succeed; continuing an enclosing WHILE after abandoning its inner
   FOR reports **ERR 46, Not in a WHILE loop, at line 5082**. Raw logs and
-  reproduction commands are in `compare/reference/README.md`.
+  reproduction commands are in `basic/reference/README.md`.
 - [x] Probe terminators reached without executing their opening statement:
   BBCSDL reports errors for NEXT (32), UNTIL (43), ENDWHILE (46), RETURN (38);
   ENDIF and ENDCASE continue without an error in these probes. Six raw logs
@@ -307,7 +307,7 @@ This implementation is for lispy3; backend parity is not implied.
 Steps 1 and 4 are complete. The broader compatibility-policy/audit work in steps
 2-3 and release/next-feature planning in steps 5-6 remain pending. The user's requested Python-suite
 audit now has actual exported programs and a representative native menu in
-`compare/reference/python-mini-basic-control-flow/`. Four representative stored
+`basic/reference/python-mini-basic-control-flow/`. Four representative stored
 programs have recorded BBCSDL results; the broader audit remains pending.
 The earlier `bbcsdl-structured-checks.bas` is a
 separate lispy3-derived audit source, not a substitute for the Python test cases.
@@ -453,3 +453,10 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Update/startup/control-flow integration: 61 passed, 3 subtests passed.
 
 - [x] Update refreshes externally changed open text buffers without evaluating them; dirty buffers require confirmation. Tokenized imports remain editable copies saved separately.
+
+### BASIC source organization (2026-10-22)
+
+- [x] Move BASIC examples, benchmarks and BBCSDL reference material to basic/.
+- [x] Retain Lisp implementation/library files under lisp/ and cross-Lisp backends under compare/.
+- [x] Update tests, launchers, documentation links and reproduction commands; preserve historical evidence unchanged.
+- Validation: 607 passed, 4 skipped, 355 subtests; 132 moved source/evidence files byte-identical. Both reference command-line tools still show help from their new paths.

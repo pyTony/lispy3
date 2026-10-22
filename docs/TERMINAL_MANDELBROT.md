@@ -36,12 +36,12 @@ The arithmetic and loops are Lisp. The renderer imports only COLOUR and
 ANSI-RESET from mini-basic for terminal output, using the private `mandel:` prefix.
 It does not run its Mandelbrot calculation through the BASIC reader.
 
-The BASIC source lives in `lisp/programs/mandelbrot-terminal.bas`. It defines
+The BASIC source lives in `basic/examples/mandelbrot-terminal.bas`. It defines
 procedures/functions without drawing until called:
 
 ```lisp
 (import (only mini-basic bbc-load bbc-run))
-(bbc-load "lisp/programs/mandelbrot-terminal.bas")
+(bbc-load "basic/examples/mandelbrot-terminal.bas")
 (bbc-run "PROCmandelbrot(FALSE,79,25,40)")
 (bbc-run "PROCmandelbrot(TRUE,79,25,40)")
 ```

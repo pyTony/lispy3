@@ -16,7 +16,10 @@ from support import REPO_DIR, LispyTestCase, lispy3
 
 COMPARE_DIR = os.path.join(REPO_DIR, 'compare')
 PROGRAMS = sorted(glob.glob(os.path.join(COMPARE_DIR, 'programs', '*.lisp').replace('\\','/')))
-BASIC_PROGRAMS = sorted(glob.glob(os.path.join(COMPARE_DIR, 'basic', '*.bas')))
+BASIC_EXAMPLES = os.path.join(REPO_DIR, 'basic', 'examples')
+# Only examples with golden output participate in cross-backend checks.
+BASIC_PROGRAMS = [os.path.splitext(path)[0] + '.bas' for path in
+                  sorted(glob.glob(os.path.join(BASIC_EXAMPLES, '*.out')))]
 
 
 def expected_output(program: str) -> str:

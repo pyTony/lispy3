@@ -81,7 +81,7 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lisp/programs/tree.lisp`, `lisp/programs/plant.lisp`, `lisp/programs/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
-| `lisp/mini-basic.lisp` | BBC BASIC text via `(bbc-run """...""")` or `(bbc-load "prog.bas")`: structured statements, PROC/FN, GOTO, GOSUB/RETURN, ON branches, DATA/READ/RESTORE, DIM arrays and an assignable centisecond TIME clock. See the [mini-basic guide](docs/MINI_BASIC.md) for usage, ANSI output and limits, and `compare/reference/README.md` for native checks. |
+| `lisp/mini-basic.lisp` | BBC BASIC text via `(bbc-run """...""")` or `(bbc-load "prog.bas")`: structured statements, PROC/FN, GOTO, GOSUB/RETURN, ON branches, DATA/READ/RESTORE, DIM arrays and an assignable centisecond TIME clock. See the [mini-basic guide](docs/MINI_BASIC.md) for usage, ANSI output and limits, and `basic/reference/README.md` for native checks. |
 | `lisp/programs/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `lisp/programs/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
 | Terminal Mandelbrot in BASIC and Lisp | Plain and ANSI-coloured terminal demos; see [run commands and source](docs/TERMINAL_MANDELBROT.md). |
@@ -596,3 +596,7 @@ Help → Update also checks local Python/runtime-library changes since startup,
 even if Git reports no new commits or pull fails, and offers a restart. It
 refreshes open text-file buffers changed on disk; unsaved edits require confirmation
 before replacement. Refreshing a buffer does not execute or reload its definitions.
+
+BASIC examples, timing programs and BBCSDL reference checks are collected in
+[basic/](basic/README.md). Lisp implementation files remain in lisp/; cross-Lisp
+implementations and Lisp-form fixtures remain in compare/.
