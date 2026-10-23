@@ -7,6 +7,12 @@ from support import LispyTestCase, lispy3
 
 
 class ReplPasteTest(LispyTestCase):
+    def setUp(self):
+        workspace = lispy3.workspaces.create('repl regression')
+        self.addCleanup(lispy3.workspaces.discard, workspace)
+        self.enterContext(lispy3.workspaces.use(workspace))
+        super().setUp()
+
     def run_repl(self, *chunks):
         prompts = []
         def read(prompt):
@@ -41,7 +47,7 @@ class ReplPasteTest(LispyTestCase):
 
     def test_extra_parenthesis_warns_and_valid_forms_execute(self):
         output, _ = self.run_repl('(define warned-value 1) ) (+ warned-value 2)')
-        self.assertIn("Warning: ignored extra ')' at line 1, column 26", output)
+        self.assertIn("Warning: ignored extra ')' at line 1, column 25", output)
         self.assertEqual(lispy3.global_env['warned-value'], 1)
         self.assertIn('3', output)
         self.assertNotIn('Error:', output)
@@ -61,6 +67,30 @@ class ReplPasteTest(LispyTestCase):
         self.assertIn('Tony', output.getvalue())
         self.assertIn('Veijalainen', output.getvalue())
         self.assertIn("Warning: ignored extra ')'", output.getvalue())
+
+
+    def test_gui_marks_extra_closer_but_not_parenthesis_in_string(self):
+        from unittest.mock import Mock
+        from test_machine_args import machine
+        app = Mock()
+        app.repl_pending = ''
+        app._console_input.return_value = '(print ")") )'
+        machine.LispMachine._highlight_repl_extra_parentheses(app)
+        app.listener_text.tag_add.assert_called_once_with('paren_bad', 'input+12c', 'input+13c')
+
+    def test_gui_pending_form_does_not_mark_its_valid_closer(self):
+        from unittest.mock import Mock
+        from test_machine_args import machine
+        app = Mock()
+        app.repl_pending = '(begin'
+        app._console_input.return_value = '(print "ok"))'
+        machine.LispMachine._highlight_repl_extra_parentheses(app)
+        app.listener_text.tag_add.assert_not_called()
+
+    def test_other_closers_still_report_errors_before_execution(self):
+        output, _ = self.run_repl('(define should-not-exist 1) ]')
+        self.assertIn('Error:', output)
+        self.assertNotIn('should-not-exist', lispy3.global_env)
 
 
 

@@ -1473,6 +1473,9 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     head = x[0]
 
+    if head == 'if' and len(x) not in (3, 4):
+        raise SyntaxError('if requires a condition, a then-expression, and optionally an else-expression')
+
     if isinstance(head, str) and head in ('new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'):
         if not toplevel or library_system.current.get() is not None:
             raise SyntaxError(f'{head} only allowed at top-level')
@@ -1969,6 +1972,22 @@ def parse(program: str) -> Exp:
     ast = read_from_tokens(tokens)
     return expand(ast, toplevel=True)
 
+def read_repl_forms(program: str, warn=None) -> list:
+    """Read all interactive forms; only stray top-level ')' is recoverable."""
+    tokens = tokenize(program)
+    forms = []
+    while tokens:
+        if tokens[0] == ')':
+            token = tokens.pop(0)
+            if warn is None:
+                print(f"Warning: ignored extra ')' at line {token.line}, column {token.column}")
+            else:
+                warn(token)
+            continue
+        forms.append(read_from_tokens(tokens))
+    return forms
+
+
 # String literals: """raw text""" (may hold " and newlines, no escapes) or "text" with escapes
 STRING_PATTERN = r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"'
 CHAR_PATTERN = r'#\\[a-zA-Z0-9]+;?|#\\.'      # named/hex chars (#\newline, #\x41;) and any single char
@@ -2399,10 +2418,7 @@ def repl(prompt: str = "lispy3> ") -> None:
                 
             # input() can return an entire bracketed paste, including newlines.
             # Read all syntax first: malformed trailing input must not be ignored.
-            tokens = tokenize(buffer)
-            forms = []
-            while tokens:
-                forms.append(read_from_tokens(tokens))
+            forms = read_repl_forms(buffer)
             buffer = ""
             for form in forms:
                 # Earlier definitions/imports must exist when later macros expand.

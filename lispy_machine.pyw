@@ -2022,6 +2022,7 @@ class LispMachine(tk.Tk):
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
         self.listener_text.tag_configure("info",   foreground=COLORS["info"])
         setup_code_tags(self.listener_text)
+        self.listener_text.tag_configure('paren_bad', background=COLORS['paren_bad'], foreground='#ffffff')
 
         # Plain REPL keys; in Listener mode the text is read-only and keeps its usual keys
         for seq, handler in (("<Return>", self._console_return),
@@ -2467,7 +2468,13 @@ class LispMachine(tk.Tk):
 
     def _run(self, code: str):
         """Evaluate `code`. Returns (value, error). Stdout is streamed to the Listener."""
-        return self._eval_with_turtle(lambda: L.eval_exp(L.parse(code), L.global_env))
+        def evaluate():
+            forms = L.read_repl_forms(code)
+            value = None
+            for form in forms:
+                value = L.eval_exp(L.expand(form, toplevel=True), L.global_env)
+            return value
+        return self._eval_with_turtle(evaluate)
 
     def _evaluation_stdout(self):
         if lispy_terminal.terminal_output_active():
@@ -3556,11 +3563,32 @@ class LispMachine(tk.Tk):
             t.mark_set("insert", "end-1c")
         return None
 
+    def _highlight_repl_extra_parentheses(self):
+        """Mark extra ')' in current input, allowing for earlier continuation lines."""
+        source = self._console_input()
+        pending = self.repl_pending + '\n' if self.repl_pending else ''
+        code = pending + source
+        extras = []
+        try:
+            L.read_repl_forms(code, warn=extras.append)
+        except SyntaxError:
+            pass  # Syntax errors are reported when input is submitted.
+        lines = code.splitlines(keepends=True)
+        for token in extras:
+            offset = sum(map(len, lines[:token.line-1])) + token.column-1 - len(pending)
+            if offset >= 0:
+                self.listener_text.tag_add('paren_bad', f'input+{offset}c', f'input+{offset+1}c')
+        self.listener_text.tag_raise('paren_bad')
+
     def _console_recolor(self, event=None):
         """Colour what is typed at the prompt as Lisp code."""
         if self.console_ready:
             language = SH.language_for('listener.bas', LANGUAGES, DEFAULT_LANGUAGE) if LispMachine._basic_mode(self) else LISP_LANGUAGE
             color_code(self.listener_text, "input", self._console_input(), language)
+            self.listener_text.tag_remove('paren_bad', 'input', 'end')
+            if not LispMachine._basic_mode(self):
+                self._highlight_repl_extra_parentheses()
+
         return None
 
     def _console_key(self, event):
