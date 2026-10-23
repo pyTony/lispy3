@@ -8,6 +8,7 @@ to read back with INPUT#.
 import os
 import tempfile
 
+from support import lispy3
 from test_mini_basic_reader import ReaderTestCase
 
 
@@ -107,3 +108,39 @@ class FileIOTest(ReaderTestCase):
                   'CLOSE#F%\nEND\n'
                   'DEF FNnext(c) = BGET#c')
         self.assertEqual(self.run_bbc(source), '65 66\n')
+
+
+class FileIOHookTest(ReaderTestCase):
+    """mini-basic-io.lisp wraps the reader's hooks: file forms go to it, everything else
+    still reaches mini-basic-ext.lisp and mini-basic.lisp."""
+
+    def test_hash_statements_and_functions_become_file_calls(self):
+        self.assertEqual(self.expand('PRINT#F%, 1, "a"'), '(bbc-program (bbc-print-file F% 1 "a"))')
+        self.assertEqual(self.expand('BPUT#F%, 7;'), '(bbc-program (bbc-bput F% 7 #f))')
+        self.assertEqual(self.expand('x = EOF#F%'), '(bbc-program (LET x (bbc-eof F%)))')
+        self.assertEqual(self.expand('F% = OPENIN "a"'), '(bbc-program (LET F% (bbc-open "a" "rb")))')
+
+    def test_print_without_hash_is_left_to_the_reader(self):
+        self.assertNotIn('bbc-print-file', self.expand('PRINT 1'))
+
+    def test_ext_statements_still_work_next_to_file_io(self):
+        path = os.path.join(tempfile.mkdtemp(), 'x.dat')
+        source = (f'F% = OPENOUT "{path}"\n'
+                  'DIM a(2) : READ a(1), a(2)\n'
+                  'GOSUB 100\n'
+                  'CLOSE#F%\n'
+                  f'F% = OPENIN "{path}" : INPUT#F%, s : CLOSE#F%\n'
+                  'PRINT ;s\n'
+                  'END\n'
+                  '100 PRINT#F%, a(1) + a(2) : RETURN\n'
+                  'DATA 3, 4')
+        self.assertEqual(self.run_bbc(source), '7\n')
+        os.unlink(path)
+
+    def test_a_pure_function_is_still_remembered(self):
+        self.run_bbc('PRINT FNsq(3)\nEND\nDEF FNsq(n) = n*n')
+        self.assertNotIsInstance(self.ev('FN-sq'), lispy3.Procedure)
+
+    def test_a_function_using_a_channel_is_not_remembered(self):
+        self.run_bbc('x = 1\nEND\nDEF FNb(c) = BGET#c')
+        self.assertIsInstance(self.ev('FN-b'), lispy3.Procedure)
