@@ -60,6 +60,45 @@ class DefunTest(LispyTestCase):
         self.assertEqual(self.ev("(rst 1)"), [])
         self.assertEqual(self.ev("((lambda (&rest xs) xs) 1 2)"), [1, 2])
 
+    def test_optional_parameters(self):
+        """&optional takes a name or (name default supplied-p); a missing one is ()."""
+        self.ev("(defun opt (a &optional (b 10) c) (list a b c))")
+        self.assertEqual(self.show("(opt 1)"), "(1 10 ())")
+        self.assertEqual(self.show("(opt 1 2 3)"), "(1 2 3)")
+        with self.assertRaisesRegex(TypeError, "at most 3"):
+            self.ev("(opt 1 2 3 4)")
+        with self.assertRaisesRegex(TypeError, "at least 1"):
+            self.ev("(opt)")
+        self.ev("(defun twice (a &optional (b (* a 2) b-given)) (list a b b-given))")
+        self.assertEqual(self.show("(twice 3)"), "(3 6 #f)")
+        self.assertEqual(self.show("(twice 3 4)"), "(3 4 #t)")
+        self.assertEqual(self.ev("((lambda (&optional (n 5)) n))"), 5)
+
+    def test_optional_parameter_keeps_tail_calls(self):
+        """A function with an &optional accumulator can still recurse deeply."""
+        self.ev("(defun count-down (n &optional (acc 0)) (if (= n 0) acc (count-down (- n 1) (+ acc 1))))")
+        self.assertEqual(self.ev("(count-down 5000)"), 5000)
+
+    def test_key_parameters(self):
+        """&key parameters are passed as :name value in any order."""
+        self.ev("(defun kw (&key x (y 2)) (list x y))")
+        self.assertEqual(self.show("(kw)"), "(() 2)")
+        self.assertEqual(self.show("(kw :y 5)"), "(() 5)")
+        self.assertEqual(self.show("(kw :y 5 :x 1)"), "(1 5)")
+        with self.assertRaisesRegex(TypeError, "unknown keyword :z"):
+            self.ev("(kw :z 1)")
+        with self.assertRaisesRegex(TypeError, "pairs"):
+            self.ev("(kw :x)")
+        self.ev("(defun loose (&key x &allow-other-keys) x)")
+        self.assertEqual(self.ev("(loose :z 1 :x 2)"), 2)
+        self.ev("(defun both (a &rest more &key (x 0)) (list a more x))")
+        self.assertEqual(self.show("(both 1 :x 9)"), "(1 (:x 9) 9)")
+
+    def test_optional_in_macros(self):
+        """define-macro takes the same lambda list."""
+        self.ev("(define-macro (pair-up a &optional (b 7)) `(list ,a ,b))")
+        self.assertEqual(self.show("(pair-up 1)"), "(1 7)")
+
     def test_defmacro_with_body(self):
         """defmacro with &body works like define-macro."""
         self.ev("(defmacro my-unless (c &body body) `(if ,c nil (progn ,@body)))")
