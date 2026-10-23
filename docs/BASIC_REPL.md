@@ -88,3 +88,6 @@ editor buffer (including unsaved edits); standalone RUN uses the stored program.
 NEW clears the session program/state and leaves editor buffers intact.
 
 File shortcuts Ctrl+O/S/N/W/Q and Ctrl+Shift+S work with Caps Lock on or off.
+
+Ctrl+L clears the GUI REPL output while preserving the live prompt and pending
+input. It works in Lisp/BASIC REPL and the Listener entry, including Caps Lock.

@@ -89,6 +89,23 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
                 assert choose.call_count == 1
                 assert notice.call_count == 1
                 assert tab.path == str(path)
+        for mode in ('listener','lisp','basic'):
+            app.listener_mode.set(mode)
+            app._select_listener_mode()
+            widget=app.listener_input if mode=='listener' else app.listener_text
+            for keysym,state in [('l',4),('L',6)]:
+                app.listener_write('old output\n','result')
+                if mode=='listener':
+                    app.listener_input.delete(0,'end')
+                    app.listener_input.insert(0,'pending command')
+                else:
+                    app._set_console_input('pending command')
+                widget.focus_force();app.update()
+                widget.event_generate('<KeyPress>',keysym=keysym,state=state)
+                app.update()
+                assert 'old output' not in app.listener_text.get('1.0','end'),(mode,keysym)
+                pending=app.listener_input.get() if mode=='listener' else app._console_input()
+                assert pending=='pending command',(mode,keysym,pending)
     finally:
         app.basic_repl.close()
         app.destroy()

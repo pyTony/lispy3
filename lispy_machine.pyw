@@ -1996,7 +1996,8 @@ class LispMachine(tk.Tk):
                              ("<Key>", self._console_key),
                              ("<<Paste>>", self._console_paste),
                              ("<<Cut>>", self._console_cut),
-                             ("<Control-l>", lambda e: (self.clear_listener(), "break")[1])):
+                             ("<Control-l>", self._clear_repl),
+                             ("<Control-L>", self._clear_repl)):
             self.listener_text.bind(seq, lambda e, h=handler: h(e) if self.plain_repl.get() else None)
 
         self.input_row = input_row = tk.Frame(listener_frame, bg=COLORS["listener_bg"])
@@ -2017,7 +2018,8 @@ class LispMachine(tk.Tk):
         self.listener_input.bind("<Control-Key-space>", self._listener_complete)
         self.listener_input.bind("<Up>",      self._history_up)
         self.listener_input.bind("<Down>",    self._history_down)
-        self.listener_input.bind("<Control-l>", lambda e: (self.clear_listener(), "break")[1])
+        for sequence in ("<Control-l>", "<Control-L>"):
+            self.listener_input.bind(sequence, self._clear_repl)
 
     def _build_status(self):
         pass  # placeholder
@@ -3618,6 +3620,11 @@ class LispMachine(tk.Tk):
         t.delete('1.0', end)
         if not self.plain_repl.get():
             t.configure(state='disabled')
+
+    def _clear_repl(self, event=None):
+        """Ctrl+L redraws the REPL screen without discarding pending input."""
+        self._clear_listener_screen()
+        return 'break'
 
     def clear_listener(self):
         self.listener_text.configure(state="normal")
