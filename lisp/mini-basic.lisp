@@ -36,6 +36,16 @@
 ;;; and lifts DEF-PROC and DEF-FN to the front, so they may come after the main part.
 ;;; Tests are BBC truth values: 0 and #f are false, anything else (TRUE is -1) is true.
 
+;;; Transform graphics commands directly to the framebuffer backend, not ANSI/VDU.
+
+(define-macro (MODE n) `(bbc-graphics-mode ,n))
+(define-macro (GCOL & values) `(graphics-gcol ,@values))
+(define-macro (MOVE x y) `(graphics-move ,x ,y))
+(define-macro (DRAW x y) `(graphics-draw ,x ,y))
+(define-macro (PLOT & values) `(graphics-plot ,@values))
+(define-macro (ORIGIN x y) `(graphics-origin ,x ,y))
+(define-macro (CLG) `(graphics-clg))
+
 ;;; --- Run-time support ---
 
 (define TRUE -1)
@@ -432,7 +442,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set!) body))
+         (not (bbc-uses? '(MODE GCOL MOVE DRAW PLOT ORIGIN CLG graphics-plot graphics-draw graphics-move graphics-gcol graphics-origin graphics-clg bbc-graphics-mode PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set!) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -510,7 +520,7 @@
   '("PRINT" "LET" "IF" "THEN" "ELSE" "ENDIF" "FOR" "TO" "STEP" "NEXT" "REPEAT" "UNTIL"
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
-    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI"
+    "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
 
@@ -1004,6 +1014,11 @@
                  (bbc-advance!)
                  (if (bbc-at? :kw "TIME") (bbc-p-time-assign) (bbc-p-assign)))
                 ((equal? value "TIME") (bbc-p-time-assign))
+                ((equal? value "MODE")
+                 (bbc-advance!) (list 'MODE (bbc-value (bbc-p-expr))))
+                ((equal? value "CLG") (bbc-advance!) (list 'CLG))
+                ((member value '("GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN"))
+                 (bbc-advance!) (cons (string->symbol value) (bbc-p-value-list)))
                 ((equal? value "CLS") (bbc-advance!) (list 'CLS))
                 ((or (equal? value "VDU") (equal? value "ANSI"))
                  (bbc-advance!)

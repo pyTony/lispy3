@@ -35,11 +35,18 @@ class ListenerClsTest(TestCase):
         self.assertEqual(app.text, 'last')
         self.assertEqual(app.clears, 2)
 
-    def test_other_output_and_incomplete_controls_are_preserved(self):
+    def test_other_ansi_and_incomplete_controls_are_not_printed(self):
         app = _Output()
         writer = machine._ListenerWriter(app)
         text = '\x1b[31mred\x1b[0m\x1b['
         writer.write(text)
         writer.flush()
-        self.assertEqual(app.text, text)
+        self.assertEqual(app.text, "red")
+        self.assertEqual(app.clears, 0)
+
+    def test_clear_like_bytes_inside_osc_do_not_clear_listener(self):
+        app = _Output()
+        writer = machine._ListenerWriter(app)
+        writer.write('before\x1b]0;hidden \x1b[2J title\x07after')
+        self.assertEqual(app.text, 'beforeafter')
         self.assertEqual(app.clears, 0)
