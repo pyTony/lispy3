@@ -5,7 +5,7 @@ Run:  python -m unittest discover tests
 import unittest
 
 from support import lispy3
-import guide
+from lispy_support import guide
 
 
 class RenderTest(unittest.TestCase):

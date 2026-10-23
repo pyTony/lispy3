@@ -42,13 +42,13 @@ with patch.object(m,'load_settings',return_value={'startup_run':False,'startup_s
         assert not m.L.eval_exp(m.L.parse('(graphics-window-open?)'),m.L.global_env)
         m.L.eval_exp(m.L.parse('(bbc-run "MODE 9")'),m.L.global_env)
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN,key=pygame.K_ESCAPE))
-        from lispy_graphics import pump_windows
+        from lispy_support.lispy_graphics import pump_windows
         assert not pump_windows()
         # Imported mini-basic owns a separate library environment. Its native
         # graphics calls must dispatch even though it bypasses workspace hooks.
         m.L.workspaces.new()
         m.L.eval_exp(m.L.parse('(import (only mini-basic bbc-run))'),m.L.global_env)
-        from lispy_graphics import Graphics
+        from lispy_support.lispy_graphics import Graphics
         owner_threads=[]
         original_open=Graphics.open
         def tracked_open(self,*args,**kwargs):

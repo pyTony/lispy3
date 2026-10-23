@@ -17,9 +17,9 @@ import sys
 import time
 import turtle
 from contextvars import ContextVar
-import lispy_terminal
-import basic_io
-from lispy_libraries import LibrarySystem, LibraryReference
+from lispy_support import lispy_terminal
+from lispy_support import basic_io
+from lispy_support.lispy_libraries import LibrarySystem, LibraryReference
 
 # --- Types and Data Structures ---
 Symbol: TypeAlias = str
@@ -1815,7 +1815,7 @@ def standard_env() -> Env:
             env[key] = value
 
     # Independent RGB/BBC graphics; pygame is loaded only when a window opens.
-    from lispy_graphics_bindings import install as install_graphics
+    from lispy_support.lispy_graphics_bindings import install as install_graphics
     install_graphics(env, Procedure, String)
     return env
 
@@ -2709,7 +2709,7 @@ def auto_close(text: str) -> tuple[str, str]:
     return text[:pos] + closers + text[pos:], closers
 
 library_system = LibrarySystem(sys.modules[__name__])
-from lispy_workspaces import WorkspaceManager
+from lispy_support.lispy_workspaces import WorkspaceManager
 workspaces = WorkspaceManager(sys.modules[__name__])
 
 def _workspace_library_cleanup(env):
@@ -2902,7 +2902,7 @@ def run_file(filename: str) -> bool:
 
 def hold_turtle_window() -> None:
     """Keep program graphics open until the user closes the window."""
-    from lispy_graphics import hold_windows
+    from lispy_support.lispy_graphics import hold_windows
     hold_windows()
     if turtle.Turtle._screen is not None:
         try:
@@ -2933,7 +2933,7 @@ def main(argv: list[str]) -> int:
     if '--version' in argv or '-V' in argv:
         print(version_text())
         return 0
-    from startup_options import extract_startup
+    from lispy_support.startup_options import extract_startup
     try:
         startup, argv = extract_startup(argv)
     except ValueError as error:

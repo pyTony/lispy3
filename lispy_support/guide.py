@@ -12,7 +12,9 @@ Only the Markdown the docs use is understood: # headings, paragraphs,
 import os
 import re
 
-DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
+from lispy_support import PROJECT_ROOT
+
+DOCS_DIR = str(PROJECT_ROOT / "docs")
 
 # (title, file in docs/) in the order the guide lists them; None = the built-ins page
 PAGES = [

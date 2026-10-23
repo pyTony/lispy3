@@ -77,7 +77,7 @@ class BasicInputTest(ReaderTestCase):
             self.expand('REM header\nINPUT LINE n')
 
     def test_standalone_cli_input_consumes_reply_not_as_a_command(self):
-        result = subprocess.run([sys.executable, 'basic_repl.py'],
+        result = subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl'],
             input='INPUT "Name: " n$\nAda\nPRINT n$\nQUIT\n',
             capture_output=True, text=True, timeout=15,
             cwd=Path(__file__).resolve().parents[1])

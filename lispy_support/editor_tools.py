@@ -1,6 +1,6 @@
 """Non-executing Lisp delimiter checks and conservative indentation helpers."""
 import re
-import syntax_highlight as SH
+from lispy_support import syntax_highlight as SH
 
 _languages, _ = SH.load_languages()
 _lisp = SH.language_for('buffer.lisp', _languages)

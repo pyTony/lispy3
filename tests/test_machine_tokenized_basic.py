@@ -3,7 +3,7 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import Mock, patch
 from test_machine_args import machine
-import basic_runner as BR
+from lispy_support import basic_runner as BR
 
 class TokenizedBasicTest(TestCase):
     def test_bbc_opens_as_unsaved_basic_using_configured_mini_basic(self):

@@ -8,7 +8,7 @@ from support import LispyTestCase, lispy3 as L
 class BasicReplTest(LispyTestCase):
     def setUp(self):
         super().setUp()
-        from basic_repl import BasicRepl
+        from lispy_support.basic_repl import BasicRepl
         self.repl = BasicRepl(L)
         self.addCleanup(self.repl.close)
 
@@ -36,7 +36,7 @@ class BasicReplTest(LispyTestCase):
         self.assertEqual(self.submit('10 REMMM THIS IS COMMENT','RUN'), '')
 
     def test_default_directory_and_relative_load_save(self):
-        from basic_repl import BasicRepl
+        from lispy_support.basic_repl import BasicRepl
         self.assertEqual(self.repl.directory, Path(__file__).resolve().parents[1]/'basic')
         with tempfile.TemporaryDirectory() as directory:
             session=BasicRepl(L, directory=directory)
@@ -97,7 +97,7 @@ class BasicReplTest(LispyTestCase):
 
     def test_cli_commands(self):
         import subprocess, sys
-        result=subprocess.run([sys.executable, 'basic_repl.py'],
+        result=subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl'],
             input='10 PRINT "ok"\nRUN\nQUIT\n', capture_output=True, text=True, timeout=15,
             cwd=Path(__file__).resolve().parents[1])
         self.assertEqual(result.returncode, 0, result.stderr)

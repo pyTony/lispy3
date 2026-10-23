@@ -104,7 +104,7 @@ INPUT "PRESS ENTER", pause$
 
 In the editor, type replies in the BASIC CLI and press Enter. Replies are
 program data, including text such as `RUN`. Stop interrupts an input wait.
-The standalone `python basic_repl.py` reads replies from its terminal. In the
+The standalone `python -m lispy_support.basic_repl` reads replies from its terminal. In the
 editor, ANSI terminal output also reads replies in that terminal; Listener
 output reads replies in the BASIC CLI. Stop interrupts either input wait.
 
@@ -353,7 +353,7 @@ Prefer structured exits or normal loop termination for portable programs.
 
 ## Interactive BASIC
 
-Choose View → Listener mode → BASIC REPL, or run `python basic_repl.py`.
+Choose View → Listener mode → BASIC REPL, or run `python -m lispy_support.basic_repl`.
 Lispy Machine starts in Lisp even if the previous session used BASIC.
 File → Load BASIC… selects a program, switches to the BASIC REPL and opens
 the loaded source in an editor buffer. Set its starting directory under

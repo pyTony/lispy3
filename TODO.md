@@ -489,7 +489,7 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Establish failing tests for private immediate state, program lines and RUN/LIST/NEW/LOAD/SAVE.
 - [x] Add BASIC Listener mode, BBC colouring, Stop support, persistent mode settings and BASIC To buffer export. Lisp Listener and Lisp REPL remain available in the same mode menu.
 - [x] Add quoted-path completion for BASIC LOAD/SAVE and Lisp load/save/slurp/bbc-load, plus BASIC keyword completion.
-- [x] Add standalone python basic_repl.py with readline completion when available.
+- [x] Add standalone `python -m lispy_support.basic_repl` with readline completion when available.
 - [x] Reuse the configured .bbc decoder in the GUI; SAVE refuses tokenised extensions.
 - [x] Validate real Tk mode switching and execution in isolated child processes. Full Windows suite: 626 passed, 4 skipped, 355 subtests; WSL: 630 passed, 371 subtests.
 - [ ] Multiline immediate-input accumulation; use stored program lines or LOAD/RUN for blocks for now.
@@ -572,3 +572,11 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Reproduce the bugs with failing tests before implementing the fixes.
 - Validation: exact staged copies passed on Windows (670 tests, 4 skipped,
   362 subtests) and WSL (674 tests, 378 subtests).
+
+### Repository layout cleanup (2026-10-24)
+
+- [x] Move Python implementation helpers into `lispy_support/`, retaining the three root launchers.
+- [x] Move shortcut and complex-check utilities into `tools/`; keep Lisp libraries/programs under `lisp/`.
+- [x] Update imports, test mocks, resource anchors and standalone BASIC CLI commands.
+- [x] Verify launcher portability, documentation/syntax resources and ANSI terminal subprocess transport.
+- [x] Focus the editor after creating a buffer or opening an existing file tab.

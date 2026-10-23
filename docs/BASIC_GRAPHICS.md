@@ -95,7 +95,7 @@ translate cursor motion into editor operations. Real ANSI-terminal output is
 unchanged; ANSI and BBC VDU decoding remain separate.
 
 Use `python lispy3.py` in a real terminal for an ANSI-capable Lisp REPL, or
-`python basic_repl.py` for a standalone BASIC REPL. These run separate sessions
+`python -m lispy_support.basic_repl` for a standalone BASIC REPL. These run separate sessions
 from Lispy Machine; attaching a terminal to the GUI's live workspace is not
 implemented.
 

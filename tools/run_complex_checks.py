@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""test_complex.py - test suite for complex-number support in lispy3.py.
+"""run_complex_checks.py - test suite for complex-number support in lispy3.py.
 
-Run:  python test_complex.py [path/to/lispy3.py]
-      (defaults to lispy3.py next to this file)
+Run:  python tools/run_complex_checks.py [path/to/lispy3.py]
+      (defaults to lispy3.py at the project root)
 
 Cases marked KNOWN are things I believe are wrong or surprising today; they are
 reported separately and do not fail the run (use --strict to make them fail).
 """
 import cmath, importlib.util, math, os, sys
 from fractions import Fraction
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 STRICT = '--strict' in sys.argv
-path = args[0] if args else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lispy3.py')
+path = args[0] if args else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lispy3.py')
 spec = importlib.util.spec_from_file_location('lispy3', path)
 L = importlib.util.module_from_spec(spec)
 sys.modules['lispy3'] = L

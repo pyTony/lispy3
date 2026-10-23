@@ -33,7 +33,7 @@ discard cannot undo file writes, graphics, imports or other external side effect
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
-from lispy_libraries import LibrarySystem
+from lispy_support.lispy_libraries import LibrarySystem
 
 
 @dataclass(eq=False)

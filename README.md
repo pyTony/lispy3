@@ -73,10 +73,12 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 
 | File | Role |
 |------|------|
-| `lispy_libraries.py` | Explicit libraries and selective imports; see the [library guide](docs/LIBRARIES.md). |
+| `lispy_support/lispy_libraries.py` | Explicit libraries and selective imports; see the [library guide](docs/LIBRARIES.md). |
 | `lispy3.py` | The interpreter (REPL + `python lispy3.py file.lisp` script runner). |
 | `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
-| `lisp/` | The folder for Lisp programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and the editor's Open / Save as look here. |
+| `lispy_support/` | Python implementation helpers for the interpreter, editor, terminal, graphics, workspaces and BASIC integration. |
+| `tools/` | Developer and setup utilities. |
+| `lisp/` | Lisp libraries and source programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and Open defaults to `lisp/programs/`. |
 | `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
 | `lisp/programs/tree.lisp`, `lisp/programs/plant.lisp`, `lisp/programs/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
@@ -88,10 +90,14 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lisp/my_workspace.lisp` | Example of a saved workspace (produced by `(save "my_workspace")`). |
 | `lispy_machine.pyw` | The Lisp-Machine style editor. |
 | `startup.lisp` | Optional startup buffer/script beside the editor; configure showing and execution independently in View → Startup Settings…, which can also reopen the files open at the last close instead. |
-| `syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
+| `lispy_support/syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
 | `TODO.md` | Features still to be implemented. |
 | `tests/` | Regression tests, starting with Norvig's [lispy.html](https://norvig.com/lispy.html). Run `python -m unittest` in this folder; no window opens. `python -m unittest -v` lists each test with a line saying what it checks. |
+
+Newly created or opened buffers receive keyboard focus automatically.
+
+See [repository layout and commands](docs/REPOSITORY_LAYOUT.md) for the directory boundaries and moved utility commands.
 
 `lispy_machine.pyw` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
 
@@ -293,7 +299,7 @@ The tree and the plant come from *The Algorithmic Beauty of Plants* (page 25), a
 
 Every file named on the command line opens in its own buffer. A bare file name that is not in the current folder means the file in `lisp/`. A name that does not exist yet opens an empty buffer that is created on the first **Save**. **File → Open** and **Save as** start in `lisp/` (or in the buffer's own folder). On Windows this also works with *Open with* or by dragging a `.lisp` file onto `lispy_machine.pyw`.
 
-The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. `python make_shortcut.py` puts a *Lispy Machine* launcher with this icon on your desktop. It works on Windows and Linux; on Linux it also adds Lispy Machine to the applications menu, and it starts the editor with the Python that ran the script, so use your venv's `python` if you have one.
+The window and taskbar icon come from `icons/lispy_machine.ico` (Windows) or `icons/lispy_machine.png`. To use your own picture, replace those files; `python icons/make_icon.py` redraws the starter λ icon. `python tools/make_shortcut.py` puts a *Lispy Machine* launcher with this icon on your desktop. It works on Windows and Linux; on Linux it also adds Lispy Machine to the applications menu, and it starts the editor with the Python that ran the script, so use your venv's `python` if you have one.
 
 The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens what you did in the Listener as a new buffer that runs as a program: the `USER>`, `lispy3>` and `... (n)>` prompts are removed, results, output and errors become `;;` comments, and a form that gave an error is commented out too. Save it with Ctrl+S, or run it with F6.
 

@@ -7,7 +7,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import syntax_highlight as SH
+from lispy_support import syntax_highlight as SH
 
 LANGS, ERRORS = SH.load_languages()
 LISP = SH.language_for("x.lisp", LANGS)

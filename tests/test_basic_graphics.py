@@ -22,7 +22,7 @@ class BasicGraphicsTest(LispyTestCase):
         self.assertFalse(self.ev('(graphics-window-open?)'))
 
     def test_basic_move_draw_point_and_origin(self):
-        with patch('lispy_graphics.Graphics.open'):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic('MODE 9:GCOL 1:MOVE 0,0:DRAW 12,0:GCOL 2:PLOT 69,8,8')
             self.assertEqual(self.pixel(0,255), [255,0,0])
             self.assertEqual(self.pixel(3,255), [255,0,0])
@@ -31,7 +31,7 @@ class BasicGraphicsTest(LispyTestCase):
             self.assertEqual(self.pixel(1,254), [0,0,255])
 
     def test_background_clear_and_mode_reset(self):
-        with patch('lispy_graphics.Graphics.open'):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic('MODE 9:GCOL 130:CLG')
             self.assertEqual(self.pixel(0,0), [0,255,0])
             self.basic('MODE 1')
@@ -54,7 +54,7 @@ class BasicGraphicsTest(LispyTestCase):
                 self.basic(source)
 
     def test_drawing_function_is_not_automatically_memoized(self):
-        with patch('lispy_graphics.Graphics.open'):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic('MODE 9\nDEF FNdot(x)\nPLOT 69,x,0\n=1\n')
             self.basic('a=FNdot(0):CLG:a=FNdot(0)')
             self.assertEqual(self.pixel(0,255), [255,255,255])
@@ -71,7 +71,7 @@ class BasicGraphicsTest(LispyTestCase):
         from pathlib import Path
         from support import REPO_DIR
         source=(Path(REPO_DIR)/'basic/graphics/mandelbrot-preview.bas').read_text()
-        with patch('lispy_graphics.Graphics.open'):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic(source)
         self.assertEqual(self.pixel(0,131), [0,255,0])
         self.assertEqual(self.pixel(160,131), [0,0,0])
@@ -79,7 +79,7 @@ class BasicGraphicsTest(LispyTestCase):
         self.assertNotEqual(self.pixel(0,126), [0,0,0])
 
     def test_origin_change_preserves_existing_physical_cursor(self):
-        with patch('lispy_graphics.Graphics.open'):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic('MODE 9:GCOL 1:MOVE 0,0:ORIGIN 4,0:DRAW 4,0')
         self.assertEqual(self.pixel(0,255), [255,0,0])
         self.assertEqual(self.pixel(1,255), [255,0,0])

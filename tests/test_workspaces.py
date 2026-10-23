@@ -1,7 +1,7 @@
 """Workspace contract; install explicitly without changing runtime defaults."""
 import unittest
 from support import lispy3 as runtime
-from lispy_workspaces import WorkspaceManager
+from lispy_support.lispy_workspaces import WorkspaceManager
 
 
 def install_manager(runtime):

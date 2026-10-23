@@ -7,7 +7,7 @@ from unittest import TestCase
 
 PROBE = r'''
 import gc, sys, threading, tkinter as tk, turtle
-from gui_gc import GuiGarbageCollector
+from lispy_support.gui_gc import GuiGarbageCollector
 events = []
 class Image(tk.PhotoImage):
     def __del__(self):

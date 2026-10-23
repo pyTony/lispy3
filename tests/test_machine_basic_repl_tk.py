@@ -15,7 +15,7 @@ spec=importlib.util.spec_from_loader(loader.name,loader)
 module=importlib.util.module_from_spec(spec)
 sys.modules[loader.name]=module
 loader.exec_module(module)
-with patch.object(module,'load_settings',return_value={'startup_run':False,'startup_show_buffer':False,'basic_repl':True,'plain_repl':True}), patch.object(module,'save_settings'):
+with patch.object(module,'load_settings',return_value={'startup_run':False,'startup_show_buffer':False,'lispy_support.basic_repl':True,'plain_repl':True}), patch.object(module,'save_settings'):
     try:
         app=module.LispMachine([])
     except tk.TclError as error:

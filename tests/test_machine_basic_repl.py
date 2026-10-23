@@ -2,7 +2,7 @@ from unittest.mock import Mock
 from support import LispyTestCase, lispy3 as L
 from test_machine_args import machine
 from test_machine_stop import _FakeMachine
-from basic_repl import BasicRepl
+from lispy_support.basic_repl import BasicRepl
 
 
 class BasicListenerTest(LispyTestCase):
@@ -28,7 +28,7 @@ class BasicListenerTest(LispyTestCase):
         saving.start()
         self.addCleanup(saving.stop)
         from pathlib import Path
-        from basic_repl import LoadedProgram
+        from lispy_support.basic_repl import LoadedProgram
         app=Mock(tabs={}, settings={})
         path=(Path.cwd()/'loaded.bas').resolve()
         loaded=LoadedProgram(path,'10 PRINT 42\n')

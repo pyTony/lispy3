@@ -74,7 +74,7 @@ in the Listener regardless of the program output destination; the BASIC prompt a
 ## Standalone terminal
 
 ```sh
-python basic_repl.py
+python -m lispy_support.basic_repl
 ```
 
 The same program-editing and runtime commands work; `QUIT` exits. Tab completion

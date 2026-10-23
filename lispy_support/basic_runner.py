@@ -1,5 +1,6 @@
 """Python mini_basic CLI adapter; no editor or interpreter imports."""
 import os
+from lispy_support import PROJECT_ROOT
 from pathlib import Path
 import queue
 import re
@@ -35,7 +36,7 @@ def error_source_line(source, message, first_line=1, numbered=False):
 
 
 def default_package_root():
-    root = Path(__file__).resolve().parent
+    root = PROJECT_ROOT
     for candidate in (root/'mini_basic', root.parent/'mini_basic'):
         if (candidate/'mini_basic'/'__main__.py').is_file():
             return str(candidate)
@@ -48,7 +49,7 @@ def run_python_basic(source, write, *, cwd, executable=None, package_root='', di
     INPUT has no console here; programs needing interactive input should use
     the standalone terminal runner. GUI graphics can use the pygame option.
     """
-    from lispy_terminal import console_python
+    from lispy_support.lispy_terminal import console_python
     executable = executable or console_python()
     env = dict(os.environ, PYTHONUTF8='1', PYTHONUNBUFFERED='1')
     if package_root:
@@ -110,7 +111,7 @@ def _stream_command(command, write, cwd, env):
 def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>', source_line=1):
     """Run unsaved Python in a fresh process, retaining source traceback lines."""
     import textwrap
-    from lispy_terminal import console_python
+    from lispy_support.lispy_terminal import console_python
     env = dict(os.environ, PYTHONUTF8='1', PYTHONUNBUFFERED='1')
     with tempfile.TemporaryDirectory(prefix='lispy-python-') as folder:
         path = Path(folder)/'buffer.py'
@@ -160,7 +161,7 @@ def run_bbcsdl(source, *, cwd, executable='', helper=''):
 def detokenize_bbc(path, *, executable=None, package_root=''):
     """Reuse Python mini_basic's Wilson/Russell decoder; never run the BASIC."""
     import json
-    from lispy_terminal import console_python
+    from lispy_support.lispy_terminal import console_python
     path = str(Path(path).resolve())
     package_root = package_root or default_package_root()
     env = dict(os.environ, PYTHONUTF8='1')

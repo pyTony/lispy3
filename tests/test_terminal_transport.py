@@ -9,8 +9,8 @@ import socket
 import threading
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
-import lispy_terminal as terminal
-import basic_io
+from lispy_support import lispy_terminal as terminal
+from lispy_support import basic_io
 
 
 def which_of(*names):

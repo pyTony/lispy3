@@ -3,7 +3,7 @@ from unittest.mock import Mock
 from test_machine_args import machine
 from test_machine_eval_buffer import _FakeMachine
 from support import lispy3 as L
-from lispy_workspaces import WorkspaceManager
+from lispy_support.lispy_workspaces import WorkspaceManager
 
 class MachineWorkspaceTest(TestCase):
     def setUp(self):
