@@ -197,6 +197,22 @@ class FractionTest(LispyTestCase):
         self.assertEqual(self.show("(exact -0.75)"), "-3/4")
         self.assertEqual(self.show("(inexact->exact 3.0)"), "3")
 
+    def test_exact_with_a_tolerance_gives_the_simplest_fraction(self):
+        """(exact x tol) is the simplest fraction within tol, always exact."""
+        self.assertEqual(self.show("(exact pi 1/100)"), "22/7")
+        self.assertEqual(self.show("(exact 0.6667 1/100)"), "2/3")
+        self.assertEqual(self.show("(exact (/ -5 3.0) 0.001)"), "-5/3")
+        self.assertEqual(self.show("(exact 2.0 1/10)"), "2")
+
+    def test_rationalize(self):
+        """Scheme's rationalize: exact stays exact, a decimal gives a decimal."""
+        self.assertEqual(self.show("(rationalize 3/10 1/10)"), "1/3")
+        self.assertEqual(self.show("(rationalize -3/10 1/10)"), "-1/3")
+        self.assertEqual(self.show("(rationalize 13/10 1/10)"), "4/3")
+        self.assertEqual(self.show("(rationalize 1/4 1/2)"), "0")
+        self.assertEqual(self.show("(rationalize 7/2 0)"), "7/2")
+        self.assertEqual(self.ev("(rationalize 0.3 1/10)"), 1 / 3)
+
     def test_division_by_zero(self):
         """(/ 1 0) is an error."""
         with self.assertRaises(ZeroDivisionError):

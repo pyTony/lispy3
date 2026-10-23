@@ -238,7 +238,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("even?", "(even? n), (odd? n) - true for an even or odd whole number"),
         ("zero?", "(zero? x), (positive? x), (negative? x) - compare with 0"),
         ("integer?", "(integer? x) - true for a whole number, also 3.0"),
-        ("exact", "(exact x) - a decimal as an exact number, 3.0 gives 3 and 2.5 gives 5/2; (inexact x) the other way"),
+        ("exact", "(exact x) - a decimal as an exact number, 3.0 gives 3 and 2.5 gives 5/2; (exact x tol) the simplest fraction within tol, (exact pi 1/100) gives 22/7; (inexact x) the other way"),
+        ("rationalize", "(rationalize x tol) - the simplest fraction within tol of x: (rationalize 3/10 1/10) gives 1/3; a decimal in gives a decimal out"),
         ("float", "(float x) - Common Lisp name for (inexact x): (float (/ 1 3)) gives 0.3333333333333333"),
         ("numerator", "(numerator 7/2) gives 7, (denominator 7/2) gives 2; (exact? x) is #t for whole numbers and fractions"),
         ("=", "(= a b ...) - equal; works on numbers, symbols, strings and characters"),
@@ -779,17 +780,48 @@ def _whole(n: Any, name: str) -> int:
         return int(n)
     raise TypeError(f"{name} needs a whole number, got {lisp_str(n)}")
 
-def _exact(x: Number) -> Number:
+def _exact(x: Number, tolerance: Number = None) -> Number:
     """A decimal as an exact number: (exact 3.0) gives 3, (exact 2.5) gives 5/2.
 
     The decimal is read as it prints, so (exact 0.1) is 1/10 rather than the
-    binary float's 3602879701896397/36028797018963968.
+    binary float's 3602879701896397/36028797018963968. With a tolerance the
+    result is the simplest fraction that close: (exact pi 1/100) gives 22/7.
     """
     if isinstance(x, float):
         if not math.isfinite(x):
             raise ValueError(f"exact: {lisp_str(x)} has no exact value")
-        return normalize(Fraction(repr(x)))
-    return x
+        x = normalize(Fraction(repr(x)))
+    if tolerance is None:
+        return x
+    return _rationalize(x, _exact(tolerance))
+
+def _simplest_between(lo: Fraction, hi: Fraction) -> Fraction:
+    """The fraction with the smallest denominator in lo..hi, for 0 < lo <= hi."""
+    whole = math.floor(lo)
+    if whole == lo or whole < math.floor(hi):
+        return Fraction(whole if whole == lo else whole + 1)
+    return whole + 1 / _simplest_between(1 / (hi - whole), 1 / (lo - whole))
+
+def _rationalize(x: Number, y: Number) -> Number:
+    """Scheme's (rationalize x y): the simplest fraction within y of x.
+
+    (rationalize 3/10 1/10) gives 1/3. As in Scheme, a decimal x or y gives
+    a decimal answer, (rationalize 0.3 1/10) is 0.3333333333333333; use
+    (exact x y) for an exact fraction from a decimal.
+    """
+    inexact = isinstance(x, float) or isinstance(y, float)
+    for value in (x, y):
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError(f"rationalize: {lisp_str(value)} has no exact value")
+    x, y = Fraction(_exact(x)), abs(Fraction(_exact(y)))
+    lo, hi = x - y, x + y
+    if lo <= 0 <= hi:
+        result = Fraction(0)
+    elif hi < 0:
+        result = -_simplest_between(-hi, -lo)
+    else:
+        result = _simplest_between(lo, hi)
+    return float(result) if inexact else normalize(result)
 
 _DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -1112,6 +1144,7 @@ def standard_env() -> Env:
         'numerator': lambda x: Fraction(x).numerator if not isinstance(x, float) else float(Fraction(x).numerator),
         'denominator': lambda x: Fraction(x).denominator if not isinstance(x, float) else float(Fraction(x).denominator),
         'exact': _exact,
+        'rationalize': _rationalize,
         'inexact': float,
         'float': float,
         'exact->inexact': float,
