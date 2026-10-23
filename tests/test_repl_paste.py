@@ -39,10 +39,29 @@ class ReplPasteTest(LispyTestCase):
         self.assertIn('6', output)
         self.assertIn('... (1)>', prompts[1])
 
-    def test_malformed_tail_is_reported_before_any_form_executes(self):
-        output, _ = self.run_repl('(define should-not-exist 1) )')
+    def test_extra_parenthesis_warns_and_valid_forms_execute(self):
+        output, _ = self.run_repl('(define warned-value 1) ) (+ warned-value 2)')
+        self.assertIn("Warning: ignored extra ')' at line 1, column 26", output)
+        self.assertEqual(lispy3.global_env['warned-value'], 1)
+        self.assertIn('3', output)
+        self.assertNotIn('Error:', output)
+
+    def test_malformed_if_is_still_an_error(self):
+        output, _ = self.run_repl('(if (= 0 (abs (trunc 0.5)) "this" "that"))')
         self.assertIn('Error:', output)
-        self.assertNotIn('should-not-exist', lispy3.global_env)
+
+    def test_gui_runner_executes_all_forms_and_warns(self):
+        from test_machine_args import machine
+        app = types.SimpleNamespace(_eval_with_turtle=lambda evaluate: (evaluate(), None))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            value, error = machine.LispMachine._run(app,
+                "(print 'Tony) (terpri) (print 'Veijalainen))")
+        self.assertIsNone(error)
+        self.assertIn('Tony', output.getvalue())
+        self.assertIn('Veijalainen', output.getvalue())
+        self.assertIn("Warning: ignored extra ')'", output.getvalue())
+
 
 
 class ReadlinePasteTest(LispyTestCase):
