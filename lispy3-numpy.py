@@ -140,7 +140,7 @@ if HAS_NUMPY:
         'a-': lambda a, b: NDOpArray(_to_raw(a) - _to_raw(b)),
         'a*': lambda a, b: NDOpArray(_to_raw(a) * _to_raw(b)),
         'a/': lambda a, b: NDOpArray(_to_raw(a) / _to_raw(b)),
-        'a-dot': lambda a, b: _wrap_result(np.dot(_to_raw(a), _to_raw(b))),
+        'dot': lambda a, b: _wrap_result(np.dot(_to_raw(a), _to_raw(b))),
         'matmul': lambda a, b: _wrap_result(np.matmul(_to_raw(a), _to_raw(b))),
         'mean': lambda arr, axis=None: _wrap_result(np.mean(_to_raw(arr), axis=axis)),
         'std': lambda arr, axis=None: _wrap_result(np.std(_to_raw(arr), axis=axis)),
@@ -152,6 +152,9 @@ if HAS_NUMPY:
 
 
 # (help 'name) and (help) know the extras too
+if HAS_NUMPY:
+    extra_primitives['a-dot'] = extra_primitives['dot']  # Compatibility alias.
+
 EXTRA_HELP = {
     "Fast vectors (lispy3-numpy.py)": [
         ("make-num-vector", "(make-num-vector n fill) - n items, all fill (0 if left out); "
@@ -172,7 +175,8 @@ if HAS_NUMPY:
         ("list->array", "(list->array lst) - an array of the items; array->list goes back"),
         ("array->list", "(array->list a) - a list of the items"),
         ("a+", "(a+ a b) - item by item +; also a- a* a/"),
-        ("a-dot", "(a-dot a b) - dot product; matmul multiplies matrices"),
+        ("dot", "(dot a b) - dot product; a-dot is an alias; matmul multiplies matrices"),
+        ("a-dot", "(a-dot a b) - compatibility alias for dot"),
         ("mean", "(mean a) - average; std gives the standard deviation"),
         ("reshape", "(reshape a rows cols) - the same items in a new shape; (shape a) gives the shape"),
     ]

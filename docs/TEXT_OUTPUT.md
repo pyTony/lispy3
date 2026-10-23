@@ -19,3 +19,10 @@ versions exposed turtle's function as plain `write`; update drawing code to
 use `turtle:write`. Other existing turtle names such as `forward` are unchanged.
 This explicit alias does not introduce a new library import or `with-turtle`
 macro.
+
+## Dot product and drawing dots
+
+With NumPy, `(dot a b)` computes a numerical dot product; `a-dot` remains a
+compatibility alias. `(turtle:dot size color)` draws a dot. Plain `dot` no
+longer names a turtle command, including in the interpreter without NumPy.
+Other short turtle names are retained where they do not conflict.

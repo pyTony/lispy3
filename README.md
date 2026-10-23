@@ -177,7 +177,7 @@ Good to know: `+ - * /` take exactly two arguments, so write `(+ (+ a b) c)`; `(
 | `(sum v)` | add up all items |
 | `(array 1 2 3)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` | make NumPy arrays (NumPy only) |
 | `(a+ a b)` `(a- a b)` `(a* a b)` `(a/ a b)` | item-by-item arithmetic on arrays or an array and a number (NumPy only) |
-| `(a-dot a b)` `(matmul a b)` `(mean a)` `(std a)` `(reshape a 2 3)` `(shape a)` | linear algebra and statistics (NumPy only) |
+| `(dot a b)` `(matmul a b)` `(mean a)` `(std a)` `(reshape a 2 3)` `(shape a)` | linear algebra and statistics (NumPy only) |
 | `(array? x)` `(array->list a)` `(list->array lst)` | test for an array and convert (NumPy only) |
 
 The speed comes from doing a whole vector in one built-in call instead of a Lisp loop, not from NumPy itself: reading or setting one item of a NumPy array is slower than of an ordinary vector. Ten rounds of the sieve take about 2.7 s with `python lispy3.py sieve_lispy3.lisp`, about 1.2 s with `python lispy3-numpy.py sieve_lispy3.lisp`, and about 0.004 s with `python lispy3-numpy.py sieve-optimized.lisp`, with or without NumPy. All three find 1899 primes.
