@@ -29,6 +29,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(define name value)` | name a value or a function |
 | `(define-memo (f a b) body...)` | like `define`, caching calls only when all arguments are exact numbers (integers/fractions) |
 | `(set! name value)` | change an existing variable |
+| `(setf x 1 y 2)` `(incf x)` `(incf x 5)` `(decf x)` | Common Lisp: set variables, add to or subtract from one; each gives the new value |
 | `(time exp)` | run `exp`, print how long it took in seconds, give its value |
 | `(lambda [a b] body)` | a function; one body expression |
 | `#'f` `(funcall f a b)` | Common Lisp spellings: `#'f` is just `f` (one namespace), `funcall` calls it |

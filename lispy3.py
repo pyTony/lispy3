@@ -246,7 +246,9 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("module-on-unload", "(module-on-unload cleanup) - register cleanup inside a module or library"),
         ("unload", "(unload filename-or-name) - remove an imported module and its owned bindings; refuse live dependents"),
         ("reload", "(reload filename-or-name) - fresh module instance and import bindings; external effects are not undone"),
-        ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...)"),
+        ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...); inside a let it still makes a global f that keeps the let's variables"),
+        ("incf", "(incf x) or (incf x 5) - add to a variable and give the new value; (decf x) subtracts"),
+        ("setf", "(setf x 1 y 2) - set variables in turn and give the last value; only variables, not (car x) places"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
         ("set!", "(set! name value) - change an existing variable"),
@@ -1888,7 +1890,29 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)
         if len(x) < 4 or not isinstance(x[2], (list, tuple)):
             raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
+        if not toplevel:
+            # Inside a let or a function body defun still names a global function,
+            # which keeps the local variables around it as a closure
+            return ['_defun', [x[1]] + list(x[2]), expand(['begin'] + list(x[3:]) if len(x) > 4 else x[3], False)]
         return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
+
+    if head in ('incf', 'decf') and len(x) in (2, 3) and head not in library_system.macros(head):
+        # (incf x) or (incf x 5) on a variable: set it and give the new value
+        if not isinstance(x[1], str):
+            raise SyntaxError(f"{head}: only a variable can be changed, got {lisp_str(x[1])}")
+        delta = x[2] if len(x) == 3 else 1
+        return expand(['begin', ['set!', x[1], ['+' if head == 'incf' else '-', x[1], delta]], x[1]], toplevel)
+
+    if head == 'setf' and head not in library_system.macros(head):
+        # (setf a 1 b 2) on variables: set each in turn and give the last value
+        if len(x) < 3 or len(x) % 2 == 0:
+            raise SyntaxError("setf needs place value pairs: (setf x 1 y 2)")
+        body = []
+        for place, value in zip(x[1::2], x[2::2]):
+            if not isinstance(place, str):
+                raise SyntaxError(f"setf: only a variable can be set, got {lisp_str(place)}")
+            body.append(['set!', place, value])
+        return expand(['begin'] + body + [x[-2]], toplevel)
 
     if head == 'define-memo':
         # define-memo caches calls only when all arguments are exact numbers.
@@ -1953,7 +1977,7 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     return [expand(e, False) for e in x]
 
-SPECIAL_FORMS = frozenset({'_loop', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
+SPECIAL_FORMS = frozenset({'_loop', '_defun', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
                            'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import', 'new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'})
 
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
@@ -2112,6 +2136,15 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
                         val.name = var
                     env[var] = val
                     return None
+
+            # 9a. defun inside a let or a body: a global function closing over env
+            case ['_defun', [str(var), *parms], body]:
+                home = env
+                while home.outer is not None:
+                    home = home.outer
+                library_system.check_definition(home, var)
+                home[var] = Procedure(parms, body, env, name=var)
+                return None
 
             # 9b. (define-macro ...)
             case ['define-macro', *_]:
@@ -2655,7 +2688,7 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
     env = global_env if env is None else env
-    names = (set(SPECIAL_FORMS) - {'_loop'}) | {'defun', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
+    names = (set(SPECIAL_FORMS) - {'_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
