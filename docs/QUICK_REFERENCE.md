@@ -76,7 +76,8 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
 | `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
 | `(not x)` | true when `x` is `#f` or `()` |
-| `(abs x)` `(round x)` | absolute value, nearest whole number |
+| `(abs x)` `(round x)` | absolute value, nearest whole number (a half goes to the even one: `(round 2.5)` is `2`) |
+| `(floor x)` `(ceil x)` `(trunc x)` | round down (like BASIC `INT`: `(floor -2.5)` is `-3`), round up, round toward zero (`(trunc -2.7)` is `-2`) |
 | `(min a b ...)` `(max a b ...)` | smallest, largest |
 | `(number? x)` `(symbol? x)` | type tests |
 | `sqrt floor ceil fmod pow log exp sin cos tan gcd lcm isqrt factorial comb ...` | everything in Python's `math` |
