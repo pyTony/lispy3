@@ -20,7 +20,7 @@ Features
   * Open / Save / Save-As / Close buffers
   * Menu + status bar showing the current "package" (USER) and buffer
 
-Run:  python lispy_machine.pyw [--repl] [file.lisp ...]
+Run:  python lispy_machine.pyw [--startup setup.lisp] [--repl] [file.lisp ...]
       python lispy_machine.pyw --version   shows the editor and lispy3 versions
       --repl starts the Listener as the plain lispy3 REPL (View > Listener mode changes it).
       Each file named on the command line opens in its own buffer; a file that
@@ -499,10 +499,13 @@ class _ListenerWriter(io.TextIOBase):
     """A stdout replacement that streams text straight into the Listener pane."""
     def __init__(self, app):
         self.app = app
+        from listener_output import PlainTextOutput
+        self.plain_output = PlainTextOutput()
 
     def write(self, s):                       # noqa: D401
-        if s:
-            self.app._ui_post(self.app.listener_write, s, "result")
+        plain = self.plain_output.feed(s)
+        if plain:
+            self.app._ui_post(self.app.listener_write, plain, "result")
         return len(s)
 
     def writable(self):
@@ -1459,7 +1462,7 @@ WM_CLASS = "LispyMachine"
 
 
 class LispMachine(tk.Tk):
-    def __init__(self, files=(), plain_repl=None):
+    def __init__(self, files=(), plain_repl=None, startup_file=None):
         # The window class lets Linux docks match the window to the
         # lispy-machine.desktop launcher (StartupWMClass) and show its icon.
         super().__init__(className=WM_CLASS)
@@ -1477,7 +1480,8 @@ class LispMachine(tk.Tk):
         self._welcome_done = False
         self.settings = load_settings()
         self.startup_show_buffer = tk.BooleanVar(self, value=bool(self.settings.get('startup_show_buffer', True)))
-        self.startup_run = tk.BooleanVar(self, value=bool(self.settings.get('startup_run', False)))
+        self.startup_file = os.path.abspath(startup_file) if startup_file is not None else STARTUP_FILE
+        self.startup_run = tk.BooleanVar(self, value=startup_file is not None or bool(self.settings.get('startup_run', False)))
         self.startup_settings_window = None
         self._startup_ran = False
         self.settings.pop('basic_backend', None)  # The run command now chooses it.
@@ -1503,6 +1507,8 @@ class LispMachine(tk.Tk):
         self._calls = queue.Queue() # what that thread hands to the Tk thread: (fn, args, box, done)
         L.global_env['help'] = self.lisp_help
         L.global_env['sleep'] = self._sleep
+        from lispy_graphics_bindings import set_dispatcher
+        set_dispatcher(self._ui)
         self._gui_builtins_on_main()
         L.workspaces.add_initializer(self._initialize_workspace_env)
 
@@ -1527,6 +1533,7 @@ class LispMachine(tk.Tk):
         self._focus_listener()
         self.refresh_definitions()
 
+        self.after(20, self._poll_graphics)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         if self.startup_run.get():
             self.after_idle(self._run_startup)
@@ -1544,7 +1551,8 @@ class LispMachine(tk.Tk):
                 tab.source_path = source_arg_path(arg)
         if not self.tabs:
             if self.startup_show_buffer.get():
-                name, content, path = read_startup()
+                override = self.__dict__.get('startup_file', STARTUP_FILE)
+                name, content, path = read_startup(override) if override != STARTUP_FILE else read_startup()
             else:
                 name, content, path = 'untitled.lisp', '', None
             self.new_buffer(name, content, path=path)
@@ -1557,15 +1565,16 @@ class LispMachine(tk.Tk):
             self.after(100, self._run_startup)
             return
         self._startup_ran = True
+        startup = self.__dict__.get('startup_file', STARTUP_FILE)
         try:
-            with open(STARTUP_FILE, encoding='utf-8') as source:
+            with open(startup, encoding='utf-8') as source:
                 content = source.read()
-            ET.check_lisp(content, STARTUP_FILE)
-            forms = self._parse_top_level_forms(content, source_name=STARTUP_FILE)
+            ET.check_lisp(content, startup)
+            forms = self._parse_top_level_forms(content, source_name=startup)
         except (OSError, UnicodeError, SyntaxError) as error:
-            self.listener_write(f'Error running startup.lisp: {error}\n', 'error')
+            self.listener_write(f'Error running startup.lisp ({startup}): {error}\n', 'error')
             return
-        self.listener_write(f';; Running {STARTUP_FILE}\n', 'info')
+        self.listener_write(f';; Running {startup}\n', 'info')
         terminal = getattr(self, '_output_mode', 'listener') == 'ansi'
         self._start(lambda: self._eval_forms_in_terminal(forms) if terminal else self._eval_forms(forms))
 
@@ -1590,7 +1599,7 @@ class LispMachine(tk.Tk):
                         variable=self.startup_show_buffer, command=save).pack(anchor='w')
         ttk.Checkbutton(frame, text='Run startup.lisp once at startup (also when hidden)',
                         variable=self.startup_run, command=save).pack(anchor='w', pady=8)
-        ttk.Label(frame, text=STARTUP_FILE).pack(anchor='w', pady=8)
+        ttk.Label(frame, text=self.startup_file).pack(anchor='w', pady=8)
         ttk.Label(frame, text='Running executes every form, including printing and graphics.').pack(anchor='w')
         ttk.Label(frame, textvariable=status).pack(anchor='w', pady=8)
         ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
@@ -2210,6 +2219,15 @@ class LispMachine(tk.Tk):
         label = getattr(self, 'status_left', None)
         if label is not None:
             label.configure(text=f'{L.workspaces.current.name or "Listener"} · saved {L.workspaces.depth}')
+
+    def _poll_graphics(self):
+        """Pump SDL on its owning Tk thread, also while evaluation is idle."""
+        from lispy_graphics import pump_windows
+        try:
+            pump_windows()
+        except Exception as error:
+            self.listener_write(f'Graphics: {error}\n', 'error')
+        self.after(20, self._poll_graphics)
 
     def _gui_builtins_on_main(self, env=None):
         """Make the turtle and window built-ins run on the Tk thread, whichever thread calls them."""
@@ -3331,6 +3349,10 @@ class LispMachine(tk.Tk):
         return "break"
 
     def listener_write(self, text: str, tag: str | None = None):
+        # Stdout is filtered incrementally by _ListenerWriter. Also protect
+        # direct diagnostics, which can contain escape bytes from user errors.
+        from listener_output import PlainTextOutput
+        text = PlainTextOutput().feed(text)
         t = self.listener_text
         t.configure(state="normal")
         # With the plain REPL's prompt showing, output goes above the prompt line
@@ -3588,6 +3610,10 @@ class LispMachine(tk.Tk):
                 f"{len(dirty)} buffer(s) have unsaved changes. Quit anyway?"
             ):
                 return
+        from lispy_graphics import close_windows
+        from lispy_graphics_bindings import set_dispatcher
+        close_windows()
+        set_dispatcher(None)
         self.destroy()
 
 
@@ -3596,10 +3622,19 @@ def main():
     if "--version" in sys.argv[1:] or "-V" in sys.argv[1:]:
         print(version_text())
         return
-    plain_repl, files = parse_args(sys.argv[1:])
-    app = LispMachine(files, plain_repl=True if plain_repl else None)
+    from startup_options import extract_startup
+    try:
+        startup, args = extract_startup(sys.argv[1:])
+    except ValueError as error:
+        print(f'lispy_machine: {error}', file=sys.stderr)
+        return 2
+    plain_repl, files = parse_args(args)
+    options = dict(plain_repl=True if plain_repl else None)
+    if startup is not None:
+        options['startup_file'] = startup
+    app = LispMachine(files, **options)
     app.mainloop()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

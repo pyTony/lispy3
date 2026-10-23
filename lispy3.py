@@ -1273,6 +1273,9 @@ def standard_env() -> Env:
         else:
             env[key] = value
 
+    # Independent RGB/BBC graphics; pygame is loaded only when a window opens.
+    from lispy_graphics_bindings import install as install_graphics
+    install_graphics(env, Procedure, String)
     return env
 
 global_env = standard_env()
@@ -2259,7 +2262,9 @@ def run_file(filename: str) -> bool:
     return False
 
 def hold_turtle_window() -> None:
-    """If the program drew with turtle, keep the window open until the user closes it."""
+    """Keep program graphics open until the user closes the window."""
+    from lispy_graphics import hold_windows
+    hold_windows()
     if turtle.Turtle._screen is not None:
         try:
             turtle.mainloop()
@@ -2268,11 +2273,12 @@ def hold_turtle_window() -> None:
 
 __version__ = "3.0"
 
-USAGE = """usage: python lispy3.py [-i] [prog.lisp]
+USAGE = """usage: python lispy3.py [--startup setup.lisp] [-i] [prog.lisp]
 
   (no arguments)   start the REPL
   prog.lisp        run prog.lisp, keep a turtle window open, then exit
   -i prog.lisp     run prog.lisp, then stay in the REPL
+  --startup FILE   load temporary setup before the program or REPL
   --version, -V    show the Lispy and Python versions
   --help, -h       show this help"""
 
@@ -2288,12 +2294,20 @@ def main(argv: list[str]) -> int:
     if '--version' in argv or '-V' in argv:
         print(version_text())
         return 0
+    from startup_options import extract_startup
+    try:
+        startup, argv = extract_startup(argv)
+    except ValueError as error:
+        print(f"lispy3: {error}\n\n{USAGE}", file=sys.stderr)
+        return 2
     interactive = '-i' in argv                 # -i may also come after the file name
     args = [a for a in argv if a != '-i']
     unknown = [a for a in args if a.startswith('-')]
     if unknown:
         print(f"lispy3: unknown option {unknown[0]}\n\n{USAGE}", file=sys.stderr)
         return 2
+    if startup is not None and not run_file(startup):
+        return 1
     if args:
         ok = run_file(args[0])
         if interactive:
