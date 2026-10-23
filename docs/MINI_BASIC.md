@@ -62,7 +62,10 @@ lispy3's Lisp loader.
 | Data | DATA/READ/RESTORE; DIM arrays with inclusive upper bounds |
 | Timing | Assignable TIME in whole centiseconds |
 
-PROC/FN parameters and LOCAL variables restore their previous values on return.
+PROC/FN parameters and LOCAL variables restore their previous values on normal
+return, BASIC runtime errors and END, including nested calls. This cleanup is
+a Lispy execution guarantee, not a claim to reproduce BBCSDL shared-stack error
+semantics. Host interrupts such as KeyboardInterrupt are outside this guarantee.
 
 A numeric destination immediately after single-line `THEN` or `ELSE` is an
 implicit `GOTO`, as in [BBC BASIC](https://www.bbcbasic.co.uk/bbcbasic/manual/bbckey4.html#then).
@@ -84,8 +87,8 @@ These commands target an ANSI-capable terminal. The Lispy Machine's Tk Listener
 captures text but does not emulate a terminal, so control bytes will not produce
 the same screen there. Windows console configuration also affects rendering.
 
-VDU and ANSI are separate languages. **VDU interprets BBC control bytes and
-translates the supported operations; ANSI sends raw bytes/strings unchanged.**
+VDU and ANSI are separate languages. **VDU and PRINT share the BBC control-byte
+decoder; ANSI sends raw bytes/strings unchanged.**
 For example, `VDU 17,1` and `ANSI 27,"[31m"` both select red text, but
 `ANSI 17,1` sends two literal control bytes, not a colour command.
 
@@ -128,7 +131,13 @@ palettes. CLS clears and homes the cursor, retaining selected colours.
 | 32..126, 128..255 | Emit characters using lispy3's character encoding |
 
 VDU truncates numeric expressions and takes the low eight bits. Parameter bytes
-can span VDU statements, including separate runs, until the library is reloaded.
+can span VDU and PRINT statements, including separate runs, until the library
+is reloaded. For example, `VDU 17:PRINT CHR$(1);"Red"` completes the colour
+command before printing text. Printable Unicode text remains unchanged; a PRINT
+character consumed as a parameter contributes its code point modulo 256.
+A normal PRINT newline uses stdout's native newline; if a command is pending,
+its logical CR/LF bytes (13,10) instead pass through the decoder. Thus a missing
+parameter may consume the newline: complete control sequences explicitly.
 A parameter is consumed as data, not interpreted as another control. Unsupported
 controls, including 22 (MODE) and 27, raise a clear error. Comma-separated bytes
 are supported; BBC's semicolon word form is not yet supported. Graphics controls,
@@ -163,8 +172,10 @@ ANSI output bypasses the VDU decoder and printable-column accounting. Use it for
 control sequences and PRINT for visible text. Colour sequences leave the tracked
 column correct; raw cursor moves, visible strings or line breaks can make it
 stale because ANSI is not parsed. Prefer TAB(x,y), CLS or VDU for tracked moves.
-Raw `PRINT CHR$(27);"[31m"` still works, but counts escape bytes as text and can
-misalign later TAB, comma zones or numeric alignment. There is no automatic
+`PRINT CHR$(17);CHR$(1);"Red"` now selects red through the same decoder as
+`VDU 17,1`. Supported control bytes do not consume printable columns. Raw
+`PRINT CHR$(27);"[31m"` now raises the unsupported-VDU-27 error; use
+`ANSI 27,"[31m"` for raw escape sequences. There is no automatic
 terminal reset on END or an error: restore attributes explicitly when finished.
 
 ## Bundled terminal Mandelbrot demos
@@ -262,7 +273,7 @@ Acceptance tests are ordinary tests: unfinished behavior should fail before the
 implementation is added, rather than being hidden by skip/xfail.
 
 ```powershell
-python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py tests/test_mini_basic_time.py tests/test_mini_basic_ansi.py -q
+python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py tests/test_mini_basic_time.py tests/test_mini_basic_ansi.py tests/test_mini_basic_output_cleanup.py -q
 ```
 
 [TODO.md](../TODO.md) records completed fixes and remaining compatibility work.

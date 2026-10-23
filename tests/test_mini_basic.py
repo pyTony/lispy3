@@ -153,9 +153,10 @@ class ProcedureTest(MiniBasicTestCase):
 
     def test_tail_results_need_no_exception(self):
         code = self.expansion('(DEF-FN (fact n) (IF (< n 2) (FN= 1) ELSE (FN= (* n (FN fact (- n 1))))))')
-        self.assertNotIn('try', code)
+        # Cleanup still needs a handler; tail results must not use a return signal.
+        self.assertNotIn('bbc:return', code)
         code = self.expansion('(DEF-FN (f x) (IF (< x 0) (FN= 0)) (FN= x))')
-        self.assertIn('try', code)
+        self.assertIn('bbc:return', code)
 
     def test_early_return(self):
         program = ('(DEF-FN (sign x) (IF (< x 0) (FN= -1)) (IF (= x 0) (FN= 0)) (FN= 1))',

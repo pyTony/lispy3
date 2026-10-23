@@ -79,8 +79,8 @@ lines. It is a comparison aid, not an assertion about valid BBCSDL usage.
 Cases correspond to `NestedJumpRegressionTest` and `SubroutineAcceptanceTest`
 in `tests/test_mini_basic_tdd.py`. Numeric line labels and jump destinations
 are offset to keep cases separate. Case 9 uses numeric labels instead of the
-test's symbolic label; it also probes the numbered-WHEN syntax that lispy3's
-reader currently rejects.
+test's symbolic label; it also probes numbered-WHEN syntax. The reader now accepts numbered clause
+headers; `NumberedCaseRegressionTest` retains this regression.
 
 ## Documented restrictions versus observations
 
@@ -106,8 +106,10 @@ subroutine scopes: a procedure cannot consume a caller's return frame or look
 up its subroutine targets. Missing targets, RETURN without GOSUB, and reaching
 the end of a called body without RETURN report errors. These are lispy3's
 supported execution rules, not a claim to reproduce every native stack edge
-case. Parameters/LOCAL restoration under arbitrary errors remains part of the
-broader audit rather than being established by call-frame cleanup tests.
+case. Lispy regressions now cover parameter/LOCAL restoration on runtime errors and
+END, including nested calls and errors in GOSUB. Native BBCSDL observations for
+these restoration cases remain part of the broader audit; the Lispy cleanup
+guarantee does not establish native shared-stack equivalence.
 
 Targets can be in the program/PROC/FN statement list or an already active
 structured body; jumping into an inactive body is outside the current reader's

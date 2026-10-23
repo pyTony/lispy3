@@ -300,6 +300,7 @@
         saved (bbc-adjoin locals parms)
         saves (map (lambda (v) (gensym "saved")) saved)
         result (gensym "result")
+        err (gensym "error")
         tail-body (bbc-tail body)
         tag (if (eq? kind 'FN) "bbc:return" "bbc:endproc")
         core (if (bbc-uses? '(GOSUB ON-GOSUB RETURN) body)
@@ -311,9 +312,13 @@
         fn `(lambda ,args
               (let ,(map list saves saved)
                 ,@(map (lambda (p a) `(set! ,p ,a)) parms args)
-                (let ((,result ,run))
-                  ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
-                  ,result)))]
+                (try
+                  (let ((,result ,run))
+                    ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                    ,result)
+                  (catch ,err
+                    ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                    (error ,err)))))]
     `(define ,(bbc-def-name kind name) ,(if memo `(memoize-exact ,fn) fn))))
 
 (define-macro (bbc-program & stmts)

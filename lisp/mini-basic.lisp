@@ -81,7 +81,7 @@
 (define bbc-zone-width 10)
 (define bbc-blank "")
 
-(define (bbc-write text)
+(define (bbc-write-visible text)
   (format #t "~a" text)
   (let [s (str text)
         nl (s/rfind "\n")]
@@ -89,9 +89,28 @@
         (set! bbc-col (+ bbc-col (length s)))
         (set! bbc-col (- (length s) nl 1)))))
 
+;; Keep Unicode printable text intact; only the VDU byte channel wraps to 8 bits.
+(define (bbc-character-code character)
+  (let [text (str character)
+        bytes (text/encode "utf-32-le")]
+    (+ (bytes/__getitem__ 0) (* 256 (bytes/__getitem__ 1))
+       (* 65536 (bytes/__getitem__ 2)) (* 16777216 (bytes/__getitem__ 3)))))
+
+(define (bbc-write text)
+  (for-each
+    (lambda (character)
+      (let [code (bbc-character-code character)]
+        (if (or (not (null? bbc-vdu-pending)) (< code 32) (= code 127))
+            (bbc-vdu (list code))
+            (bbc-write-visible (str character)))))
+    (seq (str text))))
+
 (define (bbc-newline)
-  (format #t "~%")
-  (set! bbc-col 0))
+  ;; A normal logical CR/LF is represented by stdout's native newline. If a
+  ;; parameter is pending, both bytes must pass through the decoder instead.
+  (if (null? bbc-vdu-pending)
+      (begin (format #t "~%") (set! bbc-col 0))
+      (bbc-vdu (list 13 10))))
 
 (define (bbc-spaces n)
   (if (> n 0) (bbc-write (bbc-blank/ljust n))))
@@ -164,7 +183,7 @@
               ((= byte 30) (bbc-ansi "H") (set! bbc-col 0))
               ((or (< byte 32) (= byte 127))
                (error (str "VDU: unsupported control " byte)))
-              (else (bbc-write (bbc-chr byte)))))))
+              (else (bbc-write-visible (bbc-chr byte)))))))
     bytes))
 
 ;; Explicit raw ANSI channel; these bytes never enter the BBC VDU decoder.
@@ -408,6 +427,7 @@
         saved (bbc-adjoin locals parms)
         saves (map (lambda (v) (gensym "saved")) saved)
         result (gensym "result")
+        err (gensym "error")
         tail-body (bbc-tail body)
         tag (if (eq? kind 'FN) "bbc:return" "bbc:endproc")
         run (if (bbc-uses? '(FN= ENDPROC) tail-body)
@@ -416,9 +436,13 @@
         fn `(lambda ,args
               (let ,(map list saves saved)
                 ,@(map (lambda (p a) `(set! ,p ,a)) parms args)
-                (let ((,result ,run))
-                  ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
-                  ,result)))]
+                (try
+                  (let ((,result ,run))
+                    ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                    ,result)
+                  (catch ,err
+                    ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                    (error ,err)))))]
     `(define ,(bbc-def-name kind name) ,(if memo `(memoize-exact ,fn) fn))))
 
 (define-macro (DEF-PROC head & body) (bbc-def 'PROC head body #f))
