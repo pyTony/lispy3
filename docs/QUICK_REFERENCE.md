@@ -71,6 +71,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(expt a b)` | power, exact for whole numbers |
 | `(even? n)` `(odd? n)` `(zero? x)` `(positive? x)` `(negative? x)` `(integer? x)` | number tests |
 | `(exact 3.0)` `(inexact 3)` | `3` and `3.0`; `(exact 0.1)` is `1/10` |
+| `(exact x tol)` `(rationalize x tol)` | simplest fraction within `tol` of `x`: `(exact pi 1/100)` is `22/7`, `(rationalize 3/10 1/10)` is `1/3`; `rationalize` gives a decimal for a decimal, as in Scheme |
 | `(number->string 255 16)` `(string->number "ff" 16)` | `"ff"` and `255`, any base from 2 to 36 |
 | `(import bitwise)` | bit operations from `lisp/bitwise.sld`, Scheme (SRFI 151) names: `bitwise-and` `bitwise-ior` `bitwise-xor` `bitwise-not` `arithmetic-shift` `bit-count` `integer-length` `(bit-set? i n)` `(bit-field n start end)`; Common Lisp aliases `logand` `logior` `logxor` `lognot` `ash` `logcount` `logbitp`; fixed width: `(signed-field n 32)`, `(logical-shift-right n k 32)` |
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
