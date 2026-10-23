@@ -1146,3 +1146,4 @@
   (run-program "clojure" (list "-M" (bbc-compare-file "clojure/run.clj"))
                (bbc-foreign-text (bbc-expand text) :clojure)))
 (load "mini-basic-ext")
+(load "mini-basic-io")

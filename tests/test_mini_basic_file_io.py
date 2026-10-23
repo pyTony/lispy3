@@ -81,3 +81,29 @@ class FileIOTest(ReaderTestCase):
     def test_close_hash_zero_closes_every_file(self):
         with self.assertRaisesRegex(Exception, 'channel'):
             self.run_bbc(f'F% = OPENOUT "{self.path}" : CLOSE#0 : BPUT#F%, 65')
+
+    def test_numbers_of_every_kind_read_back(self):
+        source = (f'F% = OPENOUT "{self.path}"\n'
+                  'PRINT#F%, -7, 3000000000, -0.125, 1/3, 0\n'
+                  'PTR#F% = 0\n'
+                  'INPUT#F%, a, b, c, d, e\n'
+                  'CLOSE#F%\n'
+                  'PRINT ;a;" ";b;" ";c;" ";d;" ";e')
+        self.assertEqual(self.run_bbc(source), '-7 3E9 -0.125 0.333333333 0\n')
+
+    def test_input_hash_into_an_array_element(self):
+        source = (f'F% = OPENOUT "{self.path}" : PRINT#F%, 5, "five" : PTR#F% = 0\n'
+                  'DIM n(2), n$(2)\n'
+                  'INPUT#F%, n(1), n$(2)\n'
+                  'CLOSE#F%\n'
+                  'PRINT ;n(1);" ";n$(2)')
+        self.assertEqual(self.run_bbc(source), '5 five\n')
+
+    def test_a_function_that_reads_a_file_is_not_remembered(self):
+        with open(self.path, 'wb') as f:
+            f.write(b'AB')
+        source = (f'F% = OPENIN "{self.path}"\n'
+                  'PRINT ;FNnext(F%);" ";FNnext(F%)\n'
+                  'CLOSE#F%\nEND\n'
+                  'DEF FNnext(c) = BGET#c')
+        self.assertEqual(self.run_bbc(source), '65 66\n')
