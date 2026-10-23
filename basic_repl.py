@@ -1,6 +1,13 @@
 """Line-oriented mini-basic session; program editing never evaluates source."""
 import re
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class LoadedProgram:
+    path: Path
+    source: str
 
 
 class BasicRepl:
@@ -115,6 +122,7 @@ class BasicRepl:
                     lines[number] = numbered[i][2] if numbered[i] else row
                     previous = number
                 self.lines = lines
+                return LoadedProgram(path.resolve(), text)
             return
         try:
             self._execute(line)

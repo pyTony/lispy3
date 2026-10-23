@@ -52,7 +52,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
 import lispy_terminal
 from lispy_terminal import terminal_command
 import lispy3 as L
-from basic_repl import BasicRepl
+from basic_repl import BasicRepl, LoadedProgram
 from repl_completion import filename_completion
 
 def _use_numpy_interpreter() -> bool:
@@ -586,6 +586,31 @@ def _is_gui_object(value) -> bool:
     return type(value).__module__ in ("turtle", "tkinter")
 
 
+def bind_file_shortcuts(widget, app, binder=None):
+    """Consume file keys before Text bindings, with and without Caps Lock."""
+    if binder is None:
+        # A separate first bindtag also precedes virtual Text events (X11
+        # maps Ctrl+W to Cut). Register callbacks on the app, so closing an
+        # editor tab cannot delete a shared binding's Tcl command.
+        tag = 'LispyMachineFileKeys'
+        tags = widget.bindtags()
+        if tag not in tags:
+            widget.bindtags((tag, *tags))
+        bind = lambda sequence, callback: app.bind_class(tag, sequence, callback)
+    else:
+        bind = binder
+    actions = {'o': lambda: app.open_file(),
+               's': lambda: app.save_current(confirm=True),
+               'n': lambda: app.new_buffer_dialog(),
+               'w': lambda: app.close_current(),
+               'q': lambda: app._on_close()}
+    for key, action in actions.items():
+        for symbol in (key, key.upper()):
+            bind(f'<Control-{symbol}>', lambda event, action=action: (action(), 'break')[1])
+    for symbol in ('s', 'S'):
+        bind(f'<Control-Shift-{symbol}>', lambda event: (app.save_current_as(confirm=True), 'break')[1])
+
+
 # =============================================================================
 # Editor tab
 # =============================================================================
@@ -670,10 +695,7 @@ class EditorTab(tk.Frame):
         t.bind("<Control-slash>", self._toggle_comment)
         t.bind("<<Modified>>", self._on_modified)
         # Widget bindings precede Tk Text's class bindings and global bindings.
-        t.bind("<Control-o>", lambda e: (self.app.open_file(), 'break')[1])
-        t.bind("<Control-s>", lambda e: (self.app.save_current(confirm=True), 'break')[1])
-        t.bind("<Control-Shift-S>", lambda e: (self.app.save_current_as(confirm=True), 'break')[1])
-        t.bind("<Control-w>", lambda e: (self.app.close_current(), 'break')[1])
+        bind_file_shortcuts(t, self.app)
 
         t.bind('<F4>', self._open_file_at_cursor)
         t.bind('<Command-Button-1>' if sys.platform == 'darwin' else '<Control-Button-1>',
@@ -728,7 +750,7 @@ class EditorTab(tk.Frame):
             self.app._refresh_buffer_list()
             self._schedule_highlight()
 
-    def _schedule_highlight(self):
+    def _schedule_highlight(self, event=None):
         if self._highlight_job:
             self.after_cancel(self._highlight_job)
         self._highlight_job = self.after(30, self._highlight)
@@ -2025,18 +2047,11 @@ class LispMachine(tk.Tk):
         # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
         self.bind_all("<Control-Cancel>", self.stop)
         self.bind_all("<Control-Break>", self.stop)
-        self.bind_all("<Control-n>", lambda e: self.new_buffer_dialog())
-        self.bind_all("<Control-o>", lambda e: (self.open_file(), 'break')[1])
+        bind_file_shortcuts(self, self, binder=self.bind_all)
         # Tk Text gives Ctrl+O its own editing behavior before bind_all runs.
         # Handle Open at the widget first, including while BASIC waits for INPUT.
         for widget in (self.listener_text, self.listener_input, self.inspector):
-            widget.bind("<Control-o>", lambda e: (self.open_file(), 'break')[1])
-            widget.bind("<Control-s>", lambda e: (self.save_current(confirm=True), 'break')[1])
-            widget.bind("<Control-Shift-S>", lambda e: (self.save_current_as(confirm=True), 'break')[1])
-        self.bind_all("<Control-s>", lambda e: (self.save_current(confirm=True), 'break')[1])
-        self.bind_all("<Control-Shift-S>", lambda e: (self.save_current_as(confirm=True), 'break')[1])
-        self.bind_all("<Control-w>", lambda e: (self.close_current(), 'break')[1])
-        self.bind_all("<Control-q>", lambda e: self._on_close())
+            bind_file_shortcuts(widget, self)
         self.bind_all("<Control-e>", lambda e: self._focus_listener())
         self.bind_all("<Control-f>",  lambda e: (self.search_bar.show_bar(False), "break")[1])
         self.bind_all("<Control-h>",  lambda e: (self.search_bar.show_bar(True),  "break")[1])
@@ -3098,6 +3113,25 @@ class LispMachine(tk.Tk):
     def _get_basic_buffer_text(self):
         return getattr(self, '_cached_basic_buffer', '')
 
+    def _open_basic_repl_program(self, loaded):
+        path = str(loaded.path)
+        for tab in self.tabs.values():
+            origin = buffer_source_path(tab)
+            if origin and os.path.normcase(os.path.abspath(origin)) == os.path.normcase(path):
+                self.notebook.select(tab)
+                if tab.dirty:
+                    self.listener_write(';; Kept unsaved buffer edits; LOAD read the disk version.\n', 'info')
+                else:
+                    tab.set_content(loaded.source)
+                    tab.disk_content = loaded.source
+                return
+        tokenized = loaded.path.suffix.lower() == '.bbc'
+        tab = self.new_buffer(loaded.path.stem+'.bas' if tokenized else loaded.path.name,
+                              loaded.source, path=None if tokenized else path)
+        if tokenized:
+            tab.source_path = path
+            self.listener_write(';; Detokenised BASIC opened as text; Save As .bas.\n', 'info')
+
     def _begin_basic_input(self, replies):
         self._basic_input_queue = replies
         self._basic_input_used = True
@@ -3165,9 +3199,27 @@ class LispMachine(tk.Tk):
                     if line.strip():
                         self.listener_history.append(line)
                         self.listener_hist_idx = len(self.listener_history)
-                        self.basic_repl.submit(line)
+                        command = line.strip().split(maxsplit=1)[0].upper()
+                        if command in ('LIST', 'HELP'):
+                            with contextlib.redirect_stdout(_ListenerWriter(self)):
+                                result = self.basic_repl.submit(line)
+                        else:
+                            result = self.basic_repl.submit(line)
+                        if isinstance(result, LoadedProgram):
+                            self._ui(LispMachine._open_basic_repl_program, self, result)
+                            self._ui(self._cache_current_buffer_for_basic)
             started = time.perf_counter() if timed else None
             try:
+                management = source is None and all(not line.strip() or
+                    re.match(r'^\d', line.strip()) or line.strip().split(maxsplit=1)[0].upper()
+                    in ('LIST', 'HELP', 'LOAD', 'SAVE', 'NEW') for line in lines)
+                if management:
+                    try:
+                        with contextlib.redirect_stdout(_ListenerWriter(self)):
+                            evaluate()
+                        return None, None
+                    except Exception as error:
+                        return None, error
                 return self._eval_with_turtle(evaluate)
             finally:
                 if started is not None:

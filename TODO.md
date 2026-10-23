@@ -518,3 +518,10 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Bind save shortcuts directly on Listener and Inspector widgets too.
   Verify actual Ctrl+S writes the file once and confirms once without altering
   buffer text, including the first save of an unnamed buffer.
+
+### BASIC Listener usability fixes (2026-10-23)
+
+- [x] Reproduce Caps Lock Ctrl+O failing in real Windows Tk; share case-independent file shortcut registration across editor and Listener panes.
+- [x] Reproduce LIST opening an ANSI terminal; keep management output in the Listener, including mixed RUN batches.
+- [x] Open LOAD results in editor buffers, refresh clean copies, retain dirty edits, and update the current-buffer RUN snapshot after LOAD.
+- Validation: exact staged copies: Windows 661 passed, 4 skipped, 358 subtests; WSL 665 passed, 374 subtests. Local primes_visual.bas edits and the untracked Mandelbrot benchmark excluded.

@@ -21,7 +21,9 @@ class SaveCloseTest(TestCase):
     def test_ctrl_shortcuts_are_bound_on_editor_and_consume_event(self):
         tab = Mock()
         callbacks = {}
+        tab.text.bindtags.return_value=('Text',)
         tab.text.bind.side_effect = lambda event, callback: callbacks.update({event: callback})
+        tab.app.bind_class.side_effect = lambda tag, event, callback: callbacks.update({event: callback})
         machine.EditorTab._setup_bindings(tab)
         for event, action in [('<Control-o>', 'open_file'), ('<Control-s>', 'save_current'), ('<Control-w>', 'close_current')]:
             self.assertIn(event, callbacks)

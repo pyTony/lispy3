@@ -30,11 +30,19 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
             before=content()
             widget.focus_force()
             app.update()
-            with patch.object(module.filedialog,'askopenfilename',return_value='') as dialog:
-                widget.event_generate('<Control-o>')
-                app.update()
-                assert dialog.call_count == 1, (str(widget),dialog.call_count)
+            for keysym, state in [('o',4),('O',6)]:
+                with patch.object(module.filedialog,'askopenfilename',return_value='') as dialog:
+                    widget.event_generate('<KeyPress>',keysym=keysym,state=state)
+                    app.update()
+                    assert dialog.call_count == 1, (str(widget),keysym,state,dialog.call_count)
             assert content() == before, str(widget)
+            for key,action in [('n','new_buffer_dialog'),('w','close_current'),('q','_on_close')]:
+                for symbol,state in [(key,4),(key.upper(),6)]:
+                    with patch.object(app,action) as call:
+                        widget.event_generate('<KeyPress>',keysym=symbol,state=state)
+                        app.update()
+                        assert call.call_count == 1, (str(widget),symbol,state,call.call_count)
+                    assert content() == before, str(widget)
         check(tab.text)
         app.listener_mode.set('basic')
         app._select_listener_mode()
@@ -64,10 +72,11 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
                     assert title == 'File saved', title
                     assert str(path.resolve()) in message, message
                     assert path.read_text(encoding='utf-8') == before
-                with patch.object(module.messagebox,'showinfo',side_effect=saved) as notice:
-                    widget.event_generate('<Control-s>')
-                    app.update()
-                    assert notice.call_count == 1, (str(widget),notice.call_count)
+                for keysym,state in [('s',4),('S',6)]:
+                    with patch.object(module.messagebox,'showinfo',side_effect=saved) as notice:
+                        widget.event_generate('<KeyPress>',keysym=keysym,state=state)
+                        app.update()
+                        assert notice.call_count == 1, (str(widget),keysym,state,notice.call_count)
                 assert not tab.dirty
                 assert tab.get_content() == before
             tab.path=None

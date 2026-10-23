@@ -130,6 +130,23 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         writer.write('\x1b[2J\x1b[H')
         assert app.listener_text.get('1.0','end-1c') == 'BASIC> PRINT "pending command"'
         assert app.console_ready
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'loaded program.bas'
+            path.write_text('10 PRINT "loaded source"\n')
+            app._output_mode='ansi'
+            with patch.object(module.lispy_terminal,'ansi_terminal_output',side_effect=AssertionError('management opened terminal')):
+                app._basic_feed(['LOAD "'+path.as_posix()+'"','LIST'])
+                deadline=time.monotonic()+10
+                while app._job is not None and time.monotonic()<deadline:
+                    app.update(); time.sleep(.005)
+                assert app._job is None
+            loaded=app.current_tab()
+            assert loaded.path == str(path.resolve()), loaded.path
+            assert loaded.get_content() == '10 PRINT "loaded source"\n'
+            assert '10 PRINT "loaded source"\n' in app.listener_text.get('1.0','end')
+            app._output_mode='listener'
         app.listener_mode.set('lisp')
         app._select_listener_mode()
         assert app._prompt_text() == 'lispy3>'
