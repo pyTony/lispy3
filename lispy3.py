@@ -261,6 +261,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("let", "(let [a 1 b 2] body...) - local names; later ones may use earlier ones. Scheme's (let ((a 1) (b 2)) ...) and (let loop ((i 0)) ...) work too"),
         ("while", "(while test body...) - loop while test is true, no recursion depth used"),
         ("dotimes", "(dotimes [i count] body...) - run body with i = 0, 1, ... count-1"),
+        ("loop", "(loop for x in lst when (odd? x) collect x) - Common Lisp loop: for x in/on/across, for i from 1 to 10 [by 2] (also below downto above), for x = a then b, with, repeat n, while, until, do forms, collect/append/sum/count/maximize/minimize [into v], when/unless ... else ... end, always/never/thereis, initially, finally, return"),
+        ("return", "(return x) - leave the running loop at once with the value x"),
         ("try", "(try exp (catch e handler...)) - run exp; on an error, run handler with e = the message"),
         ("quote", "(quote x) or 'x - x itself, not evaluated"),
         ("quasiquote", "`(a ,b ,@c) - a template: ,b puts in the value of b, ,@c splices the list c"),
@@ -1182,6 +1184,319 @@ def evaluate_code(code):
     finally:
         _dynamic_eval.reset(token)
 
+# --- Common Lisp loop ---
+# (loop for x in lst when (odd? x) collect x) is turned into (_loop for x in ...)
+# by expand, and run here. A user function or named let called loop still works:
+# only a loop whose first argument is a loop keyword is taken as the macro.
+LOOP_KEYWORDS = frozenset({
+    'for', 'as', 'with', 'repeat', 'while', 'until', 'always', 'never', 'thereis',
+    'do', 'doing', 'collect', 'collecting', 'append', 'appending', 'nconc', 'nconcing',
+    'sum', 'summing', 'count', 'counting', 'maximize', 'maximizing', 'minimize', 'minimizing',
+    'when', 'if', 'unless', 'initially', 'finally', 'return'})
+_LOOP_ACCUMULATE = {
+    'collect': 'collect', 'collecting': 'collect', 'append': 'append', 'appending': 'append',
+    'nconc': 'append', 'nconcing': 'append', 'sum': 'sum', 'summing': 'sum',
+    'count': 'count', 'counting': 'count', 'maximize': 'max', 'maximizing': 'max',
+    'minimize': 'min', 'minimizing': 'min'}
+_LOOP_DEFAULT = '_loop-result'
+_loop_depth = 0
+
+class _LoopReturn(BaseException):
+    """(return x) inside a loop. A BaseException, so (try ...) in the body does not catch it."""
+    def __init__(self, value: Any):
+        self.value = value
+
+def loop_return(value: Any = None) -> Any:
+    """(return x) - leave the innermost running loop with x."""
+    if _loop_depth == 0:
+        raise SyntaxError("return: not inside a loop")
+    raise _LoopReturn(value)
+
+class _LoopDone(Exception):
+    """A for clause ran out, or while/until stopped the loop: run finally and give the result."""
+
+def _loop_word(x: Any) -> Union[str, None]:
+    """x as a lower-case loop keyword, or None."""
+    return x.lower() if isinstance(x, str) and x.lower() in LOOP_KEYWORDS | {
+        'in', 'on', 'across', 'from', 'upfrom', 'downfrom', 'to', 'upto', 'below', 'downto',
+        'above', 'by', '=', 'then', 'into', 'and', 'else', 'end'} else None
+
+def _loop_bind(env: 'Env', var: Any, value: Any) -> None:
+    """Set a loop variable; (a b) takes a list apart, and nil skips a value."""
+    if isinstance(var, (list, tuple)):
+        items = list(value) if isinstance(value, (list, tuple)) else []
+        for i, v in enumerate(var):
+            _loop_bind(env, v, items[i] if i < len(items) else [])
+    elif var not in ('nil', None):
+        env[var] = value
+
+def _loop_names(var: Any) -> list[str]:
+    """Every name in a loop variable, also inside (a b)."""
+    if isinstance(var, (list, tuple)):
+        return [n for v in var for n in _loop_names(v)]
+    return [] if var in ('nil', None) else [var]
+
+class _LoopParser:
+    """Read loop clauses into a prologue, a list of steps run each pass, and a finally list."""
+
+    def __init__(self, clauses: list[Any]):
+        self.c, self.i = list(clauses), 0
+        self.names: list[str] = []          # variables, set to () before the loop starts
+        self.steps: list[tuple] = []        # run in order on every pass
+        self.initially: list[Any] = []
+        self.final: list[Any] = []
+        self.accumulators: dict[str, str] = {}
+        self.default: Union[str, None] = None  # kind of the anonymous accumulator
+        self.result_kind = None             # 'always' or 'never' make the result #t
+        while self.i < len(self.c):
+            self.clause(self.steps, top=True)
+
+    def peek(self) -> Union[str, None]:
+        return _loop_word(self.c[self.i]) if self.i < len(self.c) else None
+
+    def take(self, what: str = "a value") -> Any:
+        if self.i >= len(self.c):
+            raise SyntaxError(f"loop: expected {what} at the end")
+        self.i += 1
+        return self.c[self.i - 1]
+
+    def forms(self) -> list[Any]:
+        """The compound forms after do, initially or finally, up to the next keyword."""
+        out = []
+        while self.i < len(self.c) and not (isinstance(self.c[self.i], str) and _loop_word(self.c[self.i])):
+            out.append(self.c[self.i])
+            self.i += 1
+        return out
+
+    def clause(self, steps: list, top: bool = False) -> None:
+        word = self.peek()
+        if word is None:
+            raise SyntaxError(f"loop: {lisp_str(self.c[self.i])} is not a loop keyword")
+        self.i += 1
+        if word in ('for', 'as') and top:
+            self.for_clause(steps)
+            while self.peek() == 'and':
+                self.i += 1
+                self.for_clause(steps)
+        elif word == 'with' and top:
+            while True:
+                var = self.take("a name")
+                init = []
+                if self.peek() == '=':
+                    self.i += 1
+                    init = self.take()
+                self.names += _loop_names(var)
+                steps.append(('with', var, init))
+                if self.peek() != 'and':
+                    break
+                self.i += 1
+        elif word == 'repeat' and top:
+            steps.append(('repeat', self.take("a count")))
+        elif word in ('while', 'until', 'always', 'never', 'thereis'):
+            steps.append((word, self.take("a test")))
+            if word in ('always', 'never'):
+                self.result_kind = True
+        elif word in ('do', 'doing'):
+            body = self.forms()
+            if not body:
+                raise SyntaxError("loop: do needs at least one form")
+            steps.append(('do', body))
+        elif word in _LOOP_ACCUMULATE:
+            kind = _LOOP_ACCUMULATE[word]
+            exp = self.take(f"a value after {word}")
+            into = _LOOP_DEFAULT
+            if self.peek() == 'into':
+                self.i += 1
+                into = self.take("a name after into")
+                if into not in self.names:
+                    self.names.append(into)
+            else:
+                self.default = self.default or kind
+            self.accumulators.setdefault(into, kind)
+            steps.append(('acc', kind, exp, into))
+        elif word in ('when', 'if', 'unless'):
+            test = self.take("a test")
+            then, other = [], []
+            self.clause(then)
+            while self.peek() == 'and':
+                self.i += 1
+                self.clause(then)
+            if self.peek() == 'else':
+                self.i += 1
+                self.clause(other)
+                while self.peek() == 'and':
+                    self.i += 1
+                    self.clause(other)
+            if self.peek() == 'end':
+                self.i += 1
+            if word == 'unless':
+                then, other = other, then
+            steps.append(('if', test, then, other))
+        elif word == 'return':
+            steps.append(('return', self.take("a value after return")))
+        elif word == 'initially' and top:
+            self.initially += self.forms()
+        elif word == 'finally' and top:
+            if self.peek() == 'return':
+                self.i += 1
+                self.final.append(['return', self.take("a value after return")])
+            else:
+                self.final += self.forms()
+        else:
+            raise SyntaxError(f"loop: {word} is not allowed here")
+
+    def for_clause(self, steps: list) -> None:
+        var = self.take("a name after for")
+        self.names += _loop_names(var)
+        word = self.peek()
+        if word in ('in', 'on', 'across'):
+            self.i += 1
+            steps.append((word, var, self.take(f"a list after {word}")))
+        elif word == '=':
+            self.i += 1
+            init = self.take()
+            then = None
+            if self.peek() == 'then':
+                self.i += 1
+                then = self.take("a value after then")
+            steps.append(('=', var, init, then))
+        elif word in ('from', 'upfrom', 'downfrom', 'to', 'upto', 'below', 'downto', 'above', 'by'):
+            start, end, by, down, inclusive = 0, None, 1, False, True
+            while self.peek() in ('from', 'upfrom', 'downfrom', 'to', 'upto', 'below', 'downto', 'above', 'by'):
+                word = self.take()
+                word = word.lower()
+                value = self.take(f"a number after {word}")
+                if word in ('from', 'upfrom', 'downfrom'):
+                    start = value
+                    down = down or word == 'downfrom'
+                elif word == 'by':
+                    by = value
+                else:
+                    end = value
+                    down = down or word in ('downto', 'above')
+                    inclusive = word in ('to', 'upto', 'downto')
+            steps.append(('range', var, start, end, by, down, inclusive))
+        else:
+            raise SyntaxError(f"loop: for {lisp_str(var)} needs in, on, across, from or =")
+
+def run_loop(clauses: list[Any], env: 'Env') -> Any:
+    """Run a Common Lisp (loop ...) whose clauses come after the word loop."""
+    global _loop_depth
+    p = _LoopParser(clauses)
+    lenv = Env(outer=env)
+    for name in p.names:
+        lenv[name] = []
+    for name, kind in p.accumulators.items():
+        lenv[name] = 0 if kind in ('sum', 'count') else [] if kind in ('collect', 'append') else None
+    ev = lambda e: eval_exp(e, lenv)
+    state: dict[int, Any] = {}
+
+    def result() -> Any:
+        if p.result_kind:
+            return True
+        value = lenv.get(_LOOP_DEFAULT) if p.default else None
+        return [] if value is None and p.default in ('max', 'min') else value
+
+    def run(steps: list, first: bool) -> None:
+        for step in steps:
+            kind = step[0]
+            if kind == 'with':
+                if first:
+                    _loop_bind(lenv, step[1], ev(step[2]))
+            elif kind in ('in', 'on', 'across'):
+                key = id(step)
+                if first:
+                    items = ev(step[2])
+                    if isinstance(items, Pair):
+                        items = items.items
+                    if kind != 'across' and not isinstance(items, (list, tuple)):
+                        raise TypeError(f"loop: for ... {kind} needs a list, got {lisp_str(items)}")
+                    state[key] = [list(items) if kind != 'across' else global_env['seq'](items), 0]
+                items, pos = state[key]
+                if pos >= len(items):
+                    raise _LoopDone
+                _loop_bind(lenv, step[1], items[pos:] if kind == 'on' else items[pos])
+                state[key][1] = pos + 1
+            elif kind == '=':
+                _loop_bind(lenv, step[1], ev(step[2] if first or step[3] is None else step[3]))
+            elif kind == 'range':
+                key = id(step)
+                _, var, start, end, by, down, inclusive = step
+                if first:
+                    state[key] = [ev(start), None if end is None else ev(end), ev(by)]
+                    if not state[key][2] > 0:
+                        raise ValueError(f"loop: by must be positive, got {lisp_str(state[key][2])}")
+                else:
+                    state[key][0] = state[key][0] - state[key][2] if down else state[key][0] + state[key][2]
+                value, limit, _ = state[key]
+                if limit is not None and (
+                        (value < limit or (value == limit and not inclusive)) if down else
+                        (value > limit or (value == limit and not inclusive))):
+                    raise _LoopDone
+                lenv[var] = value
+            elif kind == 'repeat':
+                key = id(step)
+                if first:
+                    state[key] = ev(step[1])
+                if state[key] <= 0:
+                    raise _LoopDone
+                state[key] -= 1
+            elif kind == 'while':
+                if not is_true(ev(step[1])):
+                    raise _LoopDone
+            elif kind == 'until':
+                if is_true(ev(step[1])):
+                    raise _LoopDone
+            elif kind == 'always':
+                if not is_true(ev(step[1])):
+                    raise _LoopReturn(False)
+            elif kind == 'never':
+                if is_true(ev(step[1])):
+                    raise _LoopReturn(False)
+            elif kind == 'thereis':
+                value = ev(step[1])
+                if is_true(value):
+                    raise _LoopReturn(value)
+            elif kind == 'do':
+                for form in step[1]:
+                    ev(form)
+            elif kind == 'acc':
+                _, how, exp, into = step
+                value, old = ev(exp), lenv[into]
+                if how == 'collect':
+                    old.append(value)
+                elif how == 'append':
+                    old.extend(value)
+                elif how == 'sum':
+                    lenv[into] = old + value
+                elif how == 'count':
+                    lenv[into] = old + (1 if is_true(value) else 0)
+                elif old is None or (value > old if how == 'max' else value < old):
+                    lenv[into] = value
+            elif kind == 'if':
+                run(step[2] if is_true(ev(step[1])) else step[3], first)
+            elif kind == 'return':
+                raise _LoopReturn(ev(step[1]))
+
+    _loop_depth += 1
+    try:
+        for form in p.initially:
+            ev(form)
+        first = True
+        try:
+            while True:
+                run(p.steps, first)
+                first = False
+        except _LoopDone:
+            pass
+        for form in p.final:
+            ev(form)
+        return result()
+    except _LoopReturn as done:
+        return done.value
+    finally:
+        _loop_depth -= 1
+
 # --- Standard Environment Definitions ---
 def standard_env() -> Env:
     """Create a global environment where ALL operations are wrapped inside Procedure objects."""
@@ -1317,6 +1632,7 @@ def standard_env() -> Env:
         'gensym': gensym,
         'eval': evaluate_code,
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
+        'return': loop_return,
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
@@ -1502,6 +1818,8 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return expand(expand_quasiquote(x[1]), toplevel)
 
     # Common Lisp spellings of lispy3 special forms
+    if head == 'loop' and len(x) > 1 and isinstance(x[1], str) and x[1].lower() in LOOP_KEYWORDS:
+        return ['_loop'] + [expand(e, False) for e in x[1:]]
     if head == 'progn':
         return expand(['begin'] + list(x[1:]), toplevel)
     if head == 'setq':
@@ -1617,7 +1935,7 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     return [expand(e, False) for e in x]
 
-SPECIAL_FORMS = frozenset({'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
+SPECIAL_FORMS = frozenset({'_loop', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
                            'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import', 'new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'})
 
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
@@ -1853,7 +2171,11 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
                         eval_exp(b, loop_env)
                 return eval_exp(result, loop_env) if result is not None else None
 
-            # 13c. (while test body...)
+            # 13c. Common Lisp (loop for x in lst collect x), turned into _loop by expand
+            case ['_loop', *clauses]:
+                return run_loop(clauses, env)
+
+            # 13d. (while test body...)
             case ['while', test_exp, *body_exps]:
                 result = None
                 while is_true(eval_exp(test_exp, env)):
@@ -1861,7 +2183,7 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
                         result = eval_exp(b, env)
                 return result
 
-            # 13d. (try exp (catch err_var handler...)) or (try exp handler)
+            # 13e. (try exp (catch err_var handler...)) or (try exp handler)
             case ['try', try_exp, *catch_clauses]:
                 try:
                     return eval_exp(try_exp, env)
@@ -2309,7 +2631,7 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
     env = global_env if env is None else env
-    names = set(SPECIAL_FORMS) | {'defun', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
+    names = (set(SPECIAL_FORMS) - {'_loop'}) | {'defun', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):

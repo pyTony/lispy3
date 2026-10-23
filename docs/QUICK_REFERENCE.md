@@ -36,6 +36,8 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(begin e1 e2 ...)` | run in order, return the last |
 | `(let [a 1 b 2] body)` | local names for one body; Scheme's `(let ((a 1) (b 2)) body)` and named `(let loop ((i 0)) ...)` work too |
 | `(while test body...)` | loop while test is true |
+| `(loop for x in lst when (odd? x) collect x)` | Common Lisp `loop`: `for x in`/`on`/`across`, `for i from 1 to 10 by 2` (also `below` `downto` `above`), `for x = a then b`, `with`, `repeat`, `while`, `until`, `do`, `collect` `append` `sum` `count` `maximize` `minimize` (`into v`), `when`/`unless` ... `else` ... `end`, `always` `never` `thereis`, `initially`, `finally`; `(help 'loop)` |
+| `(return x)` | leave the running `loop` at once with `x` |
 | `(quote x)` / `'x` | `x` itself, unevaluated |
 | `(:key map)` | look `:key` up in `map` |
 | `(save "name")` | write definitions to `lisp/name.lisp`; imported bindings require keeping original source |
