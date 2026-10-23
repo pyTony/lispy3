@@ -1,0 +1,18 @@
+    10 CLS
+    20 INPUT "LIMIT ";L
+    30 TIME = 0 : GOSUB 60
+    40 PRINT TIME/100, " s"
+    50 INPUT "PRESS ENTER", L$
+    55 PRINT "BYE!" : END
+    60 REM PRIME LOOP
+    65 C=1: PRINT "2";
+    70 FOR N = 3 TO L
+    80    FOR D = 2 TO (N - 1)
+    90      IF N / D = INT(N / D) THEN GOTO 130
+   100    NEXT D
+   110    PRINT ;N; : C = C + 1 :REM WRONG OUTPUT WITHOUT THE OTHER ; BUT CONSISTENT WITH BBC
+   120    GOTO 140
+   130   PRINT ".";
+   140 NEXT N
+   145 PRINT TIME/100;" s, ";C;" primes."
+   150 RETURN
