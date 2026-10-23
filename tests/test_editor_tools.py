@@ -40,6 +40,42 @@ class EditorToolsTest(TestCase):
         with self.assertRaises(SyntaxError):
             indent_lisp('(begin\n  ]')
 
+    def test_reindent_breaks_one_line_definitions(self):
+        from editor_tools import reindent_lisp
+        text = ('(define (int x) (if (> (round x) x) (- (round x) 1) (round x)))\n'
+                '(define (mixed x) (list (trunc x) (abs (- x (trunc x))))) ; parts\n'
+                '(define limit 10)\n')
+        expected = ('(define (int x)\n  (if (> (round x) x) (- (round x) 1) (round x)))\n'
+                    '(define (mixed x) ; parts\n  (list (trunc x) (abs (- x (trunc x)))))\n'
+                    '(define limit 10)\n')
+        self.assertEqual(reindent_lisp(text), expected)
+        self.assertEqual(reindent_lisp(expected), expected)
+
+    def test_reindent_breaks_long_lines_and_keeps_strings(self):
+        from editor_tools import reindent_lisp
+        text = ('(define (h x) (let [a (+ x 1) b (* x 2)] (if (> a b) '
+                '(list "a (" a \'very-long-name-that-overflows) `(b ,b ,@(list 1 2)))))\n')
+        expected = ('(define (h x)\n  (let [a (+ x 1) b (* x 2)]\n    (if (> a b)\n'
+                    '      (list "a (" a \'very-long-name-that-overflows)\n'
+                    '      `(b ,b ,@(list 1 2)))))\n')
+        self.assertEqual(reindent_lisp(text), expected)
+
+    def test_reindent_lays_out_tonys_mixed_fraction(self):
+        from editor_tools import reindent_lisp
+        text = ('(define (mixed x) (if (= 0 (abs (trunc x))) (number->string (exact x)) '
+                '(append (number->string (trunc x)) " " (number->string (exact (- x (trunc x)))))))\n')
+        expected = ('(define (mixed x)\n  (if (= 0 (abs (trunc x)))\n    (number->string (exact x))\n'
+                    '    (append (number->string (trunc x))\n      " "\n'
+                    '      (number->string (exact (- x (trunc x)))))))\n')
+        self.assertEqual(reindent_lisp(text), expected)
+        self.assertEqual(reindent_lisp(expected), expected)
+
+    def test_reindent_selection_only_lays_out_selected_lines(self):
+        from editor_tools import reindent_lisp
+        text = '(define (f) 1)\n(define (g) 2)\n(define (k) 3)\n'
+        self.assertEqual(reindent_lisp(text, first_line=1, stop_line=2),
+                         '(define (f) 1)\n(define (g)\n  2)\n(define (k) 3)\n')
+
     def test_basic_indent_nested_blocks_and_inline_statements(self):
         from editor_tools import indent_basic
         text = 'FOR I%=1 TO 3\nIF I%=2 THEN\nPRINT "NEXT:ENDIF"\nELSE\nREPEAT\nPRINT I%\nUNTIL TRUE\nENDIF\nNEXT\nFOR J%=1 TO 2:PRINT J%:NEXT\nPRINT "done"\n'

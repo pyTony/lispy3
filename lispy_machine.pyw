@@ -2538,27 +2538,30 @@ class LispMachine(tk.Tk):
         if not tab or self._busy():
             return
         source = tab.get_content()
+        text = tab.text
+        selection = text.tag_ranges('sel')
+        first, stop = 0, None
+        if selection:
+            first = int(str(selection[0]).split('.')[0])-1
+            last_line, last_col = map(int, str(selection[1]).split('.'))
+            stop = last_line if last_col else last_line-1
         try:
             if tab.language.name == 'Lisp':
-                formatted = ET.indent_lisp(source, tab.path or tab.name)
+                # Also breaks one-line definitions and over-long lines.
+                formatted = ET.reindent_lisp(source, tab.path or tab.name, first, stop)
             elif tab.language.name == 'BBC BASIC':
                 formatted = ET.indent_basic(source)
+                if selection:
+                    original_lines = source.splitlines(keepends=True)
+                    new_lines = formatted.splitlines(keepends=True)
+                    original_lines[first:stop] = new_lines[first:stop]
+                    formatted = ''.join(original_lines)
             else:
                 self.listener_write(';; Reindent supports Lisp and BASIC buffers.\n', 'info')
                 return
         except SyntaxError as error:
             self._editor_syntax_error(tab, error)
             return
-        text = tab.text
-        selection = text.tag_ranges('sel')
-        if selection:
-            first = int(str(selection[0]).split('.')[0])-1
-            last_line, last_col = map(int, str(selection[1]).split('.'))
-            stop = last_line if last_col else last_line-1
-            original_lines = source.splitlines(keepends=True)
-            new_lines = formatted.splitlines(keepends=True)
-            original_lines[first:stop] = new_lines[first:stop]
-            formatted = ''.join(original_lines)
         if formatted == source:
             return
         cursor = text.index('insert')
