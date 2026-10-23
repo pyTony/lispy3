@@ -158,6 +158,20 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
   to the two native Lisp demo launchers were preserved; their extra output
   makes the unchanged 25-row demo assertions fail in the working checkout.
 
+### mini-basic: PRINT/VDU and call cleanup (2026-10-22)
+
+- [x] Reproduce PRINT control-code and parameter/LOCAL leaks with failing tests.
+- [x] Share PRINT/VDU decoding, preserving Unicode and raw ANSI isolation.
+- [x] Restore PROC/FN dynamic bindings on runtime errors and END, including
+  nested calls; retain normal/early return behavior. Host interrupts are not
+  covered by this Exception-based cleanup.
+- [x] Correct the guide's raw PRINT escape example and stale numbered-WHEN
+  restriction in the BBCSDL reference notes.
+- Validation: `python -m unittest discover -s tests` ran **623 tests**,
+  **OK (4 skipped)**. The new file contains 12 passing regressions.
+- [ ] Retain runtime source spans through expansion for precise BASIC error
+  navigation; current reader syntax locations are not a complete runtime map.
+
 ### mini-basic: fixes before improvements
 
 Progress recorded 2026-10-20. Fix demonstrated errors before adding features.
@@ -192,13 +206,17 @@ Do not skip or mark pending acceptance tests as expected failures.
   BBCSDL reports errors for NEXT (32), UNTIL (43), ENDWHILE (46), RETURN (38);
   ENDIF and ENDCASE continue without an error in these probes. Six raw logs
   are retained; no crashes or timeouts occurred.
-- [ ] Validate the earlier structured EXIT, early FN/ENDPROC return, and
+- [x] Validate the earlier structured EXIT, early FN/ENDPROC return, and
   parameter/LOCAL-restoration tests against BBCSDL. Use normal termination,
   adjusted loop values/conditions, and structured EXIT as the preferred baseline;
   keep cross-boundary jumps separately labelled as diagnostic probes.
-- [ ] Decide whether lispy3 should reproduce that stack error or document an
-  intentional extension; then add the corresponding failing acceptance test
-  before changing continuation semantics.
+- [x] Retain clean structured continuations as an intentional extension. The
+  abandoned-FOR/outer-WHILE fixture protects lispy3 continuation, while BBCSDL
+  reports error 46. No change to continuation semantics was needed.
+- Reference validation (2026-10-23): BBCSDL 1.44a matches ten structured
+  EXIT/return/LOCAL fixtures; one separately labelled stack diagnostic differs.
+  Sources, expected output, raw logs and a reproducible runner are in
+  `basic/reference/structured/` and `basic/reference/runs/structured-2026-10-23/`.
 - [x] **Priority 1 — fix nested-label GOTO lookup.** Jumps within active
   structured bodies now resolve local labels, preserving loop and branch
   continuations. Unmatched targets propagate to enclosing active bodies;

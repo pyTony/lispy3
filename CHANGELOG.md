@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: share VDU control decoding with PRINT strings, including split
+  parameters and colour/cursor column accounting. Preserve printable Unicode;
+  use ANSI for raw escape sequences. Restore PROC/FN parameters and LOCAL
+  variables on runtime errors and END in both definition expanders.
+
 - Add persistent Startup Settings for independently showing startup.lisp and
   executing it once at launch, including hidden execution through the normal
   worker with Stop/errors. Preserve show-only defaults and explicit file opens;

@@ -1,0 +1,9 @@
+n=0
+WHILE n<2
+n+=1
+FOR j=1 TO 5
+IF j=2 THEN EXIT FOR
+NEXT
+PRINT ;n;",";j
+ENDWHILE
+END
