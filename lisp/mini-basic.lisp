@@ -538,6 +538,7 @@
         line-start #t]
     (define (emit kind value) (bbc-push! toks (list kind value line)))
     (define (char-at j) (if (< j n) (string-ref text j) #\nul))
+    (define (digit-at? j) (let [d (char-at j)] (d/isdigit)))
     (define (scan-while j ok?) (while (and (< j n) (ok? (string-ref text j))) (set! j (+ j 1))) j)
     (while (< i n)
       (let [c (string-ref text i)]
@@ -566,11 +567,11 @@
              (emit :str (str/join parts))
              (set! line-start #f)
              (set! i j)))
-          ((or (c/isdigit) (and (eq? c #\.) ((char-at (+ i 1))/isdigit)))
+          ((or (c/isdigit) (and (eq? c #\.) (digit-at? (+ i 1))))
            (let [j (scan-while i (lambda (d) (or (d/isdigit) (eq? d #\.))))]
              (if (and (eq? (char-at j) #\E)
-                      (or ((char-at (+ j 1))/isdigit)
-                          (and (member (char-at (+ j 1)) (list #\+ #\-)) ((char-at (+ j 2))/isdigit))))
+                      (or (digit-at? (+ j 1))
+                          (and (member (char-at (+ j 1)) (list #\+ #\-)) (digit-at? (+ j 2)))))
                  (set! j (scan-while (+ j 2) (lambda (d) (d/isdigit)))))
              (emit :num (string->number (substring text i j)))
              (set! line-start #f)
