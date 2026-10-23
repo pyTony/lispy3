@@ -7,7 +7,7 @@ from unittest import TestCase
 from test_machine_eval_buffer import _FakeMachine as _EvalMachine
 from test_machine_args import machine
 from support import fresh_global_env
-from basic_repl import BasicRepl
+from lispy_support.basic_repl import BasicRepl
 
 
 class _FakeMachine(_EvalMachine):

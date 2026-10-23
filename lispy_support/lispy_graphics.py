@@ -24,7 +24,7 @@ def hold_windows():
         time.sleep(0.02)
 
 
-from graphics_modes import GraphicsMode, MODE_1, virtual_to_pixel
+from lispy_support.graphics_modes import GraphicsMode, MODE_1, virtual_to_pixel
 
 
 def _rgb(value):

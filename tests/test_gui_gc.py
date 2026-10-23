@@ -6,7 +6,7 @@ from unittest import TestCase
 
 class GuiCollectionTest(TestCase):
     def test_worker_allocations_do_not_finalize_gui_cycles(self):
-        from gui_gc import GuiGarbageCollector
+        from lispy_support.gui_gc import GuiGarbageCollector
         events = []
         class Resource:
             def __del__(self):
@@ -31,7 +31,7 @@ class GuiCollectionTest(TestCase):
             gc.set_threshold(*threshold)
 
     def test_collection_and_state_restore_after_failure(self):
-        from gui_gc import GuiGarbageCollector
+        from lispy_support.gui_gc import GuiGarbageCollector
         enabled = gc.isenabled()
         with self.assertRaisesRegex(ValueError, 'example'):
             with GuiGarbageCollector():
@@ -40,7 +40,7 @@ class GuiCollectionTest(TestCase):
         self.assertEqual(gc.isenabled(), enabled)
 
     def test_preserves_preexisting_disabled_gc(self):
-        from gui_gc import GuiGarbageCollector
+        from lispy_support.gui_gc import GuiGarbageCollector
         enabled = gc.isenabled()
         gc.disable()
         try:

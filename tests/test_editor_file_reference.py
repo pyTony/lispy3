@@ -1,5 +1,5 @@
 from unittest import TestCase
-import editor_tools as ET
+from lispy_support import editor_tools as ET
 
 class FileReferenceTest(TestCase):
     def test_quoted_lisp_filename_and_comment(self):

@@ -2,7 +2,7 @@ from unittest import TestCase
 from unittest.mock import patch, Mock
 from pathlib import Path
 import tempfile
-import basic_runner as BR
+from lispy_support import basic_runner as BR
 
 class BBCSDLRunnerTest(TestCase):
     def test_unsaved_source_is_passed_to_native_helper_until_window_closes(self):

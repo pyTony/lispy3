@@ -25,7 +25,7 @@ class ListenerAnsiBoundaryTest(TestCase):
         app.listener_text.insert.assert_called_once_with('end-1c','bad argument','error')
 
     def test_c1_and_string_controls_are_removed_incrementally(self):
-        from listener_output import PlainTextOutput
+        from lispy_support.listener_output import PlainTextOutput
         sink=PlainTextOutput()
         chunks=['a\x9b3','1mb\x1bPprivate',' data\x1b','\\c\x1b(Bd']
         self.assertEqual(''.join(sink.feed(part) for part in chunks),'abcd')

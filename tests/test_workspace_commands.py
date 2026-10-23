@@ -7,7 +7,7 @@ class WorkspaceCommandTest(TestCase):
     def setUp(self):
         self.saved = (L.global_env, L.macro_table, L.library_system, getattr(L, 'workspaces', None))
         if hasattr(L, 'workspaces'):
-            from lispy_workspaces import WorkspaceManager
+            from lispy_support.lispy_workspaces import WorkspaceManager
             L.workspaces = WorkspaceManager(L)
             L.workspaces.add_initializer(L._workspace_library_cleanup)
             L._workspace_library_cleanup(L.global_env)

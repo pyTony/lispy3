@@ -16,7 +16,7 @@ class TerminalRoutingTest(LispyTestCase):
         def output():
             with contextlib.redirect_stdout(terminal):
                 yield
-        with patch('lispy_terminal.ansi_terminal_output', output):
+        with patch('lispy_support.lispy_terminal.ansi_terminal_output', output):
             self.ev('(define terminal-value 1)')
             result = self.ev('(with-ansi-terminal (set! terminal-value 2) (display "terminal") (+ terminal-value 3))')
         self.assertEqual(result, 5)
@@ -31,7 +31,7 @@ class TerminalRoutingTest(LispyTestCase):
                 yield
         listener = io.StringIO()
         with contextlib.redirect_stdout(listener):
-            with patch('lispy_terminal.ansi_terminal_output', output):
+            with patch('lispy_support.lispy_terminal.ansi_terminal_output', output):
                 with self.assertRaisesRegex(lispy3.LispyError, 'expected error'):
                     self.ev('(with-ansi-terminal (error "expected error"))')
             self.ev('(display "listener")')
@@ -62,9 +62,9 @@ class TerminalRoutingTest(LispyTestCase):
         terminal = io.StringIO()
         @contextlib.contextmanager
         def output():
-            with contextlib.redirect_stdout(terminal), patch('lispy_terminal.terminal_output_active', return_value=True):
+            with contextlib.redirect_stdout(terminal), patch('lispy_support.lispy_terminal.terminal_output_active', return_value=True):
                 yield
-        with patch('lispy_terminal.ansi_terminal_output', output):
+        with patch('lispy_support.lispy_terminal.ansi_terminal_output', output):
             machine.LispMachine.eval_buffer_in_terminal(app)
         self.assertEqual(terminal.getvalue(), 'colour\n')
         self.assertEqual(self.ev('gui-terminal-value'), 9)

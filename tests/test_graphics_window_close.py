@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock
 
-from lispy_graphics import Graphics
+from lispy_support.lispy_graphics import Graphics
 
 
 class GraphicsWindowCloseTest(TestCase):

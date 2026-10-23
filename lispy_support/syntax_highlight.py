@@ -23,7 +23,9 @@ import json
 import os
 import re
 
-SYNTAX_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "syntax")
+from lispy_support import PROJECT_ROOT
+
+SYNTAX_DIR = str(PROJECT_ROOT / "syntax")
 
 # Used for any tag a language file names but gives no colour.
 DEFAULT_COLORS = {

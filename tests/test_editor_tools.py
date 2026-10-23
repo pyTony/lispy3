@@ -1,5 +1,5 @@
 from unittest import TestCase
-import syntax_highlight as SH
+from lispy_support import syntax_highlight as SH
 
 
 class EditorToolsTest(TestCase):
@@ -15,7 +15,7 @@ class EditorToolsTest(TestCase):
         self.assertIn(('comment', 'REM FOR I%'), spans)
 
     def test_lisp_check_has_location_and_does_not_execute(self):
-        from editor_tools import check_lisp
+        from lispy_support.editor_tools import check_lisp
         check_lisp('(display "not executed") ; )\n[1 2]')
         with self.assertRaises(SyntaxError) as caught:
             check_lisp('(begin\n  ]', 'demo.lisp')
@@ -23,25 +23,25 @@ class EditorToolsTest(TestCase):
         self.assertIn('demo.lisp', str(caught.exception))
 
     def test_missing_close_and_unterminated_string_are_reported(self):
-        from editor_tools import check_lisp
+        from lispy_support.editor_tools import check_lisp
         for text in ['(begin\n  1', '(display "unfinished)', '(display """unfinished)', "'"]:
             with self.subTest(text=text), self.assertRaises(SyntaxError):
                 check_lisp(text)
 
     def test_lisp_indent_preserves_multiline_strings_and_comments(self):
-        from editor_tools import indent_lisp
+        from lispy_support.editor_tools import indent_lisp
         text = '(begin\n(display """raw\n  keep these spaces\n""") ; comment\n[1\n2])\n'
         expected = '(begin\n  (display """raw\n  keep these spaces\n""") ; comment\n  [1\n    2])\n'
         self.assertEqual(indent_lisp(text), expected)
         self.assertEqual(indent_lisp(expected), expected)
 
     def test_invalid_lisp_is_not_formatted(self):
-        from editor_tools import indent_lisp
+        from lispy_support.editor_tools import indent_lisp
         with self.assertRaises(SyntaxError):
             indent_lisp('(begin\n  ]')
 
     def test_reindent_breaks_one_line_definitions(self):
-        from editor_tools import reindent_lisp
+        from lispy_support.editor_tools import reindent_lisp
         text = ('(define (int x) (if (> (round x) x) (- (round x) 1) (round x)))\n'
                 '(define (mixed x) (list (trunc x) (abs (- x (trunc x))))) ; parts\n'
                 '(define limit 10)\n')
@@ -52,13 +52,13 @@ class EditorToolsTest(TestCase):
         self.assertEqual(reindent_lisp(expected), expected)
 
     def test_reindent_keeps_defun_name_and_params_on_first_line(self):
-        from editor_tools import reindent_lisp
+        from lispy_support.editor_tools import reindent_lisp
         text = '(defun hello (name) (format t "hi ~a" name) (format t "!"))\n'
         self.assertEqual(reindent_lisp(text),
                          '(defun hello (name)\n  (format t "hi ~a" name)\n  (format t "!"))\n')
 
     def test_reindent_breaks_long_lines_and_keeps_strings(self):
-        from editor_tools import reindent_lisp
+        from lispy_support.editor_tools import reindent_lisp
         text = ('(define (h x) (let [a (+ x 1) b (* x 2)] (if (> a b) '
                 '(list "a (" a \'very-long-name-that-overflows) `(b ,b ,@(list 1 2)))))\n')
         expected = ('(define (h x)\n  (let [a (+ x 1) b (* x 2)]\n    (if (> a b)\n'
@@ -67,7 +67,7 @@ class EditorToolsTest(TestCase):
         self.assertEqual(reindent_lisp(text), expected)
 
     def test_reindent_lays_out_tonys_mixed_fraction(self):
-        from editor_tools import reindent_lisp
+        from lispy_support.editor_tools import reindent_lisp
         text = ('(define (mixed x) (if (= 0 (abs (trunc x))) (number->string (exact x)) '
                 '(append (number->string (trunc x)) " " (number->string (exact (- x (trunc x)))))))\n')
         expected = ('(define (mixed x)\n  (if (= 0 (abs (trunc x)))\n    (number->string (exact x))\n'
@@ -77,20 +77,20 @@ class EditorToolsTest(TestCase):
         self.assertEqual(reindent_lisp(expected), expected)
 
     def test_reindent_selection_only_lays_out_selected_lines(self):
-        from editor_tools import reindent_lisp
+        from lispy_support.editor_tools import reindent_lisp
         text = '(define (f) 1)\n(define (g) 2)\n(define (k) 3)\n'
         self.assertEqual(reindent_lisp(text, first_line=1, stop_line=2),
                          '(define (f) 1)\n(define (g)\n  2)\n(define (k) 3)\n')
 
     def test_basic_indent_nested_blocks_and_inline_statements(self):
-        from editor_tools import indent_basic
+        from lispy_support.editor_tools import indent_basic
         text = 'FOR I%=1 TO 3\nIF I%=2 THEN\nPRINT "NEXT:ENDIF"\nELSE\nREPEAT\nPRINT I%\nUNTIL TRUE\nENDIF\nNEXT\nFOR J%=1 TO 2:PRINT J%:NEXT\nPRINT "done"\n'
         expected = 'FOR I%=1 TO 3\n  IF I%=2 THEN\n    PRINT "NEXT:ENDIF"\n  ELSE\n    REPEAT\n      PRINT I%\n    UNTIL TRUE\n  ENDIF\nNEXT\nFOR J%=1 TO 2:PRINT J%:NEXT\nPRINT "done"\n'
         self.assertEqual(indent_basic(text), expected)
         self.assertEqual(indent_basic(expected), expected)
 
     def test_basic_line_numbers_and_return_indent(self):
-        from editor_tools import indent_basic, next_indent
+        from lispy_support.editor_tools import indent_basic, next_indent
         self.assertEqual(indent_basic('10 FOR I%=1 TO 2\n20 PRINT I%\n30 NEXT'),
                          '10 FOR I%=1 TO 2\n20   PRINT I%\n30 NEXT')
         self.assertEqual(next_indent('FOR I%=1 TO 2', basic=True), 2)

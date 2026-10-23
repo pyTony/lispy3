@@ -51,11 +51,11 @@ from tkinter.scrolledtext import ScrolledText
 
 # --- import the interpreter (no side effects when imported) -------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) or ".")
-import lispy_terminal
-from lispy_terminal import terminal_command
+from lispy_support import lispy_terminal
+from lispy_support.lispy_terminal import terminal_command
 import lispy3 as L
-from basic_repl import BasicRepl, LoadedProgram
-from repl_completion import filename_completion
+from lispy_support.basic_repl import BasicRepl, LoadedProgram
+from lispy_support.repl_completion import filename_completion
 
 def _use_numpy_interpreter() -> bool:
     """With NumPy installed, load lispy3-numpy.py: it speeds up L in place and adds
@@ -71,10 +71,10 @@ def _use_numpy_interpreter() -> bool:
         return False
 
 USING_NUMPY = _use_numpy_interpreter()
-import guide
-import syntax_highlight as SH
-import editor_tools as ET
-import basic_runner as BR
+from lispy_support import guide
+from lispy_support import syntax_highlight as SH
+from lispy_support import editor_tools as ET
+from lispy_support import basic_runner as BR
 
 
 # =============================================================================
@@ -505,7 +505,7 @@ class _ListenerWriter(io.TextIOBase):
     """A stdout replacement that streams text straight into the Listener pane."""
     def __init__(self, app):
         self.app = app
-        from listener_output import PlainTextOutput
+        from lispy_support.listener_output import PlainTextOutput
         self.plain_output = PlainTextOutput(on_clear=self._clear)
 
     def _clear(self, preceding_text):
@@ -1316,7 +1316,7 @@ class GuideWindow(tk.Toplevel):
 
     # ---------- showing pages ----------
     def show(self, page: str = guide.PAGES[0][0], anchor: str | None = None, remember: bool = True):
-        """Show `page` (a title from guide.PAGES), at the heading `anchor` if given."""
+        """Show `page` (a title from lispy_support.guide.PAGES), at the heading `anchor` if given."""
         if remember and self.page is not None:
             self.history.append((self.page, self.text.index("@0,0")))
             self.back_btn.configure(state="normal")
@@ -1513,7 +1513,7 @@ class LispMachine(tk.Tk):
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         self.basic_settings_window = None
         if plain_repl is None:
-            plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('basic_repl', False)
+            plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('lispy_support.basic_repl', False)
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
         self.basic_repl_mode = tk.BooleanVar(self, value=False)
         self.basic_repl = BasicRepl(L, self._read_basic_repl_source, get_current_source=self._get_basic_buffer_text)
@@ -1527,7 +1527,7 @@ class LispMachine(tk.Tk):
         self._calls = queue.Queue() # what that thread hands to the Tk thread: (fn, args, box, done)
         L.global_env['help'] = self.lisp_help
         L.global_env['sleep'] = self._sleep
-        from lispy_graphics_bindings import set_dispatcher
+        from lispy_support.lispy_graphics_bindings import set_dispatcher
         set_dispatcher(self._ui)
         self._gui_builtins_on_main()
         L.workspaces.add_initializer(self._initialize_workspace_env)
@@ -2117,6 +2117,7 @@ class LispMachine(tk.Tk):
         self.notebook.add(tab, text=name)
         self.notebook.select(tab)
         self._refresh_buffer_list()
+        self.after_idle(tab.text.focus_set)
         return tab
 
     def new_buffer_dialog(self):
@@ -2229,6 +2230,7 @@ class LispMachine(tk.Tk):
             origin = buffer_source_path(tab)
             if origin and os.path.normcase(os.path.abspath(origin)) == os.path.normcase(path):
                 self.notebook.select(tab)
+                self.after_idle(tab.text.focus_set)
                 return
         try:
             if os.path.splitext(path)[1].lower() == '.bbc':
@@ -2343,7 +2345,7 @@ class LispMachine(tk.Tk):
 
     def _poll_graphics(self):
         """Pump SDL on its owning Tk thread, also while evaluation is idle."""
-        from lispy_graphics import pump_windows
+        from lispy_support.lispy_graphics import pump_windows
         try:
             pump_windows()
         except Exception as error:
@@ -3270,7 +3272,7 @@ class LispMachine(tk.Tk):
             self.listener_text.delete('prompt_start', 'end-1c')
             self.console_ready = False
         self._apply_repl_mode()
-        self.settings['basic_repl'] = self.basic_repl_mode.get()
+        self.settings['lispy_support.basic_repl'] = self.basic_repl_mode.get()
         self.settings['plain_repl'] = self.plain_repl.get()
         save_settings(self.settings)
         self.listener_write(';; BASIC REPL: HELP lists commands; state is separate from Lisp.\n'
@@ -3727,7 +3729,7 @@ class LispMachine(tk.Tk):
     def listener_write(self, text: str, tag: str | None = None):
         # Stdout is filtered incrementally by _ListenerWriter. Also protect
         # direct diagnostics, which can contain escape bytes from user errors.
-        from listener_output import PlainTextOutput
+        from lispy_support.listener_output import PlainTextOutput
         text = PlainTextOutput().feed(text)
         t = self.listener_text
         t.configure(state="normal")
@@ -4038,8 +4040,8 @@ class LispMachine(tk.Tk):
             self._remember_open_files()
         except Exception:   # never let a settings problem stop quitting
             pass
-        from lispy_graphics import close_windows
-        from lispy_graphics_bindings import set_dispatcher
+        from lispy_support.lispy_graphics import close_windows
+        from lispy_support.lispy_graphics_bindings import set_dispatcher
         close_windows()
         set_dispatcher(None)
         self.destroy()
@@ -4050,7 +4052,7 @@ def main():
     if "--version" in sys.argv[1:] or "-V" in sys.argv[1:]:
         print(version_text())
         return
-    from startup_options import extract_startup
+    from lispy_support.startup_options import extract_startup
     try:
         startup, args = extract_startup(sys.argv[1:])
     except ValueError as error:
@@ -4060,7 +4062,7 @@ def main():
     options = dict(plain_repl=True if plain_repl else None)
     if startup is not None:
         options['startup_file'] = startup
-    from gui_gc import GuiGarbageCollector
+    from lispy_support.gui_gc import GuiGarbageCollector
     with GuiGarbageCollector() as collector:
         app = LispMachine(files, **options)
         collector.schedule(app)

@@ -18,7 +18,9 @@ import subprocess
 import sys
 import select
 import time
-import basic_io
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from lispy_support import basic_io
 
 
 class TerminalError(RuntimeError):

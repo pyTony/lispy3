@@ -1,5 +1,6 @@
 """Line-oriented mini-basic session; program editing never evaluates source."""
 import re
+from lispy_support import PROJECT_ROOT
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +20,7 @@ class BasicRepl:
         self.lines = {}
         self.program_edited = False
         self.read_source = read_source or self._read_source
-        self.directory = Path(directory).resolve() if directory is not None else Path(__file__).resolve().parent/'basic'
+        self.directory = Path(directory).resolve() if directory is not None else PROJECT_ROOT/'basic'
 
     @staticmethod
     def _read_source(path):
@@ -143,8 +144,8 @@ def setup_completion(directory=None):
         import readline
     except ImportError:
         return False
-    from repl_completion import filename_completion
-    import syntax_highlight as syntax
+    from lispy_support.repl_completion import filename_completion
+    from lispy_support import syntax_highlight as syntax
     languages, _ = syntax.load_languages()
     language = syntax.language_for('repl.bas', languages)
     names = {name.upper() for name in language.words} | {'RUN','LIST','NEW','LOAD','SAVE','HELP','QUIT'}

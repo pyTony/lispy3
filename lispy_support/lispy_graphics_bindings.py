@@ -1,8 +1,8 @@
 """Register optional Lisp graphics primitives without importing Pygame until open()."""
 from __future__ import annotations
 
-from graphics_modes import MODES, GraphicsMode
-from lispy_graphics import Graphics
+from lispy_support.graphics_modes import MODES, GraphicsMode
+from lispy_support.lispy_graphics import Graphics
 
 _dispatcher = None
 
