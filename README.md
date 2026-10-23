@@ -568,6 +568,8 @@ Try `Ctrl+H`, search `define`, tick `Aa`, replace with `DEFINE` and press **All*
 
 Everything the plain REPL can do, the editor can do — plus a place to keep your `.lisp` files open while you do it.
 
+**Edit → Open file at cursor** and **F4** use the focused editor, Listener input, or REPL line. The Listener context menu also offers this command. The caret may be inside the filename or immediately after its closing quote. File navigation accepts pasted Windows paths with single backslashes; it does not evaluate the input.
+
 Quoted filenames can be opened with **F4**, **Ctrl+click** (Command+click on macOS),
 or the editor context menu. Relative paths resolve from the source directory,
 then the working/editor/library directories. Already-open buffers retain their edits.

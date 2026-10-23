@@ -39,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 import threading
 import time
 import turtle
@@ -351,7 +352,10 @@ def add_context_menu(widget, read_only: bool = False, extra_commands=()):
             menu.add_command(label=label, state="normal" if enabled else "disabled",
                              command=lambda v=virtual: widget.event_generate(v))
         if extra_commands:
-            widget.mark_set('insert', widget.index(f'@{event.x},{event.y}'))
+            if isinstance(widget, tk.Entry):
+                widget.icursor(widget.index(f'@{event.x}'))
+            else:
+                widget.mark_set('insert', widget.index(f'@{event.x},{event.y}'))
             menu.add_separator()
             for label, command in extra_commands:
                 menu.add_command(label=label, command=command)
@@ -692,21 +696,8 @@ class EditorTab(tk.Frame):
             text.mark_set('insert', text.index(f'@{event.x},{event.y}'))
         source = self.get_content()
         offset = len(text.get('1.0', 'insert'))
-        reference = ET.file_reference_at_cursor(source, offset, self.language.name)
-        if reference is None:
-            self.app.listener_write(';; No quoted filename at cursor.\n', 'info')
-            return 'break'
-        origin = buffer_source_path(self)
-        roots = [os.path.dirname(origin)] if origin else []
-        roots += [os.getcwd(), APP_DIR, L.LISP_DIR]
-        for root in roots:
-            path = os.path.abspath(os.path.join(root, reference))
-            for candidate in [path] + ([path+'.lisp'] if not os.path.splitext(path)[1] else []):
-                if os.path.isfile(candidate):
-                    self.app._open_source_path(candidate)
-                    return 'break'
-        self.app.listener_write(f';; File not found: {reference}\n', 'error')
-        return 'break'
+        return self.app._open_file_reference(source, offset, self.language.name,
+                                             buffer_source_path(self))
 
     # ---------- highlighting ----------
     def set_language(self):
@@ -1712,7 +1703,7 @@ class LispMachine(tk.Tk):
         edit_m.add_command(label="Toggle comment",   accelerator="Ctrl+/", command=lambda: self._call_editor("_toggle_comment"))
         edit_m.add_command(label="Complete symbol",  accelerator="Ctrl+Space", command=lambda: self._call_editor("_complete"))
         edit_m.add_separator()
-        edit_m.add_command(label="Open file at cursor", accelerator="F4", command=lambda: self._call_editor("_open_file_at_cursor"))
+        edit_m.add_command(label="Open file at cursor", accelerator="F4", command=self.open_file_at_cursor)
         edit_m.add_command(label="Check Lisp syntax", command=self.check_buffer_syntax)
         edit_m.add_command(label="Reindent selection or buffer", command=self.reindent_buffer)
         bar.add_cascade(label="Edit", menu=edit_m)
@@ -1977,7 +1968,8 @@ class LispMachine(tk.Tk):
             borderwidth=0, highlightthickness=0, padx=8, pady=4)
         self.listener_text.pack(fill="both", expand=True)
         self.listener_text.configure(state="disabled")
-        add_context_menu(self.listener_text)
+        add_context_menu(self.listener_text, extra_commands=[("Open file at cursor",
+            lambda: self.open_file_at_cursor(types.SimpleNamespace(widget=self.listener_text)))])
         self.listener_text.tag_configure("prompt", foreground=COLORS["prompt"], font=FONT_MONO_BOLD)
         self.listener_text.tag_configure("result", foreground=COLORS["result"])
         self.listener_text.tag_configure("error",  foreground=COLORS["error"])
@@ -2014,7 +2006,8 @@ class LispMachine(tk.Tk):
             highlightthickness=1, highlightbackground="#333",
             highlightcolor=COLORS["prompt"])
         self.listener_input.pack(side="left", fill="x", expand=True, ipady=4)
-        add_context_menu(self.listener_input)
+        add_context_menu(self.listener_input, extra_commands=[("Open file at cursor",
+            lambda: self.open_file_at_cursor(types.SimpleNamespace(widget=self.listener_input)))])
         self.listener_input.bind("<Return>",  lambda e: (self._listener_submit(), "break")[1])
         self.listener_input.bind("<Tab>", self._listener_complete)
         self.listener_input.bind("<Control-space>", self._listener_complete)
@@ -2028,6 +2021,7 @@ class LispMachine(tk.Tk):
         pass  # placeholder
 
     def _bind_global(self):
+        self.bind_all("<F4>", self.open_file_at_cursor)
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
         self.bind_all("<F7>", lambda e: (self.eval_basic_at_cursor(), "break")[1])
         self.bind_all("<F8>", lambda e: (self.eval_basic_buffer(), "break")[1])
@@ -3680,6 +3674,37 @@ class LispMachine(tk.Tk):
     # =========================================================================
     # Misc
     # =========================================================================
+    def open_file_at_cursor(self, event=None):
+        """Open a quoted path in the focused Listener or editor without evaluation."""
+        widget = event.widget if event is not None else self.focus_get()
+        if widget is self.listener_input:
+            source = widget.get()
+            offset = widget.index('insert')
+        elif widget is self.listener_text:
+            source = widget.get('insert linestart', 'insert lineend')
+            offset = len(widget.get('insert linestart', 'insert'))
+        else:
+            self._call_editor('_open_file_at_cursor')
+            return 'break'
+        language = 'BBC BASIC' if self.basic_repl_mode.get() else 'Lisp'
+        return self._open_file_reference(source, offset, language)
+
+    def _open_file_reference(self, source, offset, language, origin=None):
+        reference = ET.file_reference_at_cursor(source, offset, language)
+        if reference is None:
+            self.listener_write(';; No quoted filename at cursor.\n', 'info')
+            return 'break'
+        roots = [os.path.dirname(origin)] if origin else []
+        roots += [os.getcwd(), APP_DIR, L.LISP_DIR]
+        for root in roots:
+            path = os.path.abspath(os.path.join(root, reference))
+            for candidate in [path] + ([path+'.lisp'] if not os.path.splitext(path)[1] else []):
+                if os.path.isfile(candidate):
+                    self._open_source_path(candidate)
+                    return 'break'
+        self.listener_write(f';; File not found: {reference}\n', 'error')
+        return 'break'
+
     def _call_editor(self, method_name: str, *args):
         tab = self.current_tab()
         if tab and hasattr(tab, method_name):

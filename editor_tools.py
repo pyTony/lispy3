@@ -127,13 +127,18 @@ def file_reference_at_cursor(text, offset, language='Lisp'):
     import ast
     language = next((item for item in _languages if item.name == language), _lisp)
     for tag, start, end in language.spans(text):
-        if tag != 'string' or not start <= offset < end:
+        if tag != 'string' or not start <= offset <= end:
             continue
         token = text[start:end]
         try:
             if language.name == 'BBC BASIC':
                 return token[1:-1].replace('""', '"')
             if language.name == 'Lisp':
+                # File navigation also accepts paths pasted from Windows Explorer.
+                quote = '"""' if token.startswith('"""') else '"'
+                literal = token[len(quote):-len(quote)]
+                if re.match(r'^[A-Za-z]:\\', literal) and '\\\\' not in literal:
+                    return literal
                 import lispy3
                 value = lispy3.atom(token)
                 return value.value if isinstance(value, lispy3.String) else None
