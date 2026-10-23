@@ -4,6 +4,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Startup Settings: new option to reopen the files that were open when the
+  Machine was last closed (tab order and current buffer kept, missing files
+  skipped) instead of showing startup.lisp. Off by default.
+
 - mini-basic: share VDU control decoding with PRINT strings, including split
   parameters and colour/cursor column accounting. Preserve printable Unicode;
   use ANSI for raw escape sequences. Restore PROC/FN parameters and LOCAL

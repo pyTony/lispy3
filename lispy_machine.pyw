@@ -25,7 +25,8 @@ Run:  python lispy_machine.pyw [--startup setup.lisp] [--repl] [file.lisp ...]
       --repl starts the Listener as the plain lispy3 REPL (View > Listener mode changes it).
       Each file named on the command line opens in its own buffer; a file that
       does not exist yet opens empty and is created on the first Save. With no
-      files, startup.lisp beside the editor opens by default; configure it in Startup Settings.
+      files, startup.lisp beside the editor opens by default; Startup Settings can
+      reopen the files open at the last close instead.
 """
 import io
 import hashlib
@@ -1499,6 +1500,7 @@ class LispMachine(tk.Tk):
         self._welcome_done = False
         self.settings = load_settings()
         self.startup_show_buffer = tk.BooleanVar(self, value=bool(self.settings.get('startup_show_buffer', True)))
+        self.startup_reopen_files = tk.BooleanVar(self, value=bool(self.settings.get('startup_reopen_files', False)))
         self.startup_file = os.path.abspath(startup_file) if startup_file is not None else STARTUP_FILE
         self.startup_run = tk.BooleanVar(self, value=startup_file is not None or bool(self.settings.get('startup_run', False)))
         self.startup_settings_window = None
@@ -1566,6 +1568,9 @@ class LispMachine(tk.Tk):
             tab = self.new_buffer(name, content, path=path)
             if os.path.splitext(arg)[1].lower() == '.bbc':
                 tab.source_path = source_arg_path(arg)
+        reopen = getattr(self, 'startup_reopen_files', None)
+        if not files and reopen is not None and reopen.get() is True:
+            errors.extend(self._reopen_last_session())
         if not self.tabs:
             if self.startup_show_buffer.get():
                 override = self.__dict__.get('startup_file', STARTUP_FILE)
@@ -1574,6 +1579,45 @@ class LispMachine(tk.Tk):
                 name, content, path = 'untitled.lisp', '', None
             self.new_buffer(name, content, path=path)
         return errors
+
+    def _reopen_last_session(self):
+        """Open the files that were open when the Machine was last closed.
+
+        Files that no longer exist are skipped; the buffer that was current
+        at closing is selected again."""
+        errors = []
+        saved = self.settings.get('last_session_files', [])
+        current = self.settings.get('last_session_current')
+        selected = None
+        for path in saved if isinstance(saved, list) else []:
+            if not isinstance(path, str) or not os.path.isfile(path):
+                continue
+            try:
+                name, content, file_path = read_file_arg(path, self.settings)
+            except (OSError, UnicodeDecodeError, RuntimeError) as error:
+                errors.append(f'{path}: {error}')
+                continue
+            tab = self.new_buffer(name, content, path=file_path)
+            if file_path is None:
+                tab.source_path = path
+            if path == current:
+                selected = tab
+        if selected is not None:
+            self.notebook.select(selected)
+        return errors
+
+    def _remember_open_files(self):
+        """Save the open files, in tab order, for Reopen files at the next launch."""
+        files = []
+        for name in self.tab_order:
+            path = buffer_source_path(self.tabs[name]) if name in self.tabs else None
+            if path and os.path.abspath(path) not in files:
+                files.append(os.path.abspath(path))
+        current = self.current_tab()
+        current = buffer_source_path(current) if current is not None else None
+        self.settings['last_session_files'] = files
+        self.settings['last_session_current'] = os.path.abspath(current) if current else None
+        save_settings(self.settings)
 
     def _run_startup(self):
         if self._startup_ran or not self.startup_run.get():
@@ -1608,12 +1652,15 @@ class LispMachine(tk.Tk):
 
         def save():
             self.settings['startup_show_buffer'] = self.startup_show_buffer.get()
+            self.settings['startup_reopen_files'] = self.startup_reopen_files.get()
             self.settings['startup_run'] = self.startup_run.get()
             save_settings(self.settings)
             status.set('Saved for the next launch.')
 
-        ttk.Checkbutton(frame, text='Show startup.lisp buffer when no files are supplied',
-                        variable=self.startup_show_buffer, command=save).pack(anchor='w')
+        ttk.Checkbutton(frame, text='Reopen the files that were open when the Machine was last closed',
+                        variable=self.startup_reopen_files, command=save).pack(anchor='w')
+        ttk.Checkbutton(frame, text='Show startup.lisp buffer when no files are supplied or reopened',
+                        variable=self.startup_show_buffer, command=save).pack(anchor='w', pady=(8, 0))
         ttk.Checkbutton(frame, text='Run startup.lisp once at startup (also when hidden)',
                         variable=self.startup_run, command=save).pack(anchor='w', pady=8)
         ttk.Label(frame, text=self.startup_file).pack(anchor='w', pady=8)
@@ -3882,6 +3929,10 @@ class LispMachine(tk.Tk):
                 f"{len(dirty)} buffer(s) have unsaved changes. Quit anyway?"
             ):
                 return
+        try:
+            self._remember_open_files()
+        except Exception:   # never let a settings problem stop quitting
+            pass
         from lispy_graphics import close_windows
         from lispy_graphics_bindings import set_dispatcher
         close_windows()
