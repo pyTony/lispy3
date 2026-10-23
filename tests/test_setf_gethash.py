@@ -30,7 +30,7 @@ class HashPlaceTest(LispyTestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(self.ev('(setf (gethash (begin (display "K") 1) (begin (display "T") table) (begin (display "D") 0)) (begin (display "V") 42))'), 42)
-        self.assertEqual(out.getvalue(), 'KTDV')
+        self.assertEqual(out.getvalue().splitlines(), ['K', 'T', 'D', 'V'])
         self.assertEqual(self.ev('(gethash 1 table)'), 42)
 
     def test_table_reference_is_captured_before_value_runs(self):
