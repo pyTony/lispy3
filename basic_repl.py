@@ -17,6 +17,7 @@ class BasicRepl:
         self.manager = runtime.workspaces
         self.workspace = None
         self.lines = {}
+        self.program_edited = False
         self.read_source = read_source or self._read_source
         self.directory = Path(directory).resolve() if directory is not None else Path(__file__).resolve().parent/'basic'
 
@@ -56,6 +57,10 @@ class BasicRepl:
     def source(self):
         return ''.join(f'{number} {body}\n' for number, body in sorted(self.lines.items()))
 
+    @property
+    def uses_editor_source(self):
+        return self.get_current_source is not None and not self.program_edited
+
     def submit(self, line):
         line = line.strip()
         if not line:
@@ -66,6 +71,7 @@ class BasicRepl:
             if not 1 <= number <= 65535:
                 raise ValueError('Line number must be between 1 and 65535')
             body = numbered[2] or ''
+            self.program_edited = True
             if body: self.lines[number] = body
             else: self.lines.pop(number, None)
             return
@@ -83,10 +89,11 @@ class BasicRepl:
                       'RUN starts fresh; immediate statements retain session variables.')
             elif command == 'NEW':
                 self.lines.clear()
+                self.program_edited = True
                 self._fresh()
             else:
                 self._fresh()
-                src = (self.get_current_source() if self.get_current_source is not None
+                src = (self.get_current_source() if self.uses_editor_source
                        else self.source()) or ''
                 if src.strip():
                     try:
@@ -122,6 +129,7 @@ class BasicRepl:
                     lines[number] = numbered[i][2] if numbered[i] else row
                     previous = number
                 self.lines = lines
+                self.program_edited = False
                 return LoadedProgram(path.resolve(), text)
             return
         try:

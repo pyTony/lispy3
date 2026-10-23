@@ -1540,11 +1540,9 @@ class LispMachine(tk.Tk):
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         self.basic_settings_window = None
         if plain_repl is None:
-            plain_repl = bool(self.settings.get("plain_repl", False))
+            plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('basic_repl', False)
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
-        self.basic_repl_mode = tk.BooleanVar(self, value=bool(self.settings.get('basic_repl', False)))
-        if self.basic_repl_mode.get():
-            self.plain_repl.set(True)
+        self.basic_repl_mode = tk.BooleanVar(self, value=False)
         self.basic_repl = BasicRepl(L, self._read_basic_repl_source, get_current_source=self._get_basic_buffer_text)
         self.listener_mode = tk.StringVar(self, value='basic' if self.basic_repl_mode.get() else
                                          'lisp' if self.plain_repl.get() else 'listener')
@@ -1712,6 +1710,7 @@ class LispMachine(tk.Tk):
         file_m.add_command(label="New buffer",       accelerator="Ctrl+N", command=self.new_buffer_dialog)
         file_m.add_command(label="Load library silently…", command=self.load_library_silently)
         file_m.add_command(label="Open…",            accelerator="Ctrl+O", command=self.open_file)
+        file_m.add_command(label="Load BASIC…", command=self.load_basic)
         file_m.add_command(label="Save",             accelerator="Ctrl+S", command=lambda: self.save_current(confirm=True))
         file_m.add_command(label="Save as…",         accelerator="Ctrl+Shift+S", command=lambda: self.save_current_as(confirm=True))
         file_m.add_separator()
@@ -2148,6 +2147,27 @@ class LispMachine(tk.Tk):
         if not path:
             return
         self._open_source_path(path)
+
+    def _basic_dialog_dir(self):
+        root = self.settings.get('basic_directory') or BR.default_package_root()
+        candidates = [self.settings.get('basic_examples_directory'),
+                      self.settings.get('basic_last_directory'),
+                      os.path.join(root, 'examples') if root else None,
+                      os.path.join(APP_DIR, 'basic')]
+        return next((path for path in candidates if path and os.path.isdir(path)), APP_DIR)
+
+    def load_basic(self):
+        """Browse for a BASIC program and LOAD it into the BASIC session and editor."""
+        if self._busy():
+            return
+        path = filedialog.askopenfilename(parent=self, title='Load BASIC program',
+            initialdir=self._basic_dialog_dir(),
+            filetypes=[('BASIC programs', '*.bas *.BAS *.bbc *.BBC'), ('All files', '*')])
+        if not path:
+            return
+        self.listener_mode.set('basic')
+        self._select_listener_mode()
+        self._basic_feed(['LOAD "' + path + '"'])
 
     def _open_source_path(self, path):
         path = os.path.abspath(path)
@@ -2641,6 +2661,28 @@ class LispMachine(tk.Tk):
         ttk.Label(frame, text='BASIC: F5/F6 use Lispy mini-basic; F7/F8 use Python mini_basic.').pack(anchor='w', pady=(0,12))
         status = tk.StringVar(window, value='Settings are saved automatically.')
 
+        examples = ttk.Frame(frame)
+        examples.pack(fill='x', pady=(0,12))
+        ttk.Label(examples, text='BASIC examples directory').pack(side='left')
+        examples_path = tk.StringVar(window, value=self.settings.get('basic_examples_directory', ''))
+        ttk.Entry(examples, textvariable=examples_path, state='readonly', width=45).pack(side='left', fill='x', expand=True)
+
+        def choose_examples():
+            path = filedialog.askdirectory(parent=window, title='BASIC examples directory',
+                                           initialdir=self._basic_dialog_dir())
+            if path:
+                self.settings['basic_examples_directory'] = path
+                examples_path.set(path)
+                save_settings(self.settings)
+
+        def clear_examples():
+            self.settings.pop('basic_examples_directory', None)
+            examples_path.set('')
+            save_settings(self.settings)
+
+        ttk.Button(examples, text='Browse…', command=choose_examples).pack(side='left')
+        ttk.Button(examples, text='Use last loaded', command=clear_examples).pack(side='left')
+
         def save():
             self._save_basic_settings()
             status.set('Saved. Applies to the next run.')
@@ -2802,6 +2844,7 @@ class LispMachine(tk.Tk):
                     terminal=terminal, python_source=python_source)
             return
         if basic and not terminal and basic_backend == 'lispy':
+            self.basic_repl.program_edited = False
             if not self.basic_repl_mode.get():
                 self.listener_mode.set('basic')
                 self._select_listener_mode()
@@ -3115,6 +3158,8 @@ class LispMachine(tk.Tk):
 
     def _open_basic_repl_program(self, loaded):
         path = str(loaded.path)
+        self.settings['basic_last_directory'] = str(loaded.path.parent)
+        save_settings(self.settings)
         for tab in self.tabs.values():
             origin = buffer_source_path(tab)
             if origin and os.path.normcase(os.path.abspath(origin)) == os.path.normcase(path):
@@ -3169,6 +3214,7 @@ class LispMachine(tk.Tk):
 
     def _cache_current_buffer_for_basic(self):
         tab = self.current_tab()
+        self._cached_basic_tab = tab
         self._cached_basic_buffer = tab.get_content() if tab is not None else ''
 
     def _basic_feed(self, lines, source=None, source_line=1):
@@ -3176,10 +3222,13 @@ class LispMachine(tk.Tk):
             self._show_prompt()
             return
         self._cache_current_buffer_for_basic()
+        if source is not None:
+            self.basic_repl.program_edited = False
         lines = list(lines)
         tab = self.current_tab()
         original = self._get_basic_buffer_text()
         error_source = source
+        error_context = dict(tab=tab, source=source, original=original)
         if source is None and any(line.strip().upper() == 'RUN' for line in lines):
             error_source = original
         timing = getattr(self, 'time_buffer_runs', None)
@@ -3200,6 +3249,12 @@ class LispMachine(tk.Tk):
                         self.listener_history.append(line)
                         self.listener_hist_idx = len(self.listener_history)
                         command = line.strip().split(maxsplit=1)[0].upper()
+                        if command == 'RUN':
+                            if self.basic_repl.uses_editor_source:
+                                text = self._get_basic_buffer_text()
+                                error_context.update(tab=getattr(self, '_cached_basic_tab', tab), source=text, original=text)
+                            else:
+                                error_context.update(tab=None, source=None)
                         if command in ('LIST', 'HELP'):
                             with contextlib.redirect_stdout(_ListenerWriter(self)):
                                 result = self.basic_repl.submit(line)
@@ -3231,9 +3286,10 @@ class LispMachine(tk.Tk):
                 if error is not None:
                     self.listener_write(f'Error: {error}\n', 'error')
                     self.set_inspector(f'Error: {error}')
-                    if tab is not None and error_source is not None:
+                    if error_context['tab'] is not None and error_context['source'] is not None:
                         LispMachine._basic_error_highlight(
-                            self, tab, error_source, str(error), source_line, original)
+                            self, error_context['tab'], error_context['source'], str(error),
+                            source_line, error_context['original'])
             self._show_prompt()
         self._start(work, done)
 

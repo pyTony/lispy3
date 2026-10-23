@@ -6,13 +6,34 @@ from basic_repl import BasicRepl
 
 
 class BasicListenerTest(LispyTestCase):
+    def test_cli_program_error_does_not_highlight_unrelated_buffer(self):
+        from unittest.mock import patch
+        app=_FakeMachine()
+        tab=Mock(); tab.get_content.return_value='PRINT "unrelated buffer"'
+        app.current_tab=Mock(return_value=tab)
+        app._cache_current_buffer_for_basic=lambda: machine.LispMachine._cache_current_buffer_for_basic(app)
+        app._get_basic_buffer_text=lambda: machine.LispMachine._get_basic_buffer_text(app)
+        app.basic_repl=BasicRepl(L,get_current_source=app._get_basic_buffer_text)
+        self.addCleanup(app.basic_repl.close)
+        app.listener_history=[]; app._show_prompt=Mock()
+        with patch.object(machine.LispMachine,'_basic_error_highlight') as highlight:
+            machine.LispMachine._basic_feed(app,['10 @','RUN'])
+            self.assertTrue(app.loop())
+        self.assertIn('unexpected character @',''.join(app.lines))
+        highlight.assert_not_called()
+
     def test_load_opens_source_buffer_and_preserves_dirty_existing_copy(self):
+        from unittest.mock import patch
+        saving = patch.object(machine, 'save_settings')
+        saving.start()
+        self.addCleanup(saving.stop)
         from pathlib import Path
         from basic_repl import LoadedProgram
-        app=Mock(tabs={})
+        app=Mock(tabs={}, settings={})
         path=(Path.cwd()/'loaded.bas').resolve()
         loaded=LoadedProgram(path,'10 PRINT 42\n')
         machine.LispMachine._open_basic_repl_program(app,loaded)
+        self.assertEqual(app.settings['basic_last_directory'], str(path.parent))
         app.new_buffer.assert_called_once_with('loaded.bas','10 PRINT 42\n',path=str(path))
         tab=Mock(path=str(path),source_path=None,dirty=True)
         app.tabs={'loaded':tab}

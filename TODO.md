@@ -525,3 +525,15 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Reproduce LIST opening an ANSI terminal; keep management output in the Listener, including mixed RUN batches.
 - [x] Open LOAD results in editor buffers, refresh clean copies, retain dirty edits, and update the current-buffer RUN snapshot after LOAD.
 - Validation: exact staged copies: Windows 661 passed, 4 skipped, 358 subtests; WSL 665 passed, 374 subtests. Local primes_visual.bas edits and the untracked Mandelbrot benchmark excluded.
+
+### BASIC browsing and source ownership (2026-10-23)
+
+- [x] Start in Lisp when the previous Listener mode was BASIC.
+- [x] Add File → Load BASIC… and a configurable examples directory, falling
+  back to the last loaded directory and available example directories.
+- [x] Treat REM without a following space as a comment in reading and colouring.
+- [x] Give numbered REPL edits their own RUN source and keep their errors out
+  of unrelated editor buffers; explicit buffer execution selects the editor again.
+- [x] Reproduce the bugs with failing tests before implementing the fixes.
+- Validation: exact staged copies passed on Windows (670 tests, 4 skipped,
+  362 subtests) and WSL (674 tests, 378 subtests).

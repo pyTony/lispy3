@@ -5,7 +5,7 @@
   "case_insensitive": true,
   "rules": [
     {"tag": "string", "pattern": "\"(?:[^\"\\n]|\"\")*\""},
-    {"tag": "comment", "pattern": "\\bREM\\b[^\\n]*"},
+    {"tag": "comment", "pattern": "(?<![A-Z_])REM[^\\n]*"},
     {"tag": "number", "pattern": "&[0-9A-F]+|\\b\\d+(?:\\.\\d*)?(?:E[-+]?\\d+)?"}
   ],
   "word_pattern": "[A-Z_][A-Z0-9_]*[%$]?",

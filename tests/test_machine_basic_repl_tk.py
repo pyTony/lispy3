@@ -15,7 +15,7 @@ spec=importlib.util.spec_from_loader(loader.name,loader)
 module=importlib.util.module_from_spec(spec)
 sys.modules[loader.name]=module
 loader.exec_module(module)
-with patch.object(module,'load_settings',return_value={'startup_run':False,'startup_show_buffer':False}), patch.object(module,'save_settings'):
+with patch.object(module,'load_settings',return_value={'startup_run':False,'startup_show_buffer':False,'basic_repl':True,'plain_repl':True}), patch.object(module,'save_settings'):
     try:
         app=module.LispMachine([])
     except tk.TclError as error:
@@ -23,6 +23,7 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         raise
     app.withdraw()
     try:
+        assert not app.basic_repl_mode.get(), 'startup restored BASIC instead of Lisp'
         app.listener_mode.set('basic')
         app._select_listener_mode()
         assert app._prompt_text() == 'BASIC>'
@@ -37,14 +38,14 @@ with patch.object(module,'load_settings',return_value={'startup_run':False,'star
         assert 'Error:' not in output, output
         tab.text.delete('1.0','end')
         tab.text.insert('1.0','PRINT "edited buffer"\n')
-        app._basic_feed(['10 PRINT "stale CLI program"', 'RUN'])
+        app._basic_feed(['10 PRINT "stored CLI program"', 'RUN'])
         deadline=time.monotonic()+10
         while app._job is not None and time.monotonic()<deadline:
             app.update(); time.sleep(.005)
         assert app._job is None, 'worker did not complete'
         output=app.listener_text.get('1.0','end')
-        assert 'edited buffer\n' in output, output
-        assert 'stale CLI program\n' not in output, output
+        assert 'stored CLI program\n' in output, output
+        assert 'edited buffer\n' not in output, output
         for cli_run in (False, True):
             tab.text.delete('1.0','end')
             tab.text.insert('1.0','10 PRINT "before error"\n100 FOR\n')

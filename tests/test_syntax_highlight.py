@@ -71,3 +71,19 @@ class PythonColours(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BasicCommentColours(unittest.TestCase):
+    def test_rem_does_not_require_following_space(self):
+        basic=SH.language_for('program.bas',LANGS)
+        for source in ('10 REMM THIS IS COMMENT', '10REMM THIS IS COMMENT',
+                       'PRINT 1:REMcomment "not a string', 'remcomment'):
+            with self.subTest(source=source):
+                spans=colours(basic,source)
+                self.assertEqual([text for tag,text in spans if tag == 'comment'],
+                                 [source[source.upper().index('REM'):]])
+
+    def test_rem_inside_string_or_identifier_is_not_a_comment(self):
+        basic=SH.language_for('program.bas',LANGS)
+        self.assertEqual([text for tag,text in colours(basic,'PRINT "REMM":PREM=7')
+                          if tag == 'comment'],[])

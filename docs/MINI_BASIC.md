@@ -268,5 +268,19 @@ misreporting the next line as an incomplete DEF header. See the
 ## Interactive BASIC
 
 Choose View → Listener mode → BASIC REPL, or run `python basic_repl.py`.
+Lispy Machine starts in Lisp even if the previous session used BASIC.
+File → Load BASIC… selects a program, switches to the BASIC REPL and opens
+the loaded source in an editor buffer. Set its starting directory under
+Eval → BASIC Settings → BASIC examples directory. With no configured directory,
+the browser uses the last successfully loaded BASIC program's directory,
+then the Python mini_basic project's examples directory, then this project's
+`basic/` directory. Missing directories are skipped. Use last loaded clears
+the explicit directory setting. Cancelling the browser leaves the mode unchanged.
+
+Numbered lines entered in the BASIC REPL become its own program: RUN executes
+those lines and their errors do not highlight unrelated editor buffers.
+F5/F6 explicitly run the editor buffer and select it again for subsequent RUN.
+REM starts a comment without requiring a following space (`REMM` is a comment).
+
 Direct statements, numbered program editing, RUN/LIST/NEW/LOAD/SAVE and
 filename completion are described in [BASIC_REPL.md](BASIC_REPL.md).
