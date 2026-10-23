@@ -463,7 +463,7 @@ The buffer is read once from left to right, and at each point the first rule tha
 
 ### Search and replace
 
-An inline bar that sits above the editor tabs and is shared by every buffer.
+Open **Edit → Find…** (`Ctrl+F`) or **Edit → Replace…** (`Ctrl+H`). The inline bar sits above the editor tabs and is shared by every buffer.
 
 | Control | Meaning |
 |---------|---------|

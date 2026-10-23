@@ -11,7 +11,7 @@ class SearchMenuTest(TestCase):
             menus.append(result)
             return result
         app=Mock()
-        with patch.object(machine.tk,'Menu',side_effect=menu):
+        with patch.object(machine.tk, 'Menu', side_effect=menu), patch.object(machine.tk, 'BooleanVar'):
             machine.LispMachine._build_menu(app)
         edit=next(call.kwargs['menu'] for call in menus[0].add_cascade.call_args_list if call.kwargs.get('label')=='Edit')
         commands={call.kwargs.get('label'):call.kwargs for call in edit.add_command.call_args_list}
