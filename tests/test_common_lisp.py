@@ -117,6 +117,28 @@ class DefunTest(LispyTestCase):
         self.assertEqual(self.ev("(1- 5)"), 4)
         self.assertEqual(self.show("'(#'car)"), "((function car))")
 
+    def test_defun_in_let_is_a_global_closure(self):
+        """The Cookbook's counter: defun inside let is global and keeps counter."""
+        self.ev("(let ((limit 3) (counter -1)) (defun my-counter () "
+                "(if (< counter limit) (incf counter) (setf counter 0))))")
+        self.assertEqual([self.ev("(my-counter)") for _ in range(5)], [0, 1, 2, 3, 0])
+        with self.assertRaises(NameError):
+            self.ev("counter")
+        self.ev("(defun outer () (defun inner (x) (* x 10)) (inner 2))")
+        self.assertEqual(self.ev("(outer)"), 20)
+        self.assertEqual(self.ev("(inner 3)"), 30)
+
+    def test_incf_decf_setf(self):
+        self.ev("(define y 5)")
+        self.assertEqual(self.ev("(incf y)"), 6)
+        self.assertEqual(self.ev("(incf y 10)"), 16)
+        self.assertEqual(self.ev("(decf y)"), 15)
+        self.ev("(define z 0)")
+        self.assertEqual(self.ev("(setf y 1 z 2)"), 2)
+        self.assertEqual(self.show("(list y z)"), "(1 2)")
+        with self.assertRaisesRegex(SyntaxError, "only a variable"):
+            self.ev("(setf (car y) 1)")
+
     def test_when_and_unless(self):
         """when and unless run their body for a true or false test, else give ()."""
         self.assertEqual(self.ev("(when (> 2 1) 'a 'b)"), "b")
