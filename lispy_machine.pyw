@@ -3632,8 +3632,14 @@ def main():
     options = dict(plain_repl=True if plain_repl else None)
     if startup is not None:
         options['startup_file'] = startup
-    app = LispMachine(files, **options)
-    app.mainloop()
+    from gui_gc import GuiGarbageCollector
+    with GuiGarbageCollector() as collector:
+        app = LispMachine(files, **options)
+        collector.schedule(app)
+        try:
+            app.mainloop()
+        finally:
+            del app
 
 
 if __name__ == "__main__":

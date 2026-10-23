@@ -480,3 +480,10 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 
 - [x] Restrict default discovery to tests/ and exclude the linked Python mini_basic checkout, preventing cross-project collection and unknown-marker warnings.
 - Validation: Windows default pytest run: 607 passed, 4 skipped, 355 subtests; WSL Debian existing virtual environment: 611 passed, 371 subtests. Both default collections found exactly 611 lispy3 tests.
+
+### Turtle close and Tk cyclic cleanup (2026-10-22)
+
+- [x] Reproduce unsafe collection timing with a real Tk/turtle child-process probe on WSL; main-thread collector regressions failed before implementation.
+- [x] Disable automatic cyclic GC only during the GUI lifetime; collect on the Tk thread every second and at exit, restoring the previous GC state. Normal reference counting stays active.
+- [x] Verify three repeated turtle closes with cyclic PhotoImage finalizers and allocating workers; subprocess isolation prevents native Tk failures from aborting pytest.
+- Validation: Windows 611 passed, 4 skipped, 355 subtests; WSL 615 passed, 371 subtests. Real Tk regression passed on both.
