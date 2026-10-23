@@ -53,3 +53,11 @@ class UserSetterTest(LispyTestCase):
         self.ev('(defun (setf field) (value object) value)')
         with self.assertRaises(TypeError):
             self.ev('(setf (field) 2)')
+
+    def test_dispatch_does_not_depend_on_unshadowed_list_function(self):
+        self.ev('(defun (setf field) (value object) value)')
+        self.assertEqual(self.ev('(let ((list 7)) (setf (field list) 42))'), 42)
+
+    def test_listener_labels_the_setter_distinctly(self):
+        from test_machine_args import machine
+        self.assertEqual(machine.LispMachine._defined_name('(defun (setf area) (value object) value)'), '(setf area)')

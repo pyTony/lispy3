@@ -246,11 +246,11 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("module-on-unload", "(module-on-unload cleanup) - register cleanup inside a module or library"),
         ("unload", "(unload filename-or-name) - remove an imported module and its owned bindings; refuse live dependents"),
         ("reload", "(reload filename-or-name) - fresh module instance and import bindings; external effects are not undone"),
-        ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...); inside a let it still makes a global f that keeps the let's variables"),
+        ("defun", "(defun f (a b) body...) or (defun (setf f) (value a) body...) - Common Lisp spelling of (define (f a b) body...); inside a let it still makes a global f that keeps the let's variables"),
         ("incf", "(incf x) or (incf x 5) - add to a variable and give the new value; (decf x) subtracts"),
         ("make-hash-table", "(make-hash-table) - a fresh mutable hash table; no keyword options"),
         ("gethash", "(gethash key table [default]) - stored value, default or nil if missing; one return value"),
-        ("setf", "(setf x 1 y 2) - set variables in turn and give the last value; variables and (gethash key table) places"),
+        ("setf", "(setf x 1 y 2) - set variables in turn and give the last value; variables, gethash and user-defined setter places"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
         ("set!", "(set! name value) - change an existing variable"),
@@ -380,6 +380,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("get-internal-run-time", "(get-internal-run-time) - processor time used, in the same units"),
         ("sleep", "(sleep seconds) - wait; seconds may be a decimal number"),
         ("display", "(display a b ...) - print the values with nothing between them, then a new line"),
+        ("write", "(write object) - readable Lisp text, no newline, returns object; no stream/format keyword options"),
+        ("turtle:write", "(turtle:write text) - draw text in the turtle graphics window"),
         ("print", "(print a b ...) - print the values with spaces between them"),
         ("newline", "(newline) - print an empty line"),
         ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
@@ -1181,6 +1183,12 @@ def _append(*items: Any) -> Any:
         return String("".join(_unwrap_str(x) for x in items))
     return [elem for lst in items for elem in lst]
 
+def _write_text(value):
+    """Write one readable Lisp object to stdout without an added newline."""
+    print(lisp_str(value), end='')
+    return value
+
+
 def _make_hash_table():
     return {}
 
@@ -1678,6 +1686,7 @@ def standard_env() -> Env:
         'eval': evaluate_code,
         'error': lambda *args: (_ for _ in ()).throw(LispyError(" ".join(_unwrap_str(a) for a in args))),
         'return': loop_return,
+        'write': _write_text,
         'print': lambda *args: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in args)),
         'display': lambda *x: print(*(_unwrap_str(a) if isinstance(a, (String, Char)) else lisp_str(a) for a in x), sep=''),
         'slurp': slurp,
@@ -1784,6 +1793,11 @@ def standard_env() -> Env:
         if was_uninitialized and turtle.Turtle._screen is not None and k != 'title':
             turtle.title("Lispy3 Graphics")
         return res
+
+    if hasattr(turtle, 'write'):
+        env['turtle:write'] = Procedure(
+            parms=['*args'], body=None, env=env,
+            native_fn=lambda *args: _call_turtle('write', *args), name='turtle:write')
 
     for key in turtle.__all__:
         if key in primitives:
@@ -1924,11 +1938,18 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         # Common Lisp spelling: (defun f (x y) body...) is (define (f x y) body...)
         if len(x) < 4 or not isinstance(x[2], (list, tuple)):
             raise SyntaxError("defun needs a name, a parameter list and a body: (defun f (x) ...)")
+        name = x[1]
+        if isinstance(name, list) and len(name) == 2 and name[0] == 'setf' and isinstance(name[1], str):
+            if not x[2] or not isinstance(x[2][0], str) or x[2][0].startswith('&'):
+                raise SyntaxError('defun setter requires a new-value parameter first')
+            name = f'(setf {name[1]})'
+        elif not isinstance(name, str):
+            raise SyntaxError('defun name must be a symbol or (setf accessor)')
         if not toplevel:
             # Inside a let or a function body defun still names a global function,
             # which keeps the local variables around it as a closure
-            return ['_defun', [x[1]] + list(x[2]), expand(['begin'] + list(x[3:]) if len(x) > 4 else x[3], False)]
-        return expand(['define', [x[1]] + list(x[2])] + list(x[3:]), toplevel)
+            return ['_defun', [name] + list(x[2]), expand(['begin'] + list(x[3:]) if len(x) > 4 else x[3], False)]
+        return expand(['define', [name] + list(x[2])] + list(x[3:]), toplevel)
 
     if head in ('incf', 'decf') and len(x) in (2, 3) and head not in library_system.macros(head):
         # (incf x) or (incf x 5) on a variable: set it and give the new value
@@ -1947,6 +1968,8 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
                 body.append(['begin', ['set!', place, value], place])
             elif isinstance(place, list) and place and place[0] == 'gethash' and len(place) in (3, 4):
                 body.append(['%sethash'] + place[1:] + [value])
+            elif isinstance(place, list) and place and isinstance(place[0], str) and place[0] != 'gethash':
+                body.append(['_setf-call', ['quote', place[0]], value] + place[1:])
             else:
                 raise SyntaxError(f"setf: only a variable or (gethash key table [default]) can be set, got {lisp_str(place)}")
         return expand(['begin'] + body, toplevel)
@@ -2014,7 +2037,7 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 
     return [expand(e, False) for e in x]
 
-SPECIAL_FORMS = frozenset({'_loop', '_defun', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
+SPECIAL_FORMS = frozenset({'_setf-call', '_loop', '_defun', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
                            'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import', 'new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'})
 
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
@@ -2173,6 +2196,19 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
                         val.name = var
                     env[var] = val
                     return None
+
+            # A separate function binding keeps a setter distinct from its getter.
+            case ['_setf-call', ['quote', str(accessor)], value, *arguments]:
+                setter_name = f'(setf {accessor})'
+                try:
+                    setter = env.find(setter_name)[setter_name]
+                except NameError:
+                    raise SyntaxError(f'setf: only a variable, gethash, or a place with a defined setter can be set; no setter defined for {accessor}') from None
+                args = [eval_exp(argument, env) for argument in arguments]
+                new_value = eval_exp(value, env)
+                # The new value is passed first, after place arguments were evaluated.
+                x = [['quote', setter], ['quote', new_value]] + [['quote', arg] for arg in args]
+                continue
 
             # 9a. defun inside a let or a body: a global function closing over env
             case ['_defun', [str(var), *parms], body]:
@@ -2741,7 +2777,7 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
     env = global_env if env is None else env
-    names = (set(SPECIAL_FORMS) - {'_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
+    names = (set(SPECIAL_FORMS) - {'_setf-call', '_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
