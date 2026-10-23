@@ -26,7 +26,19 @@
   (not (or (nil? x) (false? x) (and (number? x) (zero? x)))))
 
 (defn bbc-int [x]
-  (long x))
+  (if (integer? x) x (long x)))
+
+;; Typed variables: A% 32-bit, A%% 64-bit, A& a byte, A# a float
+(defn bbc-in-range [x bits]
+  (let [n (bbc-int x)
+        top (.shiftLeft BigInteger/ONE (dec bits))]
+    (if (and (>= n (- top)) (< n top))
+      (long n)
+      (throw (ex-info "Number too big" {})))))
+
+(defn bbc-int32 [x] (bbc-in-range x 32))
+(defn bbc-int64 [x] (bbc-in-range x 64))
+(defn bbc-byte [x] (bit-and (long (bbc-int x)) 255))
 
 (defn bbc-equal [a b]
   (if (and (number? a) (number? b)) (== a b) (= a b)))
@@ -148,6 +160,68 @@
   ([^String s ^String target start]
    (inc (.indexOf s target (int (max 0 (dec (bbc-trunc start))))))))
 
+;;; --- Shifts and hex, as in BBC BASIC for SDL ---
+
+(defn- bbc-width [n]
+  ;; 32 bits for a number that fits them, signed or not, else 64
+  (if (and (>= n -2147483648) (<= n 4294967295)) 32 64))
+
+(defn bbc-shl [a b] (bit-shift-left (long (bbc-int a)) (bbc-int b)))
+(defn bbc-shr [a b] (bit-shift-right (long (bbc-int a)) (bbc-int b)))
+(defn bbc-lsr [a b]
+  (let [n (long (bbc-int a))]
+    (if (= 32 (bbc-width n))
+      (unsigned-bit-shift-right (bit-and n 0xFFFFFFFF) (bbc-int b))
+      (unsigned-bit-shift-right n (bbc-int b)))))
+
+(defn bbc-hex
+  "Upper-case hex, a negative number in 32 (or 64) bits."
+  [x]
+  (let [n (long (bbc-int x))]
+    (.toUpperCase (if (= 32 (bbc-width n))
+                    (Long/toHexString (bit-and n 0xFFFFFFFF))
+                    (Long/toHexString n)))))
+
+(defn bbc-print-hex [x justify]
+  (let [text (bbc-hex x)]
+    (bbc-write (if justify (format (str "%" zone-width "s") text) text))))
+
+;;; --- TIME, in centiseconds since the program started or TIME was set ---
+
+(def time-base (atom (System/nanoTime)))
+
+(defn bbc-time-read []
+  (quot (- (System/nanoTime) @time-base) 10000000))
+
+(defn bbc-time-set! [value]
+  (reset! time-base (- (System/nanoTime) (* (bbc-int value) 10000000))))
+
+;;; --- DATA, READ, RESTORE and arrays ---
+
+(def data (atom []))
+(def data-ptr (atom 0))
+
+(defn bbc-read-datum []
+  (when (>= @data-ptr (count @data)) (throw (ex-info "Out of DATA" {})))
+  (let [d (nth @data @data-ptr)]
+    (swap! data-ptr inc)
+    d))
+
+(defn bbc-make-array [dims fill]
+  ;; Nested Java arrays of (0..d0) x (0..d1) ...
+  (let [n (inc (bbc-int (first dims)))
+        a (object-array n)]
+    (dotimes [i n]
+      (aset a i (if (next dims) (bbc-make-array (next dims) fill) fill)))
+    a))
+
+(defn bbc-aref [arr & indices]
+  (reduce (fn [a i] (aget ^objects a (int (bbc-int i)))) arr indices))
+
+(defn bbc-aset! [arr val & indices]
+  (let [inner (reduce (fn [a i] (aget ^objects a (int (bbc-int i)))) arr (butlast indices))]
+    (aset ^objects inner (int (bbc-int (last indices))) val)))
+
 ;;; --- Helpers the macros use while they expand ---
 
 (defn marker? [x nm]
@@ -170,6 +244,15 @@
 (defn bbc-default [var]
   (if (suffix? var \$) "" 0))
 
+(defn name-suffix? [var suffix]
+  (let [s (name var)]
+    (and (> (count s) (count suffix)) (.endsWith s suffix))))
+
+(defn lhs-var
+  "The variable of a READ target: var or (AREF var i ...)."
+  [target]
+  (if (form? target "AREF") (second target) target))
+
 (defn uses?
   "Does code x contain a form starting with one of the names?"
   [names x]
@@ -189,12 +272,21 @@
 (defn assigned-vars
   "Every variable the statements give a value to."
   [stmts]
-  (collect-forms ["LET" "FOR" "LOCAL" "DEF-PROC" "DEF-FN"]
+  (collect-forms ["LET" "FOR" "LOCAL" "DEF-PROC" "DEF-FN" "READ" "DIM" "ASET!"]
                  (fn [form]
-                   (cond (or (form? form "LET") (form? form "FOR")) [(second form)]
+                   (cond (or (form? form "LET") (form? form "FOR") (form? form "ASET!")) [(second form)]
                          (form? form "LOCAL") (rest form)
+                         (form? form "READ") (map lhs-var (rest form))
+                         (form? form "DIM") (map first (rest form))
                          :else (rest (second form))))
                  (apply list stmts)))
+
+(defn data-items
+  "The items of every DATA statement, in program order."
+  [stmts]
+  (->> (tree-seq #(and (seq? %) (not= 'quote (first %)) (not (form? % "DATA"))) seq (apply list stmts))
+       (filter #(form? % "DATA"))
+       (mapcat rest)))
 
 (defn def? [form]
   (or (form? form "DEF-PROC") (form? form "DEF-FN")))
@@ -220,10 +312,17 @@
 
 ;;; --- Statements ---
 
+(defn typed-value
+  "A% 32-bit, A%% 64-bit, A& a byte, A# a float."
+  [var exp]
+  (cond (name-suffix? var "%%") `(bbc-int64 ~exp)
+        (name-suffix? var "%") `(bbc-int32 ~exp)
+        (name-suffix? var "&") `(bbc-byte ~exp)
+        (name-suffix? var "#") `(double ~exp)
+        :else exp))
+
 (defmacro LET [var exp]
-  (if (suffix? var \%)
-    `(set! ~var (bbc-int ~exp))
-    `(set! ~var ~exp)))
+  `(set! ~var ~(typed-value var exp)))
 
 (defn print-code
   "The code for PRINT's items; :semi stops right-justifying numbers, :comma starts it again."
@@ -244,6 +343,8 @@
                   (print-code more justify))
             (form? item "SPC")
             (cons `(bbc-spaces ~(second item)) (print-code more justify))
+            (form? item "HEX")
+            (cons `(bbc-print-hex ~(second item) ~justify) (print-code more justify))
             :else
             (cons `(bbc-print-value ~item ~justify) (print-code more justify))))))
 
@@ -349,12 +450,39 @@
 (defmacro DEF-PROC [head & body] (def-code "PROC" head body))
 (defmacro DEF-FN [head & body] (def-code "FN" head body))
 
+(defmacro DIM [& specs]
+  `(do ~@(map (fn [[var & dims]] `(set! ~var (bbc-make-array [~@dims] ~(bbc-default var)))) specs)))
+
+(defmacro AREF [var & indices] `(bbc-aref ~var ~@indices))
+
+(defmacro ASET! [var val & indices] `(bbc-aset! ~var ~(typed-value var val) ~@indices))
+
+(defmacro DATA [& _items] nil)
+
+(defmacro READ [& targets]
+  `(do ~@(map (fn [target]
+                (let [var (lhs-var target)
+                      datum (if (suffix? var \$)
+                              `(str (bbc-read-datum))
+                              `(let [d# (bbc-read-datum)] (if (string? d#) (bbc-val d#) d#)))]
+                  (if (form? target "AREF")
+                    `(ASET! ~var ~datum ~@(nnext target))
+                    `(LET ~var ~datum))))
+              targets)))
+
+(defmacro RESTORE [& target]
+  (when (seq target) (throw (ex-info "RESTORE to a label is lispy3 only" {})))
+  `(reset! data-ptr 0))
+
 ;;; --- A whole program ---
 
 (defmacro bbc-program [& stmts]
   (let [vars (assigned-vars stmts)
         defs (filter def? stmts)
-        run `(do (reset! col 0) ~@(remove def? stmts))]
+        run `(do (reset! col 0)
+                 (reset! data [~@(data-items stmts)])
+                 (reset! data-ptr 0)
+                 ~@(remove def? stmts))]
     `(do
        ~@(map (fn [v] `(def ~(with-meta v {:dynamic true}) ~(bbc-default v))) vars)
        (declare ~@(map #(def-name (if (form? % "DEF-FN") "FN" "PROC") (first (second %))) defs))

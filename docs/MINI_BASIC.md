@@ -264,8 +264,8 @@ A% = 3.7 : A%% = 2^40 : b& = 300 : x# = 1/4
 
 `a`, `a%`, `a%%`, `a&`, `a#` and `a$` are six different variables. A `~` in
 PRINT applies to the one item after it, as in BBCSDL 1.44a. Arrays (`DIM a%(9)`) do not yet use
-these types. These extensions are lispy3 only for now: the SBCL and Clojure
-comparison backends do not have them.
+these types. The SBCL and Clojure comparison backends have them too
+(see [compare/README.md](../compare/README.md)).
 
 ## Tests and progress
 
