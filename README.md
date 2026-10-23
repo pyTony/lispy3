@@ -608,3 +608,8 @@ and Lisp loader paths complete with Tab. See [BASIC REPL](docs/BASIC_REPL.md).
 Pytest defaults to this repository's `tests/` directory (`python -m pytest -q`).
 A local `mini_basic` link points to a separate project and is excluded from
 recursive discovery; run that project's tests from its own repository.
+
+Lispy Machine schedules cyclic garbage collection on its Tk main thread. This
+keeps closed turtle-window/image cycles from being finalized by the Lisp worker.
+Cycles are collected periodically while the GUI runs and at exit; normal reference
+counting is unchanged, and the prior automatic-GC setting is restored on exit.
