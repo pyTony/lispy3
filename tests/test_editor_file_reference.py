@@ -20,3 +20,21 @@ class FileReferenceTest(TestCase):
         machine.LispMachine._open_source_path(app, tab.path)
         app.notebook.select.assert_called_once_with(tab)
         app.new_buffer.assert_not_called()
+
+    def test_windows_path_at_end_of_quoted_listener_input(self):
+        path = r'C:\Users\admin\mini_basic\mini_basic\constants.py'
+        for quote in ('"', '"""'):
+            text = quote + path + quote
+            with self.subTest(quote=quote):
+                self.assertEqual(ET.file_reference_at_cursor(text, len(text), 'Lisp'), path)
+
+    def test_open_file_uses_focused_listener_input(self):
+        from unittest.mock import Mock
+        from test_machine_args import machine
+        app = Mock()
+        app.focus_get.return_value = app.listener_input
+        app.listener_input.get.return_value = '"example.bas"'
+        app.listener_input.index.return_value = 13
+        machine.LispMachine.open_file_at_cursor(app)
+        app._open_file_reference.assert_called_once_with('"example.bas"', 13, 'Lisp')
+        app._call_editor.assert_not_called()
