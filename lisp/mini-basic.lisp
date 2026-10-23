@@ -520,6 +520,14 @@
       -1
       (let [b (s/encode "utf-8")] (b/__getitem__ 0))))
 
+(define (bbc-ucase s)
+  (if (not (string? s)) (error "UCASE$: expected a string"))
+  (upcase s))
+
+(define (bbc-lcase s)
+  (if (not (string? s)) (error "LCASE$: expected a string"))
+  (downcase s))
+
 (define (bbc-left s n) (substring s 0 (max 0 (min (trunc n) (length s)))))
 
 (define (bbc-right s n)
@@ -547,7 +555,7 @@
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
     "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
-    "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
+    "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
 (define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
@@ -811,6 +819,7 @@
     ("LN" log 1 1 :num) ("LOG" log10 1 1 :num) ("EXP" exp 1 1 :num) ("SGN" bbc-sgn 1 1 :num)
     ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
     ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
+    ("UCASE$" bbc-ucase 1 1 :str) ("LCASE$" bbc-lcase 1 1 :str)
     ("LEFT$" bbc-left 2 2 :str) ("RIGHT$" bbc-right 2 2 :str) ("MID$" bbc-mid 2 3 :str)
     ("INSTR" bbc-instr 2 3 :num)))
 

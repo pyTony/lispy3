@@ -16,6 +16,16 @@ mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.
 
+## String-case compatibility extensions
+
+`UCASE$(s$)` and `LCASE$(s$)` return upper/lower-case strings without modifying
+s$. They accept exactly one string, preserve string expression typing, and
+report a clear error for numeric arguments. Unicode conversion follows Python
+mini_basic's string upper/lower behavior (for example, ß uppercases to SS).
+These are mini_basic compatibility extensions used by its museum ELIZA/BETH
+examples, not native BBC BASIC keywords. BBCSDL instead supplies FNupper and
+FNlower through its [fnusing library](https://bbcbasic.co.uk/bbcsdl/manual/bbcsdlg.html).
+
 ## Selective imports
 
 Use `(import (only mini-basic bbc-run))` to get the text reader without installing
