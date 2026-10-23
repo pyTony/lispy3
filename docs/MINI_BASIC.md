@@ -200,6 +200,35 @@ Adjust the external checkout path. This file is not bundled in lispy3. A verifie
 run printed 25 Mandelbrot rows and reported 1.03 seconds inside BASIC versus
 1.205 seconds around loading and execution; timings vary by machine.
 
+## File I/O
+
+`lisp/mini-basic-io.lisp` adds BBC BASIC channel I/O:
+
+```basic
+F% = OPENOUT "scores.dat"
+PRINT#F%, "Ada", 42
+CLOSE#F%
+F% = OPENIN "scores.dat"
+INPUT#F%, name$, score%
+CLOSE#F%
+```
+
+| Form | Meaning |
+|------|---------|
+| `OPENIN f$`, `OPENOUT f$`, `OPENUP f$` | open for reading, create for writing, or open for both; a channel number, or 0 when the file cannot be opened |
+| `PRINT#c, a, b$` / `INPUT#c, a, b$` | write and read values in BBC BASIC for SDL's layout |
+| `BPUT#c, n` / `BPUT#c, s$` | write a byte, or a string and LF; `BPUT#c, s$;` leaves out the LF |
+| `BGET#c`, `GET$#c` | read a byte, or a line ending at CR, LF, CR LF or NUL |
+| `EOF#c`, `EXT#c`, `PTR#c`, `PTR#c = n` | at the end (-1 or 0), length, position, move |
+| `CLOSE#c`, `CLOSE#0` | close one channel, or every channel |
+
+`PRINT#` writes a string followed by CR, a whole number in the 32-bit range as
+&40 and 4 bytes (least significant first), and any other number as &FF and an
+8-byte IEEE double. The string and whole-number layouts follow BBC BASIC for SDL;
+the real-number layout has not been checked against it. Strings are bytes 0-255.
+An FN that uses a channel is never memoized. File I/O is lispy3 only: the
+SBCL and Clojure comparison backends do not have it.
+
 ## Tests and progress
 
 Acceptance tests are ordinary tests: unfinished behavior should fail before the

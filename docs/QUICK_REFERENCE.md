@@ -106,6 +106,9 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |
 | `(read "text")` | turn text into code: `(eval (read "(+ 1 2)"))` is `3` |
 | `(slurp "file.txt")` | the whole text file as one string; looks in `lisp/` if not found here |
+| `(open-file "data.bin" "rb")` | open a binary file; modes `"rb"`, `"wb"`, `"w+b"`, `"r+b"`, `"ab"` |
+| `(read-byte f [eof-value])` / `(write-byte n f)` | read or write one byte; `read-byte` gives `eof-value` (`#f`) at the end |
+| `(file-position f [n])` / `(file-length f)` / `(close f)` | byte position (or move to `n`), length, close |
 | `(run-program "sbcl" (list "--version") [input])` | run another program, feeding it the input text; prints what it prints, gives its exit code |
 | `lispy-home` | the folder `lispy3.py` is in |
 | `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |

@@ -300,6 +300,12 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("slurp", "(slurp \"file.txt\") - the whole text file as one string; looks in lisp/ if not found here"),
         ("error", "(error \"message\" ...) - stop with an error; try can catch it"),
         ("gensym", "(gensym) - a new, unused symbol, for macros"),
+        ("open-file", "(open-file \"data.bin\" \"rb\") - open a binary file; modes \"rb\", \"wb\", \"w+b\", \"r+b\", \"ab\""),
+        ("read-byte", "(read-byte f [eof-value]) - the next byte 0-255, or eof-value (#f) at the end"),
+        ("write-byte", "(write-byte n f) - write one byte, n modulo 256"),
+        ("file-position", "(file-position f) - the byte position; (file-position f n) moves to byte n"),
+        ("file-length", "(file-length f) - the file's length in bytes"),
+        ("close", "(close f) - close a file"),
         ("run-program", "(run-program \"sbcl\" (list \"--version\") [input]) - run another program with input text, print what it prints, give its exit code"),
         ("lispy-home", "lispy-home - the folder lispy3.py is in"),
         ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
@@ -487,6 +493,44 @@ def run_program(program: Any, args: Any = (), text_input: Any = None) -> int:
     print(result.stdout, end="")
     print(result.stderr, end="", file=sys.stderr)
     return result.returncode
+
+# --- Binary files: Common Lisp style byte streams ---
+
+def open_file(filename: Any, mode: Any = "rb") -> Any:
+    """(open-file "data.bin" "rb") - a binary file; modes "rb", "wb", "w+b", "r+b", "ab"."""
+    mode = _unwrap_str(mode)
+    if 'b' not in mode:
+        raise LispyError(f'open-file: mode "{mode}" is not binary; add b, as in "rb"')
+    return open(_unwrap_str(filename), mode)
+
+def read_byte(stream: Any, eof_value: Any = False) -> Any:
+    """(read-byte f [eof-value]) - the next byte 0-255, or eof-value (#f) at the end."""
+    data = stream.read(1)
+    return data[0] if data else eof_value
+
+def write_byte(byte: int, stream: Any) -> int:
+    """(write-byte n f) - write one byte, n modulo 256."""
+    stream.write(bytes([int(byte) & 255]))
+    return byte
+
+def file_position(stream: Any, position: Any = None) -> Any:
+    """(file-position f) - the byte position; (file-position f n) moves to byte n."""
+    if position is None:
+        return stream.tell()
+    stream.seek(int(position))
+    return True
+
+def file_length(stream: Any) -> int:
+    """(file-length f) - the length in bytes, without moving."""
+    here = stream.tell()
+    end = stream.seek(0, os.SEEK_END)
+    stream.seek(here)
+    return end
+
+def close_file(stream: Any) -> bool:
+    """(close f) - close a file."""
+    stream.close()
+    return True
 
 def memoize(proc: Callable, *, exact_arguments_only: bool = False) -> Callable:
     """(memoize f) - f with a cache of its results, as Python's functools.cache.
@@ -1171,6 +1215,12 @@ def standard_env() -> Env:
         'workspace-on-discard': lambda callback: workspaces.on_discard(callback),
         'module-on-unload': lambda callback: library_system.on_unload(callback),
         'run-program': run_program,
+        'open-file': open_file,
+        'read-byte': read_byte,
+        'write-byte': write_byte,
+        'file-position': file_position,
+        'file-length': file_length,
+        'close': close_file,
         'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
