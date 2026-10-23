@@ -137,6 +137,11 @@ class WorkspaceManager:
             self._activate(workspace)
         return workspace
 
+    def create(self, name=None):
+        """Create independent inactive state without replacing or saving current."""
+        self._check_transition()
+        return self._create(name)
+
     def new(self, name=None):
         """Activate fresh state and discard current; preserve the saved stack."""
         return self.new_workspace(name)

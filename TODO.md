@@ -461,6 +461,17 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Update tests, launchers, documentation links and reproduction commands; preserve historical evidence unchanged.
 - Validation: 607 passed, 4 skipped, 355 subtests; 132 moved source/evidence files byte-identical. Both reference command-line tools still show help from their new paths.
 
+### Lispy mini-basic REPL and filename completion (2026-10-22)
+
+- [x] Establish failing tests for private immediate state, program lines and RUN/LIST/NEW/LOAD/SAVE.
+- [x] Add BASIC Listener mode, BBC colouring, Stop support, persistent mode settings and BASIC To buffer export. Lisp Listener and Lisp REPL remain available in the same mode menu.
+- [x] Add quoted-path completion for BASIC LOAD/SAVE and Lisp load/save/slurp/bbc-load, plus BASIC keyword completion.
+- [x] Add standalone python basic_repl.py with readline completion when available.
+- [x] Reuse the configured .bbc decoder in the GUI; SAVE refuses tokenised extensions.
+- [x] Validate real Tk mode switching and execution in isolated child processes. Full Windows suite: 626 passed, 4 skipped, 355 subtests; WSL: 630 passed, 371 subtests.
+- [ ] Multiline immediate-input accumulation; use stored program lines or LOAD/RUN for blocks for now.
+- [x] Use project basic/ as the shared default for BASIC LOAD/SAVE and GUI/CLI filename completion; Lisp path resolution remains unchanged. Follow-up: 20 focused tests passed on Windows and WSL.
+
 ### Turtle close and Tk cyclic cleanup (2026-10-22)
 
 - [x] Reproduce unsafe collection timing with a real Tk/turtle child-process probe on WSL; main-thread collector regressions failed before implementation.

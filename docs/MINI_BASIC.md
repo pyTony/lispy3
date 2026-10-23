@@ -233,3 +233,9 @@ BBC function definitions return with `=expression`; procedures use `ENDPROC`.
 source line and suggests the correct function/procedure form instead of
 misreporting the next line as an incomplete DEF header. See the
 [BBC BASIC function tutorial](https://www.bbcbasic.co.uk/bbcwin/tutorial/chapter17.html).
+
+## Interactive BASIC
+
+Choose View → Listener mode → BASIC REPL, or run `python basic_repl.py`.
+Direct statements, numbered program editing, RUN/LIST/NEW/LOAD/SAVE and
+filename completion are described in [BASIC_REPL.md](BASIC_REPL.md).

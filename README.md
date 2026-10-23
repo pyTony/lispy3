@@ -432,7 +432,7 @@ markers track actual edits, including paste/undo, rather than cursor movement.
 
 The Listener is a real REPL backed by the interpreter's `global_env`. Code in the Listener and the Inspector (what you type, echoed forms and results) is coloured with the same Lisp colours as the editor; `display` output stays green and errors red. It supports `↑` / `↓` history, coloured prompts (`USER>`), coloured results, and coloured errors. Typing `exit` closes the editor.
 
-**Plain lispy3 REPL.** Tick **View → Plain lispy3 REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener becomes a console like `python lispy3.py`, still sharing the editor's `global_env`: the `USER>` entry line goes away and you type at a `lispy3>` prompt in the Listener itself, so your input and the output scroll together. Enter on an unfinished form continues it on the next line under a `... (1)>` prompt, pasted lines are read one by one, `Tab` completes like readline (the shared start, then the list of choices) and `Ctrl+Space` opens the same pick list as elsewhere, `↑` / `↓` bring back earlier lines, `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`, and a result too long for one line, such as a whole function, indented like in the Inspector). The text above the prompt is read-only: `←` stops at the prompt, and a click in older output puts the cursor back at the prompt (drag to select and copy). The choice is remembered in `~/.lispy3_machine.json`; untick it to get the `USER>` Listener back.
+**Plain lispy3 REPL.** Choose **View → Listener mode → Lisp REPL** (or start the editor with `python lispy_machine.pyw --repl`) and the Listener becomes a console like `python lispy3.py`, still sharing the editor's `global_env`: the `USER>` entry line goes away and you type at a `lispy3>` prompt in the Listener itself, so your input and the output scroll together. Enter on an unfinished form continues it on the next line under a `... (1)>` prompt, pasted lines are read one by one, `Tab` completes like readline (the shared start, then the list of choices) and `Ctrl+Space` opens the same pick list as elsewhere, `↑` / `↓` bring back earlier lines, `Esc` drops an unfinished form, and results are printed as the REPL prints them (nothing for a `define`, and a result too long for one line, such as a whole function, indented like in the Inspector). The text above the prompt is read-only: `←` stops at the prompt, and a click in older output puts the cursor back at the prompt (drag to select and copy). The choice is remembered in `~/.lispy3_machine.json`; choose **Lisp Listener (USER>)** to get the entry-line Listener back.
 
 In Lisp buffers, F5 finds the *outermost enclosing form* at the cursor — skipping strings, `;` comments, and characters such as `#\(` — and evaluates just that. This lets you re-evaluate a single `define` without rerunning the whole file or restarting the interpreter.
 
@@ -600,6 +600,10 @@ before replacement. Refreshing a buffer does not execute or reload its definitio
 BASIC examples, timing programs and BBCSDL reference checks are collected in
 [basic/](basic/README.md). Lisp implementation files remain in lisp/; cross-Lisp
 implementations and Lisp-form fixtures remain in compare/.
+
+**BASIC REPL:** choose **View → Listener mode → BASIC REPL** for direct BASIC
+input and numbered program editing. `HELP` lists commands. `LOAD`/`SAVE` filenames
+and Lisp loader paths complete with Tab. See [BASIC REPL](docs/BASIC_REPL.md).
 
 Lispy Machine schedules cyclic garbage collection on its Tk main thread. This
 keeps closed turtle-window/image cycles from being finalized by the Lisp worker.
