@@ -580,3 +580,8 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Update imports, test mocks, resource anchors and standalone BASIC CLI commands.
 - [x] Verify launcher portability, documentation/syntax resources and ANSI terminal subprocess transport.
 - [x] Focus the editor after creating a buffer or opening an existing file tab.
+
+### Turtle wheel redraw close (2026-10-24)
+
+- [x] Handle normal turtle window closure inside mouse-wheel redraw without a Tk traceback.
+- [x] Keep callback program errors visible and release the reentrancy guard on both paths.

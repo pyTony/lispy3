@@ -733,7 +733,8 @@ def onscroll(fn: Any = False) -> None:
 
     x y is the pointer in turtle coordinates; step is 1 for a turn away from
     you and -1 towards you. (onscroll #f) stops it. A turn that comes while f
-    is still running (say, from its own (update)) is ignored.
+    is still running (say, from its own (update)) is ignored. Closing the
+    window during redraw ends that callback quietly; other errors propagate.
     """
     screen = turtle.Screen()
     canvas = screen.getcanvas()
@@ -751,6 +752,9 @@ def onscroll(fn: Any = False) -> None:
         try:
             step = 1 if event.num == 4 or event.delta > 0 else -1
             fn(canvas.canvasx(event.x) / screen.xscale, -canvas.canvasy(event.y) / screen.yscale, step)
+        except turtle.Terminator:
+            # A normal window close can interrupt a callback's redraw/update.
+            pass
         finally:
             busy = False
 
