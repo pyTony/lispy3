@@ -209,9 +209,9 @@ python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-te
 
 These are observations about the precise probes, not a recommendation to jump
 into inactive bodies or a requirement to weaken lispy3's structural validation.
-The earlier procedure-return and LOCAL-restoration tests in
-`tests/test_mini_basic.py` have not yet been reproduced on BBCSDL by this runner;
-neither have ENDPROC-without-PROC or RETURN-with-abandoned-inner-loop cases.
+Structured procedure-return and LOCAL-restoration fixtures were independently
+checked on BBCSDL on 2026-10-23; see the results below. ENDPROC-without-PROC and
+RETURN-with-abandoned-inner-loop cases remain outside this check.
 
 ## Preferred loop exits
 
@@ -228,3 +228,36 @@ programming patterns. Prioritise tests of normal termination, adjusted loop
 values/conditions, and structured EXIT, then document any deliberate differences
 in error detection or stack cleanup. The runner has not yet checked every
 earlier lispy3 stack/exit test against BBCSDL.
+
+
+## Structured exits, returns and LOCAL restoration
+
+BBC BASIC for SDL 1.44a independently ran eleven source fixtures on 2026-10-23.
+Ten matched lispy3 output: EXIT FOR/REPEAT/WHILE, nested exits, early FN values,
+FN and PROC returns from loops, parameter/LOCAL restoration, dynamic LOCAL
+scope and adjusted FOR termination. Each useful exit is followed by further
+execution to check that the continuation remains usable.
+
+The eleventh is explicitly diagnostic: abandoning an inner FOR and jumping to
+an outer WHILE terminator prints `1`, then BBCSDL reports error 46, "Not in a
+WHILE loop", at line 90. Lispy3 prints `1`, `2`, `done`. Retaining clean
+structured continuations is an intentional lispy3 extension; this is not a
+claim that arbitrary cross-boundary jumps are BBC-compatible. No continuation
+semantics were changed as a result of this comparison.
+
+[Fixtures and expected lispy3 output](structured/) are exercised by
+`tests/test_basic_structured_reference.py`. [Raw logs and versioned results](runs/structured-2026-10-23/results.json)
+record source hashes, exit status, timeouts and native output. No case crashed
+or timed out. The runner adds SPOOL/error handling and replaces standalone END
+with SPOOL-close/QUIT; it preserves ENDPROC and the tested source statements.
+
+Reproduce with a fresh output directory and your native tokenised BASRUN helper:
+
+```powershell
+python basic/reference/run_structured_checks.py --exe "C:\Program Files (x86)\BBC BASIC for SDL 2.0\bbcsdl.exe" --helper "C:\Users\admin\mini_basic\tools\BASRUN.bbc" --output basic/reference/runs/structured-new --reference-version 1.44a
+```
+
+Keep the helper path alias when it avoids spaces: BASRUN reads its source path
+from BBCSDL's command string, so resolving a junction to a path containing
+spaces can change argument interpretation. The runner preserves the supplied
+helper alias and records its file hash.

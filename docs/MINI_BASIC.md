@@ -301,6 +301,15 @@ source line and suggests the correct function/procedure form instead of
 misreporting the next line as an incomplete DEF header. See the
 [BBC BASIC function tutorial](https://www.bbcbasic.co.uk/bbcwin/tutorial/chapter17.html).
 
+## Structured-control reference checks
+
+BBCSDL 1.44a matches ten shared fixtures for structured EXIT, early FN/PROC
+returns and parameter/LOCAL restoration. Abandoning an inner FOR before an
+outer ENDWHILE is a separate diagnostic: BBCSDL reports error 46; lispy3 keeps
+its clean structured continuation as an intentional extension. See
+[reference sources, raw results and reproduction](../basic/reference/README.md#structured-exits-returns-and-local-restoration).
+Prefer structured exits or normal loop termination for portable programs.
+
 ## Interactive BASIC
 
 Choose View → Listener mode → BASIC REPL, or run `python basic_repl.py`.
