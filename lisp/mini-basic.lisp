@@ -283,9 +283,8 @@
 ;;; --- Statements ---
 
 (define-macro (LET var exp)
-  (if (bbc-suffix? var #\%)
-      `(set! ,var (bbc-int ,exp))
-      `(set! ,var ,exp)))
+  ;; A% 32-bit, A%% 64-bit, A& a byte, A# a float (mini-basic-num.lisp)
+  `(set! ,var ,(bbc-typed-value var exp)))
 
 (define (bbc-print-code items justify)
   ;; :semi stops right-justifying numbers, :comma starts it again
@@ -306,6 +305,8 @@
                      (bbc-print-code more justify)))
               ((and (pair? item) (list? item) (eq? (car item) 'SPC))
                (cons `(bbc-spaces ,(bbc-second item)) (bbc-print-code more justify)))
+              ((and (pair? item) (list? item) (eq? (car item) 'HEX))
+               (cons `(bbc-print-hex ,(bbc-second item) ,justify) (bbc-print-code more justify)))
               (else
                (cons `(bbc-print-value ,item ,justify) (bbc-print-code more justify)))))))
 
@@ -525,7 +526,7 @@
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
-(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-="))
+(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
 (define bbc-one-char-ops "+-*/^(),;'=<>~#")
 
 (define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
@@ -538,6 +539,7 @@
         line-start #t]
     (define (emit kind value) (bbc-push! toks (list kind value line)))
     (define (char-at j) (if (< j n) (string-ref text j) #\nul))
+    (define (digit-at? j) (let [d (char-at j)] (d/isdigit)))
     (define (scan-while j ok?) (while (and (< j n) (ok? (string-ref text j))) (set! j (+ j 1))) j)
     (while (< i n)
       (let [c (string-ref text i)]
@@ -566,23 +568,28 @@
              (emit :str (str/join parts))
              (set! line-start #f)
              (set! i j)))
-          ((or (c/isdigit) (and (eq? c #\.) ((char-at (+ i 1))/isdigit)))
+          ((or (c/isdigit) (and (eq? c #\.) (digit-at? (+ i 1))))
            (let [j (scan-while i (lambda (d) (or (d/isdigit) (eq? d #\.))))]
              (if (and (eq? (char-at j) #\E)
-                      (or ((char-at (+ j 1))/isdigit)
-                          (and (member (char-at (+ j 1)) (list #\+ #\-)) ((char-at (+ j 2))/isdigit))))
+                      (or (digit-at? (+ j 1))
+                          (and (member (char-at (+ j 1)) (list #\+ #\-)) (digit-at? (+ j 2)))))
                  (set! j (scan-while (+ j 2) (lambda (d) (d/isdigit)))))
              (emit :num (string->number (substring text i j)))
              (set! line-start #f)
              (set! i j)))
+          ((and (eq? c #\%) (member (char-at (+ i 1)) (list #\0 #\1)))
+           (let [j (scan-while (+ i 1) (lambda (d) (member d (list #\0 #\1))))]
+             (emit :num (string->number (substring text (+ i 1) j) 2))
+             (set! line-start #f)
+             (set! i j)))
           ((eq? c #\&)
            (let [j (scan-while (+ i 1) (lambda (d) (>= (bbc-hex-digits/find (str d)) 0)))]
-             (emit :num (string->number (substring text (+ i 1) j) 16))
+             (emit :num (bbc-hex-constant (substring text (+ i 1) j)))
              (set! line-start #f)
              (set! i j)))
           ((or (c/isalpha) (eq? c #\_))
            (let [j (scan-while i bbc-name-char?)]
-             (if (member (char-at j) (list #\$ #\%)) (set! j (+ j 1)))
+             (set! j (bbc-name-end text i j (char-at j) (char-at (+ j 1))))
              (let [name (substring text i j)]
                (cond ((equal? name "REM")
                       (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
@@ -597,6 +604,10 @@
           ((eq? c #\:)
            (emit :colon #f)
            (set! i (+ i 1)))
+          ((equal? (substring text i (min n (+ i 3))) ">>>")
+           (emit :op ">>>")
+           (set! line-start #f)
+           (set! i (+ i 3)))
           ((member (substring text i (min n (+ i 2))) bbc-two-char-ops)
            (emit :op (substring text i (+ i 2)))
            (set! line-start #f)
@@ -717,11 +728,16 @@
            :bool)))
 
 (define (bbc-p-compare)
+  ;; The shifts << >> >>> bind like comparisons, as in BBC BASIC for SDL
   (let loop ((left (bbc-p-add)))
     (let [tok (bbc-peek)]
-      (if (and (eq? (car tok) :op) (member (nth tok 1) bbc-compare-ops))
-          (begin (bbc-advance!) (loop (bbc-compare (nth tok 1) left (bbc-p-add))))
-          left))))
+      (cond ((and (eq? (car tok) :op) (member (nth tok 1) bbc-compare-ops))
+             (bbc-advance!) (loop (bbc-compare (nth tok 1) left (bbc-p-add))))
+            ((and (eq? (car tok) :op) (bbc-lookup (nth tok 1) bbc-shift-ops))
+             (bbc-advance!)
+             (loop (bbc-num (list (bbc-second (bbc-lookup (nth tok 1) bbc-shift-ops))
+                                  (bbc-value left) (bbc-value (bbc-p-add))))))
+            (else left)))))
 
 (define (bbc-plus a b)
   (if (or (eq? (bbc-type a) :str) (eq? (bbc-type b) :str))
@@ -868,6 +884,7 @@
                    (bbc-push! items (list 'TAB x)))
                (bbc-expect! :op ")" ")")))
             ((bbc-accept! :kw "SPC") (bbc-push! items (list 'SPC (bbc-value (bbc-p-unary)))))
+            ((bbc-accept! :op "~") (bbc-push! items (list 'HEX (bbc-value (bbc-p-expr)))))
             (else (bbc-push! items (bbc-value (bbc-p-expr))))))
     (cons 'PRINT items)))
 
@@ -1162,3 +1179,4 @@
                (bbc-foreign-text (bbc-expand text) :clojure)))
 (load "mini-basic-ext")
 (load "mini-basic-io")
+(load "mini-basic-num")
