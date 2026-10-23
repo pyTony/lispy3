@@ -1986,6 +1986,8 @@ def _unescape_string(raw: str) -> str:
     return re.sub(r'\\(?:x[0-9a-fA-F]+;?|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', replace_match, raw)
 
 FRACTION_RE = re.compile(r'[+-]?\d+/\d*[1-9]\d*')   # 7/2 or -1/3; never a division by 0
+# #b1010, #xFF and #o17 as in Scheme and Common Lisp
+RADIX_PREFIXES = {'#b': 2, '#o': 8, '#x': 16}
 
 
 def _try_parse_complex(token: str) -> complex | None:
@@ -2049,6 +2051,12 @@ def atom(token: str) -> Atom:
             return complex_val
     if FRACTION_RE.fullmatch(token):
         return normalize(Fraction(token))
+    radix = RADIX_PREFIXES.get(token[:2].lower()) if len(token) > 2 else None
+    if radix:
+        try:
+            return int(token[2:], radix)
+        except ValueError:
+            raise SyntaxError(f"bad digits for base {radix}: {token}") from None
     try:
         return int(token)
     except ValueError:
