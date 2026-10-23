@@ -33,6 +33,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(lambda [a b] body)` | a function; one body expression |
 | `(defun f (a &optional (b 10) &rest more &key x (y 2)) ...)` | Common Lisp parameters: `&optional` may be left out (default, or `()`), `&rest` collects the rest, `&key` is passed as `:y 5`; `(b 10 b-given)` tells whether `b` was passed |
 | `(if test then else)` | choose; else is required |
+| `(when test body...)` `(unless test body...)` | run body when test is true (`unless`: false), else `()` |
 | `(begin e1 e2 ...)` | run in order, return the last |
 | `(let [a 1 b 2] body)` | local names for one body; Scheme's `(let ((a 1) (b 2)) body)` and named `(let loop ((i 0)) ...)` work too |
 | `(while test body...)` | loop while test is true |

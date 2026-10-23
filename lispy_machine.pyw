@@ -3454,6 +3454,8 @@ class LispMachine(tk.Tk):
             self.repl_pending = code
             return None
         self.repl_pending = ""
+        if not L.tokenize(code):
+            return None              # only a comment, as in a pasted transcript
         return code
 
     def _cancel_pending(self, event=None):

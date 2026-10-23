@@ -261,6 +261,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("let", "(let [a 1 b 2] body...) - local names; later ones may use earlier ones. Scheme's (let ((a 1) (b 2)) ...) and (let loop ((i 0)) ...) work too"),
         ("while", "(while test body...) - loop while test is true, no recursion depth used"),
         ("dotimes", "(dotimes [i count] body...) - run body with i = 0, 1, ... count-1"),
+        ("when", "(when test body...) - run body when test is true, else (); (unless test body...) the other way"),
         ("loop", "(loop for x in lst when (odd? x) collect x) - Common Lisp loop: for x in/on/across, for i from 1 to 10 [by 2] (also below downto above), for x = a then b, with, repeat n, while, until, do forms, collect/append/sum/count/maximize/minimize [into v], when/unless ... else ... end, always/never/thereis, initially, finally, return"),
         ("return", "(return x) - leave the running loop at once with the value x"),
         ("try", "(try exp (catch e handler...)) - run exp; on an error, run handler with e = the message"),
@@ -1101,6 +1102,12 @@ def _format_lisp(fmt: Any, *args: Any) -> String | None:
                 out.append('\n')
                 i += 2
                 continue
+            elif directive == '&':
+                # fresh line: a newline unless the text so far already ends a line
+                if out and not "".join(out).endswith('\n'):
+                    out.append('\n')
+                i += 2
+                continue
             elif directive == '~':
                 out.append('~')
                 i += 2
@@ -1820,6 +1827,9 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
     # Common Lisp spellings of lispy3 special forms
     if head == 'loop' and len(x) > 1 and isinstance(x[1], str) and x[1].lower() in LOOP_KEYWORDS:
         return ['_loop'] + [expand(e, False) for e in x[1:]]
+    if head in ('when', 'unless') and len(x) >= 2 and head not in library_system.macros(head):
+        test = x[1] if head == 'when' else ['not', x[1]]
+        return expand(['if', test, ['begin'] + list(x[2:]) if len(x) > 2 else [], []], toplevel)
     if head == 'progn':
         return expand(['begin'] + list(x[1:]), toplevel)
     if head == 'setq':
@@ -2280,6 +2290,10 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
                 if isinstance(result, str):
                     return String(result)
                 return result
+
+            case []:
+                # () is the empty list, also unquoted, as nil is in Common Lisp
+                return []
 
             case _:
                 raise SyntaxError(f"Unknown syntax: {x}")
