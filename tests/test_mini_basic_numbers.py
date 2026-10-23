@@ -56,6 +56,7 @@ class ShiftTest(ReaderTestCase):
         self.assertEqual(self.run_bbc('PRINT ;1 << 4;" ";256 >> 4;" ";-16 >> 2'), '16 16 -4\n')
 
     def test_logical_shift_right_is_32_bit(self):
+        # BBCSDL 1.44a: -16 >>> 28 is 15
         self.assertEqual(self.run_bbc('PRINT ;-16 >>> 28;" ";256 >>> 4'), '15 16\n')
 
     def test_shifts_bind_like_comparisons(self):
@@ -69,6 +70,10 @@ class HexOutputTest(ReaderTestCase):
 
     def test_print_tilde_right_justifies(self):
         self.assertEqual(self.run_bbc('PRINT ~255'), '        FF\n')
+
+    def test_print_tilde_applies_to_one_item(self):
+        # BBCSDL 1.44a prints FF and then 255 in the next zone
+        self.assertEqual(self.run_bbc('PRINT ~255, 255'), '        FF       255\n')
 
     def test_str_tilde(self):
         self.assertEqual(self.run_bbc('a$ = STR$~255 + "/" + STR$~-2 + "/" + STR$(255) : PRINT a$'),
