@@ -43,7 +43,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(quote x)` / `'x` | `x` itself, unevaluated |
 | `(:key map)` | look `:key` up in `map` |
 | `(save "name")` | write definitions to `lisp/name.lisp`; imported bindings require keeping original source |
-| `(load "name")` | run `name.lisp`, from `lisp/` if it is not in the current folder |
+| `(load "name")` | run `name.lisp`; a bare name is looked for in the current folder, then (in the Machine) the current buffer's folder and the chosen programs folder, then `lisp/` and `lisp/programs/` |
 | `(import (only library a b))` | select public exports; also prefix/rename; see [Libraries](LIBRARIES.md) |
 
 ## Lists and strings

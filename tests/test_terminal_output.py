@@ -58,7 +58,7 @@ class TerminalRoutingTest(LispyTestCase):
         app.basic_output = Mock()
         app._save_basic_settings = Mock()
         app.eval_buffer = lambda **kwargs: machine.LispMachine.eval_buffer(app, **kwargs)
-        app._eval_forms_in_terminal = lambda forms: machine.LispMachine._eval_forms_in_terminal(app, forms)
+        app._eval_forms_in_terminal = lambda forms, **kw: machine.LispMachine._eval_forms_in_terminal(app, forms, **kw)
         terminal = io.StringIO()
         @contextlib.contextmanager
         def output():

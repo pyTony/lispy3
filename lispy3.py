@@ -541,22 +541,29 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
 # Lisp programs live in the lisp/ folder next to this file
 LISP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lisp")
 
+# Further folders (load "x") and (slurp "x") search before lisp/; the Lispy
+# Machine puts the current buffer's folder and its programs folder here.
+LOAD_DIRS: list[str] = []
+
+def find_source_file(name: str) -> str:
+    """name as given if it exists or is absolute, else the first match in
+    LOAD_DIRS, lisp/ or lisp/programs/; name unchanged when nothing matches."""
+    if os.path.exists(name) or os.path.isabs(name):
+        return name
+    for folder in [*LOAD_DIRS, LISP_DIR, os.path.join(LISP_DIR, 'programs')]:
+        candidate = os.path.normpath(os.path.join(folder, name))
+        if os.path.exists(candidate):
+            return candidate
+    return name
+
 def lisp_file_for_load(filename: str) -> str:
-    """The file (load "name") runs: name.lisp as given if it exists, else the one in lisp/."""
+    """The file (load "name") runs: name.lisp as given if it exists, else one found by find_source_file."""
     real_filename = filename if filename.endswith('.lisp') else f"{filename}.lisp"
-    in_lisp_dir = os.path.join(LISP_DIR, real_filename)
-    if not os.path.exists(real_filename) and not os.path.isabs(real_filename) \
-            and os.path.exists(in_lisp_dir):
-        return in_lisp_dir
-    return real_filename
+    return find_source_file(real_filename)
 
 def slurp(filename: Any) -> String:
-    """(slurp "file") - the whole text file as one string; a relative name not found here is looked up in lisp/."""
-    raw_name = _unwrap_str(filename)
-    name = os.path.normpath(raw_name)
-    in_lisp_dir = os.path.normpath(os.path.join(LISP_DIR, name))
-    if not os.path.exists(name) and not os.path.isabs(name) and os.path.exists(in_lisp_dir):
-        name = in_lisp_dir
+    """(slurp "file") - the whole text file as one string; a relative name not found here is looked up like load."""
+    name = find_source_file(os.path.normpath(_unwrap_str(filename)))
     with open(name, encoding='utf-8') as f:
         return String(f.read())
     
