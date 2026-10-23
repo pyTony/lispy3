@@ -248,7 +248,9 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("reload", "(reload filename-or-name) - fresh module instance and import bindings; external effects are not undone"),
         ("defun", "(defun f (a b) body...) - Common Lisp spelling of (define (f a b) body...); inside a let it still makes a global f that keeps the let's variables"),
         ("incf", "(incf x) or (incf x 5) - add to a variable and give the new value; (decf x) subtracts"),
-        ("setf", "(setf x 1 y 2) - set variables in turn and give the last value; only variables, not (car x) places"),
+        ("make-hash-table", "(make-hash-table) - a fresh mutable hash table; no keyword options"),
+        ("gethash", "(gethash key table [default]) - stored value, default or nil if missing; one return value"),
+        ("setf", "(setf x 1 y 2) - set variables in turn and give the last value; variables and (gethash key table) places"),
         ("time", "(time exp) - run exp, print how long it took in seconds, give its value"),
         ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
         ("set!", "(set! name value) - change an existing variable"),
@@ -1179,6 +1181,25 @@ def _append(*items: Any) -> Any:
         return String("".join(_unwrap_str(x) for x in items))
     return [elem for lst in items for elem in lst]
 
+def _make_hash_table():
+    return {}
+
+
+def _gethash(key, table, default=None):
+    if not isinstance(table, dict):
+        raise TypeError('gethash requires a hash table')
+    return table.get(key, [] if default is None else default)
+
+
+def _sethash(key, table, *values):
+    """SETF evaluates key, table, optional default, then value in call order."""
+    if not isinstance(table, dict):
+        raise TypeError('setf gethash requires a hash table')
+    value = values[-1]
+    table[key] = value
+    return value
+
+
 def _assoc(d: dict, *kvs: Any) -> dict:
     if len(kvs) % 2 != 0:
         raise ValueError("assoc requires an even number of key-value arguments")
@@ -1642,6 +1663,9 @@ def standard_env() -> Env:
         'format': _format_lisp,
 
         # Maps / Dictionaries
+        'make-hash-table': _make_hash_table,
+        'gethash': _gethash,
+        '%sethash': _sethash,
         'get': lambda collection, key, default=[]: collection.get(key, default) if isinstance(collection, dict) else default,
         'assoc': _assoc,
         'dissoc': _dissoc,
@@ -1911,15 +1935,18 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return expand(['begin', ['set!', x[1], ['+' if head == 'incf' else '-', x[1], delta]], x[1]], toplevel)
 
     if head == 'setf' and head not in library_system.macros(head):
-        # (setf a 1 b 2) on variables: set each in turn and give the last value
+        # Each pair finishes before the next; each place argument runs once.
         if len(x) < 3 or len(x) % 2 == 0:
             raise SyntaxError("setf needs place value pairs: (setf x 1 y 2)")
         body = []
         for place, value in zip(x[1::2], x[2::2]):
-            if not isinstance(place, str):
-                raise SyntaxError(f"setf: only a variable can be set, got {lisp_str(place)}")
-            body.append(['set!', place, value])
-        return expand(['begin'] + body + [x[-2]], toplevel)
+            if isinstance(place, str):
+                body.append(['begin', ['set!', place, value], place])
+            elif isinstance(place, list) and place and place[0] == 'gethash' and len(place) in (3, 4):
+                body.append(['%sethash'] + place[1:] + [value])
+            else:
+                raise SyntaxError(f"setf: only a variable or (gethash key table [default]) can be set, got {lisp_str(place)}")
+        return expand(['begin'] + body, toplevel)
 
     if head == 'define-memo':
         # define-memo caches calls only when all arguments are exact numbers.
