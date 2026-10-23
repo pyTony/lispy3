@@ -239,3 +239,13 @@ misreporting the next line as an incomplete DEF header. See the
 Choose View → Listener mode → BASIC REPL, or run `python basic_repl.py`.
 Direct statements, numbered program editing, RUN/LIST/NEW/LOAD/SAVE and
 filename completion are described in [BASIC_REPL.md](BASIC_REPL.md).
+
+
+### Structured-control reference checks
+
+BBCSDL 1.44a matches ten shared fixtures for structured EXIT, early FN/PROC
+returns and parameter/LOCAL restoration. Abandoning an inner FOR before an
+outer ENDWHILE is a separate diagnostic: BBCSDL reports error 46; lispy3 keeps
+its clean structured continuation as an intentional extension. See
+[reference sources, raw results and reproduction](../basic/reference/README.md#structured-exits-returns-and-local-restoration).
+Prefer structured exits or normal loop termination for portable programs.
