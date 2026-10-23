@@ -168,9 +168,14 @@ def detokenize_bbc(path, *, executable=None, package_root=''):
         if not (Path(package_root)/'mini_basic'/'__init__.py').is_file():
             raise RuntimeError('Select the Python mini_basic project directory in BASIC Settings.')
         env['PYTHONPATH'] = package_root+os.pathsep+env.get('PYTHONPATH', '')
+    # A .bbc may hold a text listing: read it as mini_basic's LOAD does (shared
+    # program_bytes_to_source); older mini_basic lacks it, so null means text.
     script = ("import json, sys; from pathlib import Path; "
-              "from mini_basic.bbc_detokenize import bbc_binary_to_source; "
-              "print(json.dumps(bbc_binary_to_source(Path(sys.argv[1]).read_bytes())))")
+              "import mini_basic.bbc_detokenize as d; "
+              "data = Path(sys.argv[1]).read_bytes(); "
+              "shared = getattr(d, 'program_bytes_to_source', None); "
+              "print(json.dumps(shared(data) if shared else "
+              "d.bbc_binary_to_source(data) if d.detect_bbc_binary_format(data) else None))")
     try:
         result = subprocess.run([executable or console_python(), '-c', script, path],
             env=env, cwd=str(Path(path).parent), capture_output=True, text=True,
@@ -186,6 +191,8 @@ def detokenize_bbc(path, *, executable=None, package_root=''):
         raise RuntimeError('Cannot detokenise BBC program: '+(detail[-1] if detail else 'decoder failed'))
     try:
         lines = json.loads(result.stdout)
+        if lines is None:
+            return Path(path).read_text(encoding='utf-8', errors='replace')
         if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
             raise ValueError('expected source lines')
     except (ValueError, TypeError) as error:

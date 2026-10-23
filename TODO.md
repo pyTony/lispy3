@@ -475,3 +475,8 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Validate real Tk mode switching and execution in isolated child processes. Full Windows suite: 626 passed, 4 skipped, 355 subtests; WSL: 630 passed, 371 subtests.
 - [ ] Multiline immediate-input accumulation; use stored program lines or LOAD/RUN for blocks for now.
 - [x] Use project basic/ as the shared default for BASIC LOAD/SAVE and GUI/CLI filename completion; Lisp path resolution remains unchanged. Follow-up: 20 focused tests passed on Windows and WSL.
+
+### WSL pytest discovery (2026-10-22)
+
+- [x] Restrict default discovery to tests/ and exclude the linked Python mini_basic checkout, preventing cross-project collection and unknown-marker warnings.
+- Validation: Windows default pytest run: 607 passed, 4 skipped, 355 subtests; WSL Debian existing virtual environment: 611 passed, 371 subtests. Both default collections found exactly 611 lispy3 tests.
