@@ -91,6 +91,26 @@ class LispyError(Exception):
     """User-raised error from within Lisp via (error ...)."""
     pass
 
+_LAMBDA_KEYWORDS = ('&optional', '&key', '&allow-other-keys')
+
+def _lambda_list_sections(parms: list[Any]) -> tuple[list[Any], dict[str, list[Any]]]:
+    """Split (a b &optional c &rest r &key d) into ([a, b], {'&optional': [c], ...})."""
+    required, sections, current = [], {}, None
+    for p in parms:
+        if p in ('.', '&', '&body'):
+            p = '&rest'
+        if isinstance(p, str) and p.startswith('&'):
+            if p in sections or p not in _LAMBDA_KEYWORDS + ('&rest',):
+                raise SyntaxError(f"lambda list: {p} is not allowed here in {lisp_str(parms)}")
+            current = sections.setdefault(p, [])
+        elif current is None:
+            required.append(p)
+        else:
+            current.append(p)
+    if '&rest' in sections and len(sections['&rest']) != 1:
+        raise SyntaxError(f"lambda list: &rest needs exactly one name in {lisp_str(parms)}")
+    return required, sections
+
 class Procedure:
     """A user-defined or wrapped native Lisp/Scheme procedure that knows how to serialize itself."""
     def __init__(self, parms: Union[list[Symbol], Symbol], body: Any, env: 'Env', native_fn: Callable = None, name: str = None):
@@ -104,6 +124,8 @@ class Procedure:
         """Create a local environment supporting standard and variadic (rest) parameters."""
         if isinstance(self.parms, str):
             return Env([self.parms], [list(args)], self.env)
+        if any(p in _LAMBDA_KEYWORDS for p in self.parms):
+            return self._bind_lambda_list(args)
         for marker in ('.', '&', '&rest', '&body'):
             if marker in self.parms:
                 idx = self.parms.index(marker)
@@ -115,6 +137,58 @@ class Procedure:
         if len(args) != len(self.parms):
             self._wrong_count(args, str(len(self.parms)))
         return Env(self.parms, list(args), self.env)
+
+    def _bind_lambda_list(self, args: list[Any]) -> 'Env':
+        """Bind a Common Lisp lambda list with &optional and &key.
+
+        (a &optional (b 10 b-given) &rest more &key x (y 2)) - a parameter
+        is a name or (name default supplied-p). A default is evaluated when
+        the call leaves it out, and can use the parameters before it.
+        """
+        env = Env(outer=self.env)
+        required, sections = _lambda_list_sections(self.parms)
+        if len(args) < len(required):
+            self._wrong_count(args, f"at least {len(required)}")
+        env.update(zip(required, args))
+        pos = len(required)
+        for spec in sections.get('&optional', []):
+            given = pos < len(args)
+            self._bind_spec(env, spec, args[pos] if given else None, given)
+            pos += given
+        rest = list(args[pos:])
+        if sections.get('&rest'):
+            env[sections['&rest'][0]] = rest
+        if '&key' in sections:
+            if len(rest) % 2:
+                raise TypeError(f"{self.name or 'lambda'}: keyword arguments must come in :name value pairs, got {lisp_str(rest)}")
+            passed = {}
+            for k, v in zip(rest[::2], rest[1::2]):
+                if not (isinstance(k, str) and k.startswith(':')):
+                    raise TypeError(f"{self.name or 'lambda'}: {lisp_str(k)} is not a :keyword")
+                passed.setdefault(k, v)
+            known = set()
+            for spec in sections['&key']:
+                key = ':' + (spec[0] if isinstance(spec, list) else spec)
+                known.add(key)
+                self._bind_spec(env, spec, passed.get(key), key in passed)
+            unknown = [k for k in passed if k not in known]
+            if unknown and '&allow-other-keys' not in sections:
+                expected = ' '.join(sorted(known)) or 'none'
+                raise TypeError(f"{self.name or 'lambda'}: unknown keyword {unknown[0]}, expected {expected}")
+        elif rest and not sections.get('&rest'):
+            self._wrong_count(args, f"at most {pos}")
+        return env
+
+    @staticmethod
+    def _bind_spec(env: 'Env', spec: Any, value: Any, given: bool) -> None:
+        """Bind one name or (name default supplied-p) from an &optional or &key list."""
+        if not isinstance(spec, list):
+            env[spec] = value if given else []
+            return
+        name, default, supplied = (list(spec) + [None, None])[:3]
+        env[name] = value if given else [] if len(spec) < 2 else eval_exp(expand(default), env)
+        if supplied is not None:
+            env[supplied] = given
 
     def _wrong_count(self, args: list[Any], expected: str) -> None:
         """Raise the error for a call with too few or too many arguments."""
@@ -177,6 +251,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("define-memo", "(define-memo (f a b) body...) - cache calls whose arguments are all exact numbers; other calls run directly"),
         ("set!", "(set! name value) - change an existing variable"),
         ("lambda", "(lambda [a b] body...) - a function; (lambda [a & more] ...) or (lambda args ...) takes any number"),
+        ("&optional", "(defun f (a &optional (b 10) c) ...) - b and c may be left out; b is then 10 and c is (); (b 10 b-given) also sets b-given to #t when b was passed"),
+        ("&key", "(defun f (&key x (y 2)) ...) - call as (f :y 5 :x 1) in any order; &rest more gets every argument, &allow-other-keys accepts unknown keys"),
         ("if", "(if test then else) - the else part may be left out"),
         ("cond", "(cond (test1 exp1...) (test2 exp2...) (else expN...)) - the first true test wins"),
         ("and", "(and e1 e2 ...) - stops at the first false value, else gives the last"),
@@ -384,7 +460,7 @@ def pretty_print(exp: Any, indent: int = 0, width: int = 40) -> str:
     if type_name == 'Procedure':
         if exp.native_fn is not None:
             return exp.name if exp.name else "<native-function>"
-        parms = '[' + ' '.join(exp.parms) + ']' if isinstance(exp.parms, (list, tuple)) else str(exp.parms)
+        parms = '[' + ' '.join(map(lisp_str, exp.parms)) + ']' if isinstance(exp.parms, (list, tuple)) else str(exp.parms)
         if getattr(exp, 'name', None):
             # the body sits two levels in, under (define name / (lambda ...
             body_s = pretty_print(exp.body, indent + 2, width).lstrip()
