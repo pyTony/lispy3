@@ -54,7 +54,7 @@ lispy3's Lisp loader.
 
 | Area | Implemented |
 |------|-------------|
-| Values | Numeric and string variables; `%` integer and `$` string suffixes |
+| Values | Numeric and string variables; `%` 32-bit, `%%` 64-bit, `&` byte, `#` float and `$` string suffixes; see [Numbers](#numbers) |
 | Output | PRINT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
@@ -199,6 +199,62 @@ If you also have the Python mini_basic repository, its plain-text terminal demo
 Adjust the external checkout path. This file is not bundled in lispy3. A verified
 run printed 25 Mandelbrot rows and reported 1.03 seconds inside BASIC versus
 1.205 seconds around loading and execution; timings vary by machine.
+
+## File I/O
+
+`lisp/mini-basic-io.lisp` adds BBC BASIC channel I/O:
+
+```basic
+F% = OPENOUT "scores.dat"
+PRINT#F%, "Ada", 42
+CLOSE#F%
+F% = OPENIN "scores.dat"
+INPUT#F%, name$, score%
+CLOSE#F%
+```
+
+| Form | Meaning |
+|------|---------|
+| `OPENIN f$`, `OPENOUT f$`, `OPENUP f$` | open for reading, create for writing, or open for both; a channel number, or 0 when the file cannot be opened |
+| `PRINT#c, a, b$` / `INPUT#c, a, b$` | write and read values in BBC BASIC for SDL's layout |
+| `BPUT#c, n` / `BPUT#c, s$` | write a byte, or a string and LF; `BPUT#c, s$;` leaves out the LF |
+| `BGET#c`, `GET$#c` | read a byte, or a line ending at CR, LF, CR LF or NUL |
+| `EOF#c`, `EXT#c`, `PTR#c`, `PTR#c = n` | at the end (-1 or 0), length, position, move |
+| `CLOSE#c`, `CLOSE#0` | close one channel, or every channel |
+
+`PRINT#` writes a string followed by CR, a whole number in the 32-bit range as
+&40 and 4 bytes (least significant first), and any other number as &FF and an
+8-byte IEEE double. The string and whole-number layouts follow BBC BASIC for SDL;
+the real-number layout has not been checked against it. Strings are bytes 0-255.
+An FN that uses a channel is never memoized. File I/O is lispy3 only: the
+SBCL and Clojure comparison backends do not have it.
+
+## Numbers
+
+`lisp/mini-basic-num.lisp` adds BBC BASIC for SDL's number types and integer
+operators on top of the Lisp [bitwise library](QUICK_REFERENCE.md#numbers-and-tests):
+
+```basic
+PRINT %1010, &FF, &FFFFFFFF      : REM 10, 255, -1
+PRINT 1 << 4, -16 >> 2, -16 >>> 28
+PRINT ~255 : a$ = STR$~255       : REM FF
+A% = 3.7 : A%% = 2^40 : b& = 300 : x# = 1/4
+```
+
+| Form | Meaning |
+|------|---------|
+| `%1010`, `&FF`, `1E5`, `.5` | binary, hex and decimal constants; up to 8 hex digits are a 32-bit signed number, so `&FFFFFFFF` is -1 |
+| `a << n`, `a >> n`, `a >>> n` | shift left, shift right keeping the sign, shift right filling with zeros (32 bits, or 64 for a bigger number); they bind like comparisons, so `1 << 2 + 1` is 8 |
+| `PRINT ~n`, `STR$~n` | upper-case hex; a negative number in 32-bit two's complement |
+| `A%` | 32-bit integer: a fraction is cut off, outside -2147483648 to 2147483647 is `Number too big` |
+| `A%%` | 64-bit integer |
+| `A&` | unsigned byte: the low 8 bits, so 300 is 44 and -1 is 255 |
+| `A#` | float |
+
+`a`, `a%`, `a%%`, `a&`, `a#` and `a$` are six different variables. A `~` in
+PRINT applies to the one item after it, as in BBCSDL 1.44a. Arrays (`DIM a%(9)`) do not yet use
+these types. These extensions are lispy3 only for now: the SBCL and Clojure
+comparison backends do not have them.
 
 ## Tests and progress
 

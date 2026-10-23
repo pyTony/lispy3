@@ -43,6 +43,8 @@ class TokenizedBasicTest(TestCase):
             package = Path(directory)/'mini_basic'; package.mkdir()
             (package/'__init__.py').write_text('')
             (package/'bbc_detokenize.py').write_text(
+                'def detect_bbc_binary_format(data):\n'
+                '    return None if data.startswith(b"REM") else "russell"\n'
                 'def bbc_binary_to_source(data):\n'
                 '    if data != b"native": raise ValueError("invalid BBC binary")\n'
                 "    return ['10 PRINT \"decoded\"', '20 END']\n")
@@ -51,6 +53,31 @@ class TokenizedBasicTest(TestCase):
             source.write_bytes(b'invalid')
             with self.assertRaisesRegex(RuntimeError, 'invalid BBC binary'):
                 BR.detokenize_bbc(source, package_root=directory)
+
+    def test_plain_text_listing_with_bbc_extension_opens_unchanged(self):
+        # examples/games/animal.bbc in mini_basic is a UTF-8 listing, not tokenised.
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory)/'mini_basic'; package.mkdir()
+            (package/'__init__.py').write_text('')
+            (package/'bbc_detokenize.py').write_text(
+                'def detect_bbc_binary_format(data):\n'
+                '    return None if data.startswith(b"REM") else "russell"\n'
+                'def bbc_binary_to_source(data):\n'
+                '    raise ValueError("unrecognised BBC BASIC binary format")\n')
+            source = Path(directory)/'animal.bbc'
+            source.write_bytes('REM café\n      PRINT "ANIMAL"\n'.encode('utf-8'))
+            self.assertEqual(BR.detokenize_bbc(source, package_root=directory),
+                             'REM café\n      PRINT "ANIMAL"\n')
+
+    def test_text_listing_uses_shared_mini_basic_loader(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory)/'mini_basic'; package.mkdir()
+            (package/'__init__.py').write_text('')
+            (package/'bbc_detokenize.py').write_text(
+                'def program_bytes_to_source(data):\n'
+                '    return data.decode("cp1252").splitlines()\n')
+            source = Path(directory)/'old.bbc'; source.write_bytes(b'10 PRINT "caf\xe9"\r\n20 END\r\n')
+            self.assertEqual(BR.detokenize_bbc(source, package_root=directory), '10 PRINT "café"\n20 END\n')
 
     def test_missing_decoder_reports_basic_settings(self):
         import subprocess
