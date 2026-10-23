@@ -381,6 +381,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("sleep", "(sleep seconds) - wait; seconds may be a decimal number"),
         ("display", "(display a b ...) - print the values with nothing between them, then a new line"),
         ("write", "(write object) - readable Lisp text, no newline, returns object; no stream/format keyword options"),
+        ("turtle:dot", "(turtle:dot size [color]) - draw a dot in the turtle graphics window"),
         ("turtle:write", "(turtle:write text) - draw text in the turtle graphics window"),
         ("print", "(print a b ...) - print the values with spaces between them"),
         ("newline", "(newline) - print an empty line"),
@@ -1794,13 +1795,15 @@ def standard_env() -> Env:
             turtle.title("Lispy3 Graphics")
         return res
 
-    if hasattr(turtle, 'write'):
-        env['turtle:write'] = Procedure(
-            parms=['*args'], body=None, env=env,
-            native_fn=lambda *args: _call_turtle('write', *args), name='turtle:write')
+    for command in ('write', 'dot'):
+        if hasattr(turtle, command):
+            name = f'turtle:{command}'
+            env[name] = Procedure(
+                parms=['*args'], body=None, env=env,
+                native_fn=lambda *args, k=command: _call_turtle(k, *args), name=name)
 
     for key in turtle.__all__:
-        if key in primitives:
+        if key in primitives or key == 'dot':
             continue
         value = getattr(turtle, key)
         if callable(value):

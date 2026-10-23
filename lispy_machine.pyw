@@ -531,7 +531,7 @@ class _ListenerWriter(io.TextIOBase):
 # Lisp code runs on its own thread so the window stays live and a Stop button
 # can end an endless loop. Tk (and so turtle) may only be used from the main
 # thread, so these built-ins are handed over to it and waited for.
-GUI_BUILTINS = (frozenset(turtle.__all__) - {'write'}) | {'turtle:write'} | {
+GUI_BUILTINS = (frozenset(turtle.__all__) - {'write', 'dot'}) | {'turtle:write', 'turtle:dot'} | {
     'push-pose', 'pop-pose', 'clear-poses', 'reinit-turtle', 'reset', 'help', 'onscroll'}
 
 

@@ -34,7 +34,7 @@
     (let ((y (* cell (- (/ mandel-h 2) row))))
       (dotimes [col mandel-w]
         (let ((x (* cell (- col (/ mandel-w 2)))))
-          ;; a short stroke, not (dot ...): lispy3-numpy has its own dot
+          ;; a short stroke; turtle points use (turtle:dot ...), numerical products use dot
           (goto x y)
           (pencolor (escape-colour (escape (+ mandel-x (* x mandel-step))
                                            (+ mandel-y (* y mandel-step))

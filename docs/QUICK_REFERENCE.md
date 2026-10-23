@@ -133,7 +133,7 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 | `(vector-fill! v x [start] [stop])` | set a range of items to `x` |
 | `(vector-slice-set! v start stop step x)` | set every `step`th item from `start` below `stop` to `x` |
 | `(sum v)` | total of the items |
-| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(a-dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |
+| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |
 
 ## Turtle graphics
 

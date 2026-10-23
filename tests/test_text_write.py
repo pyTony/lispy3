@@ -38,7 +38,13 @@ class TextWriteTest(LispyTestCase):
         drawing = L.Procedure(['*args'], None, L.global_env, native_fn=drawing_fn, name='turtle:write')
         wrapped = Mock()
         app = SimpleNamespace(_on_main_fn=Mock(return_value=wrapped))
-        machine.LispMachine._gui_builtins_on_main(app, {'write': text, 'turtle:write': drawing})
+        machine.LispMachine._gui_builtins_on_main(app, {'write': text, 'dot': text, 'turtle:write': drawing})
         self.assertIs(text.native_fn, L._write_text)
         self.assertIs(drawing.native_fn, wrapped)
         app._on_main_fn.assert_called_once_with(drawing_fn)
+
+    def test_turtle_dot_is_explicit_and_not_a_bare_graphics_alias(self):
+        self.ev('(turtle:dot 2 "black")')
+        self.assertIn(('dot', (2, 'black')), L.turtle.calls)
+        drawing = L.global_env['turtle:dot']
+        self.assertIsNot(L.global_env.get('dot'), drawing)
