@@ -189,6 +189,25 @@ class LispFolderTest(LispyTestCase):
         self.ev('(load "p")')
         self.assertEqual(self.ev("where"), "here")
 
+    def test_load_finds_programs_folder_and_load_dirs(self):
+        """load also looks in lisp/programs/ and in LOAD_DIRS (the editor buffer's folder)."""
+        os.makedirs(os.path.join("lisp", "programs"))
+        with open(os.path.join("lisp", "programs", "prog.lisp"), "w", encoding="utf-8") as f:
+            f.write("(define where 'programs)")
+        self.ev('(load "prog.lisp")')
+        self.assertEqual(self.ev("where"), "programs")
+        os.mkdir("mine")
+        with open(os.path.join("mine", "prog.lisp"), "w", encoding="utf-8") as f:
+            f.write("(define where 'mine)")
+        old_dirs = list(lispy3.LOAD_DIRS)
+        lispy3.LOAD_DIRS[:] = [os.path.abspath("mine")]
+        try:
+            self.ev('(load "prog")')
+            self.assertEqual(self.ev("where"), "mine")
+            self.assertEqual(str(self.ev('(slurp "prog.lisp")')), "(define where 'mine)")
+        finally:
+            lispy3.LOAD_DIRS[:] = old_dirs
+
 
 class CommandLineTest(LispyTestCase):
     """Options of `python lispy3.py` are not mistaken for program files."""

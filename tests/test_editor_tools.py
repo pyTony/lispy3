@@ -51,6 +51,12 @@ class EditorToolsTest(TestCase):
         self.assertEqual(reindent_lisp(text), expected)
         self.assertEqual(reindent_lisp(expected), expected)
 
+    def test_reindent_keeps_defun_name_and_params_on_first_line(self):
+        from editor_tools import reindent_lisp
+        text = '(defun hello (name) (format t "hi ~a" name) (format t "!"))\n'
+        self.assertEqual(reindent_lisp(text),
+                         '(defun hello (name)\n  (format t "hi ~a" name)\n  (format t "!"))\n')
+
     def test_reindent_breaks_long_lines_and_keeps_strings(self):
         from editor_tools import reindent_lisp
         text = ('(define (h x) (let [a (+ x 1) b (* x 2)] (if (> a b) '

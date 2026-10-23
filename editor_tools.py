@@ -76,7 +76,7 @@ def indent_lisp(text, source_name='<buffer>'):
 
 LAYOUT_WIDTH = 72
 # Forms whose body goes on new lines: head plus N leading arguments stay on line one.
-_BODY_FORMS = {'define': 1, 'define-macro': 1, 'defmacro': 2, 'lambda': 1, 'let': 1,
+_BODY_FORMS = {'define': 1, 'define-macro': 1, 'defmacro': 2, 'defun': 2, 'lambda': 1, 'let': 1,
                'let*': 1, 'letrec': 1, 'when': 1, 'unless': 1, 'begin': 0, 'cond': 0,
                'case': 1, 'dotimes': 1, 'while': 1, 'try': 0, 'define-library': 1}
 
@@ -132,6 +132,8 @@ def _head(node):
 def _keep_on_one_line(node, column, top):
     if len(_flat(node)) + column > LAYOUT_WIDTH:
         return False
+    if top and _head(node) in ('defun', 'defmacro') and len(node[1]) > 3:
+        return False                       # (defun name (params) body ...)
     if top and _head(node) in ('define', 'define-macro', 'defmacro') and len(node[1]) > 2:
         # Function definitions keep their name line separate from the body.
         return not isinstance(node[1][1], tuple)

@@ -4,6 +4,17 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Lispy Machine: **Eval → Buffer run echo** chooses how running a buffer shows
+  its forms: laid out over several lines like the editor's Reindent (new
+  default, no more `...` truncation), on one line, or silent like `load`
+  (only the program's output, values and errors). Notes such as `;; ok` now
+  start on a new line after output that did not end with one. The setting is
+  remembered.
+- `(load "x")` and `(slurp "x")` also look in `lisp/programs/`, the folder
+  the editor's Open starts in, and in the Machine in the current buffer's
+  folder and the chosen Lisp programs folder.
+- Reindent keeps `(defun name (params)` together on the first line.
+
 - Startup Settings: new option to reopen the files that were open when the
   Machine was last closed (tab order and current buffer kept, missing files
   skipped) instead of showing startup.lisp. Off by default.

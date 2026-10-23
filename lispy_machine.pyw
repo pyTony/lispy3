@@ -284,6 +284,7 @@ def git_pull(folder: str = APP_DIR):
         return "failed", output
     return ("updated" if before != after else "current"), output
 
+BUFFER_ECHO_MODES = ("pretty", "line", "off")
 LISTENER_PROMPT = re.compile(r"(?:USER>|lispy3>|\.\.\. \(\d+\)>) ?")
 
 def listener_to_code(log: str) -> str:
@@ -1637,7 +1638,9 @@ class LispMachine(tk.Tk):
             return
         self.listener_write(f';; Running {startup}\n', 'info')
         terminal = getattr(self, '_output_mode', 'listener') == 'ansi'
-        self._start(lambda: self._eval_forms_in_terminal(forms) if terminal else self._eval_forms(forms))
+        echo = LispMachine._buffer_echo_mode(self)
+        self._start(lambda: self._eval_forms_in_terminal(forms, echo=echo) if terminal
+                    else self._eval_forms(forms, echo=echo))
 
     def _open_startup_settings(self):
         if self.startup_settings_window is not None and self.startup_settings_window.winfo_exists():
@@ -1758,6 +1761,14 @@ class LispMachine(tk.Tk):
         self.eval_menu = eval_m = tk.Menu(bar, tearoff=0)
         self.time_buffer_runs = tk.BooleanVar(value=False)
         eval_m.add_checkbutton(label="Time buffer runs", variable=self.time_buffer_runs)
+        echo = self.settings.get('buffer_echo', 'pretty')
+        self.buffer_echo = tk.StringVar(self, value=echo if echo in BUFFER_ECHO_MODES else 'pretty')
+        echo_m = tk.Menu(eval_m, tearoff=0)
+        for label, value in [("Show forms laid out", 'pretty'), ("Show forms on one line", 'line'),
+                             ("Silent, like load (output and errors only)", 'off')]:
+            echo_m.add_radiobutton(label=label, value=value, variable=self.buffer_echo,
+                                   command=self._save_buffer_echo)
+        eval_m.add_cascade(label="Buffer run echo", menu=echo_m)
         eval_m.add_command(label="Run form / selection / line", accelerator="F5", command=self.eval_form_at_cursor)
         eval_m.add_command(label="Run program → ANSI terminal (fresh workspace)", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Run program → Listener (fresh workspace)", accelerator="F6", command=self.eval_buffer_listener)
@@ -2393,6 +2404,21 @@ class LispMachine(tk.Tk):
         self.listener_write(";; Still running. Press Stop (Ctrl+Break) to end it.\n", "error")
         return True
 
+    def _update_load_dirs(self):
+        """Let (load "x") find files next to the current buffer and in the chosen programs folder."""
+        dirs = []
+        try:
+            tab = self.current_tab()
+        except Exception:                            # noqa: BLE001  (no editor yet)
+            tab = None
+        origin = buffer_source_path(tab) if tab is not None else None
+        if origin:
+            dirs.append(os.path.dirname(os.path.abspath(origin)))
+        preferred = getattr(self, 'settings', {}).get('lisp_programs_directory')
+        if preferred and os.path.isdir(preferred):
+            dirs.append(preferred)
+        L.LOAD_DIRS[:] = dirs
+
     def _start(self, work, on_done=None) -> bool:
         """Run work() on the Lisp thread; then on_done(result, stopped) on the Tk thread.
 
@@ -2400,6 +2426,7 @@ class LispMachine(tk.Tk):
         """
         if self._busy():
             return False
+        LispMachine._update_load_dirs(self)
 
         def body():
             try:
@@ -2858,13 +2885,13 @@ class LispMachine(tk.Tk):
                     self._ui(self.listener_write, f';; Buffer elapsed time: {time.perf_counter()-started:.3f} s\n', 'info')
         self._start(work)
 
-    def _eval_forms_in_terminal(self, forms, on_error=None):
+    def _eval_forms_in_terminal(self, forms, on_error=None, echo='pretty'):
         try:
             with lispy_terminal.ansi_terminal_output():
                 if on_error is not None:
-                    self._eval_forms(forms, on_error=on_error)
+                    self._eval_forms(forms, on_error=on_error, echo=echo)
                 else:
-                    self._eval_forms(forms)
+                    self._eval_forms(forms, echo=echo)
         except Exception as error:
             self._ui(self._report_form_error, error)
 
@@ -2916,7 +2943,9 @@ class LispMachine(tk.Tk):
                 self.listener_write(f'BASIC> {echo_text}\n', 'prompt')
             self._basic_feed(cmd_lines, source=source, source_line=source_line)
             return
-        self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
+        echo = LispMachine._buffer_echo_mode(self)
+        if echo != 'off':
+            self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)
         if closers:
             content = self._write_closers(tab, content, closers)
@@ -2963,14 +2992,14 @@ class LispMachine(tk.Tk):
                         return
                 if terminal:
                     if basic:
-                        LispMachine._eval_forms_in_terminal(self, forms, on_error=basic_error)
+                        LispMachine._eval_forms_in_terminal(self, forms, on_error=basic_error, echo='line')
                     else:
-                        self._eval_forms_in_terminal(forms)
+                        self._eval_forms_in_terminal(forms, echo=echo)
                 else:
                     if basic:
-                        self._eval_forms(forms, on_error=basic_error)
+                        self._eval_forms(forms, on_error=basic_error, echo='line')
                     else:
-                        self._eval_forms(forms)
+                        self._eval_forms(forms, echo=echo)
             finally:
                 if started is not None:
                     elapsed = time.perf_counter() - started
@@ -2978,10 +3007,34 @@ class LispMachine(tk.Tk):
 
         self._start(run_buffer)
 
-    def _eval_forms(self, forms, on_error=None):
-        """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread."""
+    def _buffer_echo_mode(self):
+        """How a buffer run shows its forms: 'pretty', 'line' or 'off' (read on the Tk thread)."""
+        var = getattr(self, 'buffer_echo', None)
+        mode = var.get() if var is not None else 'pretty'
+        return mode if mode in BUFFER_ECHO_MODES else 'pretty'
+
+    def _save_buffer_echo(self):
+        self.settings['buffer_echo'] = self.buffer_echo.get()
+        save_settings(self.settings)
+
+    def _fresh_line(self):
+        """Start a new Listener line unless output already ended with one."""
+        t = getattr(self, 'listener_text', None)
+        if t is None:
+            return
+        where = "prompt_start" if self.console_ready else "end-1c"
+        if t.compare(where, '>', '1.0') and t.get(f'{where} -1c') != '\n':
+            self.listener_write('\n')
+
+    def _eval_forms(self, forms, on_error=None, echo='pretty'):
+        """Run the buffer's forms one by one on the Lisp thread, reporting each on the Tk thread.
+
+        echo: 'pretty' shows each form laid out, 'line' on one line, 'off' shows
+        only the program's output, values and errors, as load does.
+        """
         for form in forms:
-            self._ui(self._echo_form, form)
+            if echo != 'off':
+                self._ui(self._echo_form, form, echo == 'pretty')
 
             def run_form(form=form):
                 # Expand each form just before it runs, as the REPL does, so
@@ -2990,20 +3043,28 @@ class LispMachine(tk.Tk):
                 return form, L.eval_exp(form, L.global_env)
 
             result, err = self._eval_with_turtle(run_form)
+            self._ui(LispMachine._fresh_line, self)
             if err is not None:
                 self._ui(on_error or self._report_form_error, err)
                 return
-            self._ui(self._report_form, *result)
+            self._ui(self._report_form, *result, echo != 'off')
         self._ui(self.listener_write, ";; --- done ---\n", "info")
 
-    def _echo_form(self, form):
+    def _echo_form(self, form, pretty=False):
         try:
             form_str = L.lisp_str(form)
         except Exception:
             form_str = repr(form)
-        if len(form_str) > 120:
+        if pretty:
+            try:
+                form_str = ET.reindent_lisp(form_str).rstrip('\n')
+            except Exception:                        # noqa: BLE001
+                pretty = False
+        if not pretty and len(form_str) > 120:
             form_str = form_str[:117] + "..."
         self.listener_write("USER> ", "prompt")
+        # Continuation lines line up under the form's first character.
+        form_str = form_str.replace('\n', '\n' + ' ' * len("USER> "))
         self.listener_write(f"{form_str}\n", "code")
 
     def _report_form_error(self, e):
@@ -3012,7 +3073,9 @@ class LispMachine(tk.Tk):
         self.set_inspector(f"Error: {msg}")
         self.listener_write(";; --- aborted ---\n", "info")
 
-    def _report_form(self, form, val):
+    def _report_form(self, form, val, notes=True):
+        if val is None and not notes:
+            return
         if val is None:
             name = self._defined_name(form)
             if name:

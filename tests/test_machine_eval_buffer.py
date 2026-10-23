@@ -108,6 +108,32 @@ class EvalBufferTest(unittest.TestCase):
         self.assertIn('aborted', out)
         self.assertIn(';; Buffer elapsed time: 0.250 s', out)
 
+    def test_forms_are_echoed_laid_out_by_default(self):
+        out = _FakeMachine('(defun greet (name) (format t "hello ~a" name) (format t "!"))\n'
+                           '(greet "me")\n').run()
+        self.assertIn('USER> (defun greet (name)\n        (format t "hello ~a" name)\n', out)
+        self.assertNotIn('...', out)
+        self.assertIn('hello me!', out)
+
+    def test_one_line_echo_is_still_available(self):
+        app = _FakeMachine('(define (f x) (* x x))\n(f 4)')
+        app.buffer_echo = Mock()
+        app.buffer_echo.get.return_value = 'line'
+        out = app.run()
+        self.assertIn('USER> (define (f x) (* x x))\n', out)
+
+    def test_silent_run_shows_only_output_values_and_errors(self):
+        app = _FakeMachine('(define (f x) (display x) (newline))\n(f 7)\n(+ 1 2)\n(no-such-function 5)')
+        app.buffer_echo = Mock()
+        app.buffer_echo.get.return_value = 'off'
+        out = app.run()
+        self.assertNotIn('USER>', out)
+        self.assertNotIn('evaluating', out)
+        self.assertNotIn(';; f defined', out)
+        self.assertNotIn(';; ok', out)
+        self.assertIn('3', out)
+        self.assertIn('Error', out)
+
     def test_defun_in_a_buffer(self):
         """F6 runs a buffer with defun and reports the function as defined."""
         out = _FakeMachine("(defun factorial (n) (cond ((= n 0) 1) (t (* n (factorial (- n 1))))))\n"

@@ -138,7 +138,7 @@ Run the interpreter directly using Python 3:
 
 In the REPL, `Tab` completes the name you are typing: built-ins, special forms such as `define` and `lambda`, your own definitions, and the `:keywords` of maps you have defined. Press it twice to list every choice. `↑` / `↓` bring back earlier lines. This uses Python's `readline`, which Linux and macOS have; on Windows install it once with `pip install pyreadline3` (the REPL says so at start-up when it is missing).
 
-A program file is ordinary Lisp code that runs from top to bottom, like a Python script. A `;` starts a comment. `(load "other")` runs another file first; the `.lisp` ending is optional. A file name without a folder is looked for in the current folder first and then in `lisp/`, so `python lispy3.py tree.lisp` and `(load "lsystems")` work from anywhere. `(save "name")` writes `lisp/name.lisp` unless you give a path. If the program drew with turtle graphics, the window stays open until you close it (not when you use `-i`, where you get the prompt instead).
+A program file is ordinary Lisp code that runs from top to bottom, like a Python script. A `;` starts a comment. `(load "other")` runs another file first; the `.lisp` ending is optional. A file name without a folder is looked for in the current folder first and then in `lisp/` and `lisp/programs/` (in the Lispy Machine also the current buffer's folder and the chosen Lisp programs folder, before `lisp/`), so `python lispy3.py tree.lisp` and `(load "lsystems")` work from anywhere. `(save "name")` writes `lisp/name.lisp` unless you give a path. If the program drew with turtle graphics, the window stays open until you close it (not when you use `-i`, where you get the prompt instead).
 
 ---
 
