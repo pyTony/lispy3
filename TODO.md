@@ -50,6 +50,11 @@ Many of these already exist, as small pattern-matching Python 3.10 code close to
 
 ## Tests
 
+### Reopen last session's files (2026-10-23)
+
+- [x] Startup Settings option to reopen the files open at the last close
+  instead of startup.lisp; skip missing files, keep the current buffer.
+
 ### Startup visibility and execution (2026-10-21)
 
 - [x] Add independent saved show-buffer and run-at-startup options in a

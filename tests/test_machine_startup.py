@@ -1,3 +1,4 @@
+import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -79,3 +80,65 @@ class StartupOptionsTest(TestCase):
         with patch.object(machine.subprocess, 'Popen') as launch:
             machine.LispMachine.restart(app)
         self.assertNotIn(machine.STARTUP_FILE, launch.call_args.args[0])
+
+
+class ReopenLastSessionTest(TestCase):
+    def _app(self, settings, reopen=True):
+        app = Mock()
+        app.tabs, app.settings = {}, settings
+        app.startup_reopen_files.get.return_value = reopen
+        app.startup_show_buffer.get.return_value = True
+        app._reopen_last_session = lambda: machine.LispMachine._reopen_last_session(app)
+        def open_tab(name, content, path):
+            tab = Mock(name=name, path=path)
+            app.tabs[name] = tab
+            return tab
+        app.new_buffer.side_effect = open_tab
+        return app
+
+    def test_reopens_saved_files_in_order_skipping_missing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            a, b = Path(folder)/'a.lisp', Path(folder)/'b.lisp'
+            a.write_text('(a)', encoding='utf-8')
+            b.write_text('(b)', encoding='utf-8')
+            app = self._app({'last_session_files': [str(a), str(Path(folder)/'gone.lisp'), str(b)],
+                             'last_session_current': str(b)})
+            errors = machine.LispMachine._open_initial_buffers(app, ())
+        self.assertEqual(errors, [])
+        self.assertEqual([c.args[0] for c in app.new_buffer.call_args_list], ['a.lisp', 'b.lisp'])
+        app.notebook.select.assert_called_once_with(app.tabs['b.lisp'])
+
+    def test_falls_back_to_startup_when_nothing_remains(self):
+        app = self._app({'last_session_files': ['/missing/x.lisp']})
+        with patch.object(machine, 'read_startup', return_value=('startup.lisp', '', '/startup.lisp')):
+            machine.LispMachine._open_initial_buffers(app, ())
+        app.new_buffer.assert_called_once_with('startup.lisp', '', path='/startup.lisp')
+
+    def test_disabled_option_ignores_saved_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            a = Path(folder)/'a.lisp'
+            a.write_text('(a)', encoding='utf-8')
+            app = self._app({'last_session_files': [str(a)]}, reopen=False)
+            with patch.object(machine, 'read_startup', return_value=('startup.lisp', '', '/startup.lisp')):
+                machine.LispMachine._open_initial_buffers(app, ())
+        app.new_buffer.assert_called_once_with('startup.lisp', '', path='/startup.lisp')
+
+    def test_command_line_files_win_over_saved_session(self):
+        app = self._app({'last_session_files': ['/somewhere/a.lisp']})
+        with patch.object(machine, 'read_file_arg', return_value=('demo.lisp', '', '/demo.lisp')):
+            machine.LispMachine._open_initial_buffers(app, ['demo.lisp'])
+        app.new_buffer.assert_called_once_with('demo.lisp', '', path='/demo.lisp')
+
+    def test_close_remembers_open_files_and_current_buffer(self):
+        app = Mock()
+        first, untitled, second = Mock(path='/x/a.lisp'), Mock(path=None, source_path=None), Mock(path='/x/b.lisp')
+        app.tabs = {'a.lisp': first, 'untitled.lisp': untitled, 'b.lisp': second}
+        app.tab_order = ['a.lisp', 'untitled.lisp', 'b.lisp']
+        app.current_tab.return_value = second
+        app.settings = {}
+        with patch.object(machine, 'save_settings') as save:
+            machine.LispMachine._remember_open_files(app)
+        expected = [os.path.abspath('/x/a.lisp'), os.path.abspath('/x/b.lisp')]
+        self.assertEqual(app.settings['last_session_files'], expected)
+        self.assertEqual(app.settings['last_session_current'], expected[1])
+        save.assert_called_once_with(app.settings)
