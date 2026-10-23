@@ -325,6 +325,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("<", "(< a b ...), also > <= >= - true when each value is in order with the next"),
         ("not", "(not x) - #t if x is #f or (), else #f"),
         ("abs", "(abs x) - absolute value"),
+        ("funcall", "(funcall f a b ...) - call f with the arguments, like (f a b ...); Common Lisp's way to call #'f"),
+        ("1+", "(1+ x) - x plus one; (1- x) is x minus one, as in Common Lisp"),
         ("min", "(min a b ...) - smallest"),
         ("max", "(max a b ...) - largest"),
         ("round", "(round x) - nearest whole number; a half goes to the even one, (round 2.5) is 2"),
@@ -1559,6 +1561,9 @@ def standard_env() -> Env:
         'conjugate':         lambda x: x.conjugate() if type(x) is complex else x,
         'expt': _expt,
         'abs': abs,
+        '1+': lambda x: x + 1,
+        'funcall': lambda f, *args: f(*args),
+        '1-': lambda x: x - 1,
         'min': lambda first, *rest: min(first, *rest) if rest else first,
         'max': lambda first, *rest: max(first, *rest) if rest else first,
         'round': round,
@@ -1830,6 +1835,9 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
     if head in ('when', 'unless') and len(x) >= 2 and head not in library_system.macros(head):
         test = x[1] if head == 'when' else ['not', x[1]]
         return expand(['if', test, ['begin'] + list(x[2:]) if len(x) > 2 else [], []], toplevel)
+    if head == 'function' and len(x) == 2 and 'function' not in library_system.macros('function'):
+        # Common Lisp's #'f is just f, since Lispy has one namespace for functions and values
+        return expand(x[1], toplevel)
     if head == 'progn':
         return expand(['begin'] + list(x[1:]), toplevel)
     if head == 'setq':
@@ -2313,7 +2321,7 @@ TOKEN_RE = re.compile(
     + '|' + STRING_PATTERN
     + r'|;[^\n]*'                         # comment
     + r'|,@'                              # unquote-splicing
-    + r"|['`,]"                           # quote, quasiquote, unquote
+    + r"|#'|['`,]"                        # function quote, quote, quasiquote, unquote
     + r'|[\[\](){}]'                      # brackets
     + r'|[^\s()\[\]{}"\'`,;]+'            # symbols and numbers
 )
@@ -2410,6 +2418,8 @@ def read_from_tokens(tokens: list[str]) -> Exp:
         raise SyntaxError(message)
     elif token == "'":
         return ['quote', read_from_tokens(tokens)]
+    elif token == "#'":
+        return ['function', read_from_tokens(tokens)]
     elif token == '`':
         return ['quasiquote', read_from_tokens(tokens)]
     elif token == ',':

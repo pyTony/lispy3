@@ -31,6 +31,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(set! name value)` | change an existing variable |
 | `(time exp)` | run `exp`, print how long it took in seconds, give its value |
 | `(lambda [a b] body)` | a function; one body expression |
+| `#'f` `(funcall f a b)` | Common Lisp spellings: `#'f` is just `f` (one namespace), `funcall` calls it |
 | `(defun f (a &optional (b 10) &rest more &key x (y 2)) ...)` | Common Lisp parameters: `&optional` may be left out (default, or `()`), `&rest` collects the rest, `&key` is passed as `:y 5`; `(b 10 b-given)` tells whether `b` was passed |
 | `(if test then else)` | choose; else is required |
 | `(when test body...)` `(unless test body...)` | run body when test is true (`unless`: false), else `()` |
@@ -81,6 +82,7 @@ Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help '
 | `(= a b ...)` | equal: numbers, strings, symbols, characters |
 | `(< a b ...)` `(> a b ...)` `(<= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |
 | `(not x)` | true when `x` is `#f` or `()` |
+| `(1+ x)` `(1- x)` | `x` plus one, minus one |
 | `(abs x)` `(round x)` | absolute value, nearest whole number (a half goes to the even one: `(round 2.5)` is `2`) |
 | `(floor x)` `(ceil x)` `(trunc x)` | round down (like BASIC `INT`: `(floor -2.5)` is `-3`), round up, round toward zero (`(trunc -2.7)` is `-2`) |
 | `(min a b ...)` `(max a b ...)` | smallest, largest |

@@ -106,6 +106,17 @@ class DefunTest(LispyTestCase):
             self.ev('(let ((key :happy) (val t)) (hello "me" key val))')
         self.assertEqual(out.getvalue(), "hello me hello me :)\n")
 
+    def test_function_quote_funcall_and_one_plus(self):
+        """The Cookbook's mean with #'+ and 1+; #'f reads as (function f), which is f."""
+        self.ev("(defun mean (x &rest numbers) (/ (apply #'+ x numbers) (1+ (length numbers))))")
+        self.assertEqual(self.ev("(mean 1)"), 1)
+        self.assertEqual(self.show("(mean 1 2)"), "3/2")
+        self.assertEqual(self.ev("(mean 1 2 3 4 5)"), 3)
+        self.assertEqual(self.show("(map #'(lambda (x) (* x x)) '(1 2 3))"), "(1 4 9)")
+        self.assertEqual(self.ev("(funcall #'+ 1 2)"), 3)
+        self.assertEqual(self.ev("(1- 5)"), 4)
+        self.assertEqual(self.show("'(#'car)"), "((function car))")
+
     def test_when_and_unless(self):
         """when and unless run their body for a true or false test, else give ()."""
         self.assertEqual(self.ev("(when (> 2 1) 'a 'b)"), "b")
