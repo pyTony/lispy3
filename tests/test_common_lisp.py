@@ -94,6 +94,43 @@ class DefunTest(LispyTestCase):
         self.ev("(defun both (a &rest more &key (x 0)) (list a more x))")
         self.assertEqual(self.show("(both 1 :x 9)"), "(1 (:x 9) 9)")
 
+    def test_cookbook_key_examples(self):
+        """The CL Cookbook's hello with &key: a () body, keys from variables, when and ~&."""
+        self.ev("(defun hello (name &key happy lisper cookbook-contributor-p) ())")
+        self.assertEqual(self.ev('(hello "me" :cookbook-contributor-p t :happy t)'), [])
+        self.ev('(defun hello (name &key happy) "If happy is t, print a smiley" '
+                '(format t "hello ~a " name) (when happy (format t ":)~&")))')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.ev('(hello "me")')
+            self.ev('(let ((key :happy) (val t)) (hello "me" key val))')
+        self.assertEqual(out.getvalue(), "hello me hello me :)\n")
+
+    def test_function_quote_funcall_and_one_plus(self):
+        """The Cookbook's mean with #'+ and 1+; #'f reads as (function f), which is f."""
+        self.ev("(defun mean (x &rest numbers) (/ (apply #'+ x numbers) (1+ (length numbers))))")
+        self.assertEqual(self.ev("(mean 1)"), 1)
+        self.assertEqual(self.show("(mean 1 2)"), "3/2")
+        self.assertEqual(self.ev("(mean 1 2 3 4 5)"), 3)
+        self.assertEqual(self.show("(map #'(lambda (x) (* x x)) '(1 2 3))"), "(1 4 9)")
+        self.assertEqual(self.ev("(funcall #'+ 1 2)"), 3)
+        self.assertEqual(self.ev("(1- 5)"), 4)
+        self.assertEqual(self.show("'(#'car)"), "((function car))")
+
+    def test_when_and_unless(self):
+        """when and unless run their body for a true or false test, else give ()."""
+        self.assertEqual(self.ev("(when (> 2 1) 'a 'b)"), "b")
+        self.assertEqual(self.ev("(when (< 2 1) 'a)"), [])
+        self.assertEqual(self.ev("(unless (< 2 1) 'a)"), "a")
+        self.assertEqual(self.ev("(unless (> 2 1) 'a)"), [])
+
+    def test_empty_list_evaluates_to_itself(self):
+        self.assertEqual(self.ev("()"), [])
+
+    def test_format_fresh_line(self):
+        """~& starts a new line only when the text so far does not end one."""
+        self.assertEqual(self.ev('(format nil "a~&b~%~&c")'), lispy3.String("a\nb\nc"))
+
     def test_optional_in_macros(self):
         """define-macro takes the same lambda list."""
         self.ev("(define-macro (pair-up a &optional (b 7)) `(list ,a ,b))")
