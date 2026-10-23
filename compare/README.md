@@ -90,6 +90,13 @@ the `bbc-` functions in `sbcl/mini-basic.lisp` and `clojure/mini_basic.clj`,
 and run `sbcl` or `clojure` with them (`run-program`). Only lispy3 memoizes a
 pure `DEF FN`.
 
+The SBCL and Clojure ports have the statements above plus BBC BASIC for SDL
+numbers (`%1010`, `<<`, `>>`, `>>>`, `PRINT ~`, `STR$~`, `A%`/`A%%`/`A&`/`A#`),
+`TIME`, `DATA`/`READ`/`RESTORE` and `DIM` arrays; the golden examples
+`basic/examples/numbers.bas` and `data.bas` check them. GOTO, GOSUB and ON,
+`RESTORE` to a label, terminal control (CLS, COLOUR, VDU, ANSI), file I/O and
+graphics are lispy3 only.
+
 The Lisp-form programs in `programs/` run directly:
 
 ```sh

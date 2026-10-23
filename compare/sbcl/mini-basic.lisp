@@ -15,17 +15,19 @@
 
 (defpackage :mini-basic
   (:use :cl)
-  (:shadow #:print #:if #:let #:case)
+  (:shadow #:print #:if #:let #:case #:aref #:read)
   (:export #:bbc-program #:let #:print #:if #:for #:repeat #:while #:case
            #:def-proc #:def-fn #:proc #:fn #:fn= #:local #:endproc #:end
            #:exit-for #:exit-repeat #:exit-while #:true #:false
+           #:dim #:aref #:aset! #:data #:read #:restore
            ;; What the BBC BASIC text reader writes for operators and functions
            #:bbc= #:bbc< #:bbc> #:bbc<= #:bbc>= #:bbc-eq? #:bbc-if
            #:bbc-quotient #:bbc-remainder #:bbc-trunc #:bbc-float #:bbc-expt
            #:bbc-abs #:bbc-floor #:bbc-sqrt #:bbc-sin #:bbc-cos #:bbc-tan #:bbc-atan
            #:bbc-log #:bbc-log10 #:bbc-exp #:bbc-pi #:bbc-length #:bbc-string-append
            #:bbc-and #:bbc-or #:bbc-eor #:bbc-not #:bbc-sgn #:bbc-val #:bbc-str
-           #:bbc-asc #:bbc-chr #:bbc-left #:bbc-right #:bbc-mid #:bbc-instr))
+           #:bbc-asc #:bbc-chr #:bbc-left #:bbc-right #:bbc-mid #:bbc-instr
+           #:bbc-shl #:bbc-shr #:bbc-lsr #:bbc-hex #:bbc-time-read #:bbc-time-set!))
 
 (defpackage :mini-basic.impl
   (:use :cl))
@@ -47,6 +49,17 @@
 
 (defun bbc-int (x)
   (values (truncate x)))
+
+;; Typed variables: A% 32-bit, A%% 64-bit, A& a byte, A# a float
+(defun bbc-in-range (x bits)
+  (cl:let ((n (bbc-int x)))
+    (cl:if (<= (- (expt 2 (1- bits))) n (1- (expt 2 (1- bits))))
+        n
+        (error "Number too big"))))
+
+(defun bbc-int32 (x) (bbc-in-range x 32))
+(defun bbc-int64 (x) (bbc-in-range x 64))
+(defun bbc-byte (x) (ldb (byte 8 0) (bbc-int x)))
 
 (defun bbc-equal (a b)
   (cl:if (and (numberp a) (numberp b)) (= a b) (equal a b)))
@@ -160,6 +173,53 @@
   (cl:let ((pos (search target s :start2 (cl:if start (max 0 (min (length s) (- (truncate start) 1))) 0))))
     (cl:if pos (1+ pos) 0)))
 
+;;; --- Shifts and hex, as in BBC BASIC for SDL ---
+
+(defun bbc-width (n)
+  ;; 32 bits for a number that fits them, signed or not, else 64
+  (cl:if (<= (- (expt 2 31)) n (1- (expt 2 32))) 32 64))
+
+(defun mini-basic:bbc-shl (a b) (ash (bbc-int a) (bbc-int b)))
+(defun mini-basic:bbc-shr (a b) (ash (bbc-int a) (- (bbc-int b))))
+(defun mini-basic:bbc-lsr (a b)
+  (cl:let ((n (bbc-int a)))
+    (ash (ldb (byte (bbc-width n) 0) n) (- (bbc-int b)))))
+
+(defun mini-basic:bbc-hex (x)
+  ;; Upper-case hex, a negative number in 32 (or 64) bits
+  (cl:let ((n (bbc-int x)))
+    (format nil "~X" (cl:if (< n 0) (ldb (byte (bbc-width n) 0) n) n))))
+
+(defun bbc-print-hex (x justify)
+  (cl:let ((text (mini-basic:bbc-hex x)))
+    (bbc-write (cl:if (and justify (< (length text) *zone-width*))
+                      (format nil "~v@a" *zone-width* text)
+                      text))))
+
+;;; --- TIME, in centiseconds since the program started or TIME was set ---
+
+(defvar *time-base* (get-internal-real-time))
+
+(defun mini-basic:bbc-time-read ()
+  (values (floor (* 100 (- (get-internal-real-time) *time-base*))
+                 internal-time-units-per-second)))
+
+(defun mini-basic:bbc-time-set! (value)
+  (setf *time-base* (- (get-internal-real-time)
+                       (floor (* (bbc-int value) internal-time-units-per-second) 100))))
+
+;;; --- DATA, READ, RESTORE and arrays ---
+
+(defvar *data* #())
+(defvar *data-ptr* 0)
+
+(defun bbc-read-datum ()
+  (when (>= *data-ptr* (length *data*)) (error "Out of DATA"))
+  (prog1 (svref *data* *data-ptr*) (incf *data-ptr*)))
+
+(defun bbc-make-array (dims fill)
+  (make-array (mapcar (lambda (d) (1+ (bbc-int d))) dims) :initial-element fill))
+
 ;;; --- Helpers the macros use while they expand ---
 
 (defun marker-p (x name)
@@ -180,6 +240,15 @@
   (cl:let ((s (symbol-name var)))
     (and (> (length s) 0) (char= (char s (1- (length s))) ch))))
 
+(defun name-suffix-p (var suffix)
+  (cl:let ((s (symbol-name var)))
+    (and (> (length s) (length suffix))
+         (string= suffix s :start2 (- (length s) (length suffix))))))
+
+(defun lhs-var (target)
+  ;; The variable of a READ target: var or (AREF var i ...)
+  (cl:if (form-p target "AREF") (second target) target))
+
 (defun bbc-default (var)
   (cl:if (suffix-p var #\$) "" 0))
 
@@ -198,12 +267,28 @@
 
 (defun assigned-vars (stmts)
   ;; Every variable the statements give a value to
-  (collect-forms '("LET" "FOR" "LOCAL" "DEF-PROC" "DEF-FN")
+  (collect-forms '("LET" "FOR" "LOCAL" "DEF-PROC" "DEF-FN" "READ" "DIM" "ASET!")
                  (lambda (form)
-                   (cond ((or (form-p form "LET") (form-p form "FOR")) (list (second form)))
+                   (cond ((or (form-p form "LET") (form-p form "FOR") (form-p form "ASET!"))
+                          (list (second form)))
                          ((form-p form "LOCAL") (cdr form))
+                         ((form-p form "READ") (mapcar #'lhs-var (cdr form)))
+                         ((form-p form "DIM") (mapcar #'car (cdr form)))
                          (t (cdr (second form)))))
                  stmts))
+
+(defun data-items (stmts)
+  ;; The items of every DATA statement, in program order
+  (cl:let ((items '()))
+    (labels ((walk (x)
+               (when (and (consp x) (not (eq (car x) 'quote)))
+                 (cl:if (form-p x "DATA")
+                     (dolist (item (cdr x)) (push item items))
+                     (loop for rest on x
+                           while (consp rest)
+                           do (walk (car rest)))))))
+      (walk stmts))
+    (nreverse items)))
 
 (defun def-p (form)
   (or (form-p form "DEF-PROC") (form-p form "DEF-FN")))
@@ -223,10 +308,16 @@
 
 ;;; --- Statements ---
 
+(defun typed-value (var exp)
+  ;; A% 32-bit, A%% 64-bit, A& a byte, A# a float
+  (cond ((name-suffix-p var "%%") `(bbc-int64 ,exp))
+        ((name-suffix-p var "%") `(bbc-int32 ,exp))
+        ((name-suffix-p var "&") `(bbc-byte ,exp))
+        ((name-suffix-p var "#") `(float ,exp 1d0))
+        (t exp)))
+
 (defmacro mini-basic:let (var exp)
-  (cl:if (suffix-p var #\%)
-      `(setf ,var (bbc-int ,exp))
-      `(setf ,var ,exp)))
+  `(setf ,var ,(typed-value var exp)))
 
 (defun print-code (items justify)
   ;; :semi stops right-justifying numbers, :comma starts it again
@@ -247,6 +338,8 @@
                      (print-code more justify)))
               ((form-p item "SPC")
                (cons `(bbc-spaces ,(second item)) (print-code more justify)))
+              ((form-p item "HEX")
+               (cons `(bbc-print-hex ,(second item) ,justify) (print-code more justify)))
               (t
                (cons `(bbc-print-value ,item ,justify) (print-code more justify)))))))
 
@@ -328,6 +421,38 @@
 (defmacro mini-basic:def-proc (head &rest body) (def-code "PROC" head body))
 (defmacro mini-basic:def-fn (head &rest body) (def-code "FN" head body))
 
+(defmacro mini-basic:dim (&rest specs)
+  `(progn ,@(mapcar (lambda (spec)
+                      `(setf ,(car spec) (bbc-make-array (list ,@(cdr spec)) ,(bbc-default (car spec)))))
+                    specs)))
+
+(defmacro mini-basic:aref (var &rest indices)
+  `(cl:aref ,var ,@(mapcar (lambda (i) `(bbc-int ,i)) indices)))
+
+(defmacro mini-basic:aset! (var val &rest indices)
+  `(setf (cl:aref ,var ,@(mapcar (lambda (i) `(bbc-int ,i)) indices)) ,(typed-value var val)))
+
+(defmacro mini-basic:data (&rest items)
+  (declare (ignore items))
+  nil)
+
+(defmacro mini-basic:read (&rest targets)
+  `(progn
+     ,@(mapcar (lambda (target)
+                 (cl:let* ((var (lhs-var target))
+                           (datum (cl:if (suffix-p var #\$)
+                                         '(princ-to-string (bbc-read-datum))
+                                         '(cl:let ((d (bbc-read-datum)))
+                                            (cl:if (stringp d) (mini-basic:bbc-val d) d)))))
+                   (cl:if (form-p target "AREF")
+                       `(mini-basic:aset! ,var ,datum ,@(cddr target))
+                       `(mini-basic:let ,var ,datum))))
+               targets)))
+
+(defmacro mini-basic:restore (&rest target)
+  (when target (error "RESTORE to a label is lispy3 only"))
+  '(setf *data-ptr* 0))
+
 ;;; --- A whole program ---
 
 (defmacro mini-basic:bbc-program (&rest stmts)
@@ -337,6 +462,8 @@
     `(progn
        ,@(mapcar (lambda (v) `(defparameter ,v ,(bbc-default v))) vars)
        ,@(remove-if-not #'def-p stmts)
-       (setf *col* 0)
+       (setf *col* 0
+             *data* (vector ,@(data-items stmts))
+             *data-ptr* 0)
        (catch 'end ,@(remove-if #'def-p stmts))
        nil)))
