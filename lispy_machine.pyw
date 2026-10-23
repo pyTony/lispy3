@@ -1785,6 +1785,7 @@ class LispMachine(tk.Tk):
         bar.add_cascade(label='Workspace', menu=workspace_m)
 
         view_m = tk.Menu(bar, tearoff=0)
+        view_m.add_command(label='Lisp programs directory…', command=self._choose_lisp_directory)
         view_m.add_command(label='Startup Settings…', command=self._open_startup_settings)
         view_m.add_command(label="Reload lsystems",     command=lambda: self._run_silent('(load "lsystems")'))
         view_m.add_command(label="Show global env",     command=self._show_env)
@@ -2163,11 +2164,22 @@ class LispMachine(tk.Tk):
         self._refresh_buffer_list()
 
     def _file_dialog_dir(self, tab=None):
-        """Where Open and Save as start: the buffer's own folder, else lisp/."""
+        """Save as keeps the source folder; new browsing uses the Lisp preference."""
         if tab is not None and buffer_source_path(tab):
             return os.path.dirname(buffer_source_path(tab))
-        os.makedirs(L.LISP_DIR, exist_ok=True)
-        return L.LISP_DIR
+        preferred = self.settings.get('lisp_programs_directory')
+        if preferred and os.path.isdir(preferred):
+            return preferred
+        directory = os.path.join(L.LISP_DIR, 'programs')
+        os.makedirs(directory, exist_ok=True)
+        return directory
+
+    def _choose_lisp_directory(self):
+        path = filedialog.askdirectory(parent=self, title='Lisp programs directory',
+                                       initialdir=self._file_dialog_dir())
+        if path:
+            self.settings['lisp_programs_directory'] = path
+            save_settings(self.settings)
 
     def open_file(self):
         path = filedialog.askopenfilename(
