@@ -1,9 +1,18 @@
 """mini_basic string-case compatibility extensions used by ELIZA/BETH."""
 from unittest.mock import patch
 from test_mini_basic_reader import ReaderTestCase
+from support import lispy3 as L
 
 
 class CaseFunctionTest(ReaderTestCase):
+    def setUp(self):
+        # Plain LOAD installs macros as well as variables. Keep these new tests
+        # from leaking those definitions into later selective-import tests.
+        workspace = L.workspaces.create('case-function regression')
+        self.addCleanup(L.workspaces.discard, workspace)
+        self.enterContext(L.workspaces.use(workspace))
+        super().setUp()
+
     def test_upper_and_lower_strings(self):
         self.assertEqual(self.run_bbc('PRINT UCASE$("My LLM always makes mistakes"):PRINT LCASE$("ABC xyz 123!")'),
                          'MY LLM ALWAYS MAKES MISTAKES\nabc xyz 123!\n')
