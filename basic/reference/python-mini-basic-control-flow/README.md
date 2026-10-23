@@ -58,7 +58,7 @@ All four stored-program cases completed without errors, crashes or timeouts.
 retain the whitespace differences; the runner does not normalise them away.
 
 ```powershell
-python compare/reference/run_bbcsdl_checks.py --output compare/reference/runs/new-python-check --exported-menu compare/reference/python-mini-basic-control-flow/representative-menu.bbc
+python basic/reference/run_bbcsdl_checks.py --output basic/reference/runs/new-python-check --exported-menu basic/reference/python-mini-basic-control-flow/representative-menu.bbc
 ```
 
 This checks four representative stored programs, not all 18 examples or every
@@ -70,7 +70,7 @@ unclosed-IF regression, without establishing blanket dialect compatibility.
 From the lispy3 repository root, use a new export directory:
 
 ```powershell
-python compare/reference/export_python_mini_basic.py --repo C:\Users\admin\mini_basic --output compare/reference/python-mini-basic-new test/test_control_flow.py::TestExitLeavesUnclosedIfBlock test/test_control_flow.py::TestControlExitCorners test/test_control_flow.py::TestControlExitHierarchy test/test_control_flow.py::TestNestedForMatching
+python basic/reference/export_python_mini_basic.py --repo C:\Users\admin\mini_basic --output basic/reference/python-mini-basic-new test/test_control_flow.py::TestExitLeavesUnclosedIfBlock test/test_control_flow.py::TestControlExitCorners test/test_control_flow.py::TestControlExitHierarchy test/test_control_flow.py::TestNestedForMatching
 ```
 
 The exporter accepts other test paths/node IDs. Select bounded, non-graphics
