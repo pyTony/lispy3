@@ -98,15 +98,34 @@
       '(bbc-restore!)
       `(bbc-restore! ,(car target))))
 
+(define-macro (INPUT prompt question line-mode & targets)
+  (let [values (gensym "input")
+        kinds (map (lambda (target)
+                     (let [var (bbc-lhs-var target)]
+                       (cond ((bbc-suffix? var #\$) :str)
+                             ((bbc-suffix? var #\%) :int)
+                             (else :num)))) targets)]
+    `(begin
+       (bbc-write ,prompt)
+       (let ((,values (basic-input-values ',kinds read-line ,line-mode ,question)))
+         (set! bbc-col 0)
+         ,@(map (lambda (target index)
+                  (let [var (bbc-lhs-var target)
+                        value `(nth ,values ,index)]
+                    (if (and (pair? target) (eq? (car target) 'AREF))
+                        `(ASET! ,var ,value ,@(cdr (cdr target)))
+                        `(LET ,var ,value)))) targets (range (length targets)))))))
+
 ;;; --- Program-level variable, label, and DATA collection ---
 
 (define (bbc-assigned-vars stmts)
   ;; Every variable the statements give a value to (including READ, DIM, ASET!)
-  (bbc-collect '(LET FOR LOCAL READ DIM ASET! DEF-PROC DEF-FN)
+  (bbc-collect '(LET FOR LOCAL READ INPUT DIM ASET! DEF-PROC DEF-FN)
                (lambda (form)
                  (cond ((member (car form) '(LET FOR ASET!)) (list (bbc-second form)))
                        ((eq? (car form) 'LOCAL) (cdr form))
                        ((eq? (car form) 'READ) (map bbc-lhs-var (cdr form)))
+                       ((eq? (car form) 'INPUT) (map bbc-lhs-var (cdr (cdr (cdr (cdr form))))))
                        ((eq? (car form) 'DIM) (map car (cdr form)))
                        (else (cdr (bbc-second form)))))
                stmts '()))
@@ -466,6 +485,24 @@
       (bbc-push! targets (car (bbc-p-target))))
     (cons 'READ targets)))
 
+(define (bbc-p-input)
+  (let [line-mode (bbc-accept! :id "LINE")
+        prompt ""
+        question #t
+        targets (list)]
+    (if (bbc-at? :str #f)
+        (begin
+          (set! prompt (nth (bbc-advance!) 1))
+          (set! question (or (bbc-accept! :op ",") (bbc-accept! :op ";")))))
+    (define (target)
+      (let [info (bbc-p-target)]
+        (if (and line-mode (not (bbc-string-name? (nth info 1))))
+            (bbc-fail "INPUT LINE requires a string variable"))
+        (car info)))
+    (bbc-push! targets (target))
+    (while (bbc-accept! :op ",") (bbc-push! targets (target)))
+    (append (list 'INPUT prompt question line-mode) targets)))
+
 (define (bbc-p-block terminators fn-body)
   ;; Statements up to a keyword in terminators; a (LABEL ...) may be followed
   ;; directly by any statement on the same line without needing a colon.
@@ -520,6 +557,7 @@
           ((not (eq? kind :kw)) #f)
           ((equal? value "DATA") (bbc-advance!) (bbc-p-data))
           ((equal? value "READ") (bbc-advance!) (bbc-p-read))
+          ((equal? value "INPUT") (bbc-advance!) (bbc-p-input))
           ((equal? value "RESTORE") (bbc-advance!) (bbc-p-restore))
           ((equal? value "DIM") (bbc-advance!) (bbc-p-dim))
           ((equal? value "GOTO") (bbc-advance!) (bbc-p-goto))

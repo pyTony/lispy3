@@ -21,6 +21,20 @@ class BasicReplTest(LispyTestCase):
         self.assertEqual(self.submit('n=7', 'PRINT ;n'), '7\n')
         self.assertNotIn('n', L.global_env)
 
+    def test_run_uses_current_buffer_until_cli_program_is_edited(self):
+        current = ['PRINT "buffer"']
+        self.repl.get_current_source = lambda: current[0]
+        self.assertEqual(self.submit('RUN'), 'buffer\n')
+        current[0] = 'PRINT "edited"'
+        self.assertEqual(self.submit('RUN'), 'edited\n')
+        self.submit('10 PRINT "stored"')
+        current[0] = ''
+        self.assertEqual(self.submit('RUN'), 'stored\n')
+
+    def test_cli_rem_program_does_not_run_unrelated_editor_code(self):
+        self.repl.get_current_source=lambda: '@ unrelated editor text'
+        self.assertEqual(self.submit('10 REMMM THIS IS COMMENT','RUN'), '')
+
     def test_default_directory_and_relative_load_save(self):
         from basic_repl import BasicRepl
         self.assertEqual(self.repl.directory, Path(__file__).resolve().parents[1]/'basic')
@@ -44,6 +58,14 @@ class BasicReplTest(LispyTestCase):
         with self.assertRaisesRegex(Exception, 'Undefined symbol'):
             self.submit('RUN')
         self.assertEqual(self.submit('LIST'), '10 PRINT ;n\n')
+
+    def test_buffer_run_starts_fresh_each_time(self):
+        self.repl.get_current_source = lambda: 'PRINT ;n'
+        self.submit('n=9')
+        for unused in range(2):
+            with self.assertRaisesRegex(Exception, 'Undefined symbol'):
+                self.submit('RUN')
+            self.submit('n=7')
 
     def test_new_clears_program_and_runtime(self):
         self.submit('10 PRINT 1', 'n=9', 'NEW')

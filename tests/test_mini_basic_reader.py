@@ -171,3 +171,12 @@ class FunctionTerminatorDiagnosticTest(ReaderTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class RemPrefixTest(ReaderTestCase):
+    def test_rem_without_space_discards_rest_of_line(self):
+        self.assertEqual(self.run_bbc('10 REMM THIS IS COMMENT "unfinished\n20 PRINT "ok"'), 'ok\n')
+        self.assertEqual(self.run_bbc('PRINT "REMM":REMcomment "unfinished\nPRINT "after"'), 'REMM\nafter\n')
+
+    def test_embedded_rem_does_not_change_variable_names(self):
+        self.assertEqual(self.run_bbc('PREM=7:PRINT ;PREM'), '7\n')

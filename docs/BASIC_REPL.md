@@ -26,7 +26,7 @@ RUN
 | `LIST` | Show the stored program in numeric order |
 | `RUN` | Reset BASIC runtime state and execute the stored program |
 | `NEW` | Clear the program and reset BASIC runtime state |
-| `LOAD "file.bas"` | Replace the stored program with text from a file; do not run it |
+| `LOAD "file.bas"` | Read the program and open/select its editor buffer; do not run it |
 | `SAVE "file.bas"` | Write the numbered stored program as UTF-8 text |
 | `HELP` | Show a short command reminder |
 
@@ -68,8 +68,8 @@ runtime failures leave partial BASIC state available for inspection.
 
 The Listener captures text without interpreting ANSI controls. F6/Shift+F6 set
 the shared output destination as before; BASIC REPL execution respects it. Use
-ANSI terminal output for colour/cursor commands. LIST/HELP output is captured
-with program output; the BASIC prompt remains in the Listener.
+ANSI terminal output for colour/cursor commands. LIST/HELP output stays
+in the Listener regardless of the program output destination; the BASIC prompt also remains there.
 
 ## Standalone terminal
 
@@ -80,3 +80,14 @@ python basic_repl.py
 The same program-editing and runtime commands work; `QUIT` exits. Tab completion
 is enabled when Python readline is available. Standalone LOAD handles text;
 tokenised LOAD currently requires Lispy Machine's configured decoder.
+
+LOAD opens normal text as a saved editor buffer and tokenised input as an
+editable .bas copy. An existing clean buffer is refreshed; dirty edits are kept
+and a notice explains that LOAD read the disk version. GUI RUN uses the current
+editor buffer (including unsaved edits); standalone RUN uses the stored program.
+NEW clears the session program/state and leaves editor buffers intact.
+
+File shortcuts Ctrl+O/S/N/W/Q and Ctrl+Shift+S work with Caps Lock on or off.
+
+Ctrl+L clears the GUI REPL output while preserving the live prompt and pending
+input. It works in Lisp/BASIC REPL and the Listener entry, including Caps Lock.

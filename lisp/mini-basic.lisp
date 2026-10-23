@@ -615,7 +615,7 @@
            (let [j (scan-while i bbc-name-char?)]
              (set! j (bbc-name-end text i j (char-at j) (char-at (+ j 1))))
              (let [name (substring text i j)]
-               (cond ((equal? name "REM")
+               (cond ((and (>= (length name) 3) (equal? (substring name 0 3) "REM"))
                       (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
                      ((member name bbc-keywords) (emit :kw name))
                      ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
