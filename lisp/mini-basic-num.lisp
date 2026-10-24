@@ -52,7 +52,7 @@
         ((and (eq? c #\%) (eq? next #\%)) (+ j 2))
         ((eq? c #\%) (+ j 1))
         ((and (member c (list #\& #\#))
-              (not (member (substring text start j) bbc-keywords)))
+              (not (member (bbc-normalize-name (substring text start j)) bbc-keywords)))
          (+ j 1))
         (else j)))
 

@@ -95,8 +95,8 @@ input. It works in Lisp/BASIC REPL and the Listener entry, including Caps Lock.
 ## Number printing compatibility
 
 Use `python -m lispy_support.basic_repl --print-style mbasic` for Microsoft-style
-spaces around numeric PRINT values, or `--print-style bbc` for the default.
+spaces around numeric PRINT values and case-insensitive names/keywords, or `--print-style bbc` for the default.
 The choice survives NEW/RUN workspace resets. In Lispy Machine, select
-**Eval → BASIC Settings… → Lispy BASIC number printing**; the choice is saved
-and applies to the next Listener or ANSI run. See [numeric PRINT spacing](MINI_BASIC.md#optional-mbasic-numeric-print-spacing)
+**Eval → BASIC Settings… → Lispy BASIC compatibility**; the choice is saved
+and applies to the next Listener or ANSI run. See [MBASIC compatibility](MINI_BASIC.md#optional-mbasic-compatibility)
 for exact scope and examples.

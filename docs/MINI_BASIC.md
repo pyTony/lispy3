@@ -16,9 +16,9 @@ mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.
 
-## Optional MBASIC numeric PRINT spacing
+## Optional MBASIC compatibility
 
-Choose **Eval → BASIC Settings… → Lispy BASIC number printing → MBASIC**.
+Choose **Eval → BASIC Settings… → Lispy BASIC compatibility → MBASIC**.
 The saved preference applies to subsequent Lispy BASIC buffer and REPL runs,
 including output sent to the ANSI terminal. **BBC** is the default and restores
 the existing right-justification/semicolon behavior.
@@ -45,11 +45,18 @@ The standalone BASIC REPL accepts:
 python -m lispy_support.basic_repl --print-style mbasic
 ```
 
-This setting changes decimal numeric PRINT padding only. Strings, `STR$`,
+The same MBASIC option also makes keywords, variable names, array names and
+PROC/FN names case-insensitive: `A=1:print a` prints ` 1 `. Quoted strings,
+comments and unquoted DATA values retain their spelling. Selecting BBC restores
+case-sensitive syntax. Change the option before loading/running definitions;
+previously defined names are not renamed retroactively.
+
+This is a limited compatibility option, not a complete MBASIC dialect.
+Strings, `STR$`,
 explicit hexadecimal/USING formatting and existing comma-zone widths retain
 their current behavior. Cursor tracking includes the added spaces, so TAB/SPC
-still use the actual output column. It does not change BASIC parsing, RND or
-other dialect semantics, or configure the external Python/native BBC backends.
+still use the actual output column. It does not change RND or other dialect
+semantics, or configure the external Python/native BBC backends.
 
 ## Random numbers
 

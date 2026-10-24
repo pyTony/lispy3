@@ -383,7 +383,9 @@
            (nth tok 1)))
         ((bbc-at? :num #f) (nth (bbc-advance!) 1))
         ((bbc-at? :str #f) (nth (bbc-advance!) 1))
-        ((or (bbc-at? :id #f) (bbc-at? :kw #f)) (nth (bbc-advance!) 1))
+        ((or (bbc-at? :id #f) (bbc-at? :kw #f))
+         (let [tok (bbc-advance!)]
+           (nth tok (if (> (length tok) 3) 3 1))))
         (else "")))
 
 (define (bbc-p-data)

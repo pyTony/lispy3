@@ -178,7 +178,7 @@ def main(argv=None):
     import argparse
     import lispy3
     parser = argparse.ArgumentParser(description='Lispy mini-basic REPL')
-    parser.add_argument('--print-style', choices=('bbc', 'mbasic'), default='bbc', help='numeric PRINT spacing (default: bbc)')
+    parser.add_argument('--print-style', choices=('bbc', 'mbasic'), default='bbc', help='MBASIC: numeric PRINT spacing and case-insensitive names/keywords (default: bbc)')
     args = parser.parse_args(argv)
     session = BasicRepl(lispy3, print_style=args.print_style)
     setup_completion(session.directory)

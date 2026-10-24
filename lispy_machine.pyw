@@ -2760,14 +2760,14 @@ class LispMachine(tk.Tk):
         status = tk.StringVar(window, value='Settings are saved automatically.')
         numbers = ttk.Frame(frame)
         numbers.pack(fill='x', pady=(0,12))
-        ttk.Label(numbers, text='Lispy BASIC number printing').pack(side='left', padx=(0,8))
+        ttk.Label(numbers, text='Lispy BASIC compatibility').pack(side='left', padx=(0,8))
         number_style = tk.StringVar(window, value=self.settings.get('basic_number_printing', 'bbc').upper())
         choices = ttk.Combobox(numbers, textvariable=number_style, values=('BBC', 'MBASIC'), state='readonly', width=12)
         choices.pack(side='left')
         def change_number_style(event=None):
             style = number_style.get().lower()
             self._set_basic_number_printing(style)
-            status.set('Saved number printing: '+style.upper()+'. Applies to the next run.')
+            status.set('Saved BASIC compatibility: '+style.upper()+'. Applies to the next run.')
         choices.bind('<<ComboboxSelected>>', change_number_style)
 
 

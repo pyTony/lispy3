@@ -52,17 +52,17 @@ class NumberPrintingTest(ReaderTestCase):
         self.addCleanup(repl.close)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            repl.submit('10 PRINT "A";19;"B"')
+            repl.submit('10 a=19:print "A";A;"B"')
             repl.submit('RUN')
             repl.submit('NEW')
-            repl.submit('10 PRINT "A";19;"B"')
+            repl.submit('10 a=19:print "A";A;"B"')
             repl.submit('RUN')
         self.assertEqual(output.getvalue(), 'A 19 B\nA 19 B\n')
 
     def test_editor_basic_run_uses_saved_style(self):
         from test_machine_args import machine
         from test_machine_basic_buffer import _FakeMachine
-        app = _FakeMachine('PRINT "A";19;"B"')
+        app = _FakeMachine('a=19:print "A";A;"B"')
         app.tab.name = 'example.bas'
         app.settings = {'basic_number_printing': 'mbasic'}
         machine.LispMachine.eval_buffer(app)
@@ -72,7 +72,7 @@ class NumberPrintingTest(ReaderTestCase):
         from unittest.mock import Mock
         from test_machine_args import machine
         from test_machine_basic_buffer import _FakeMachine
-        app = _FakeMachine('PRINT "A";19;"B"')
+        app = _FakeMachine('a=19:print "A";A;"B"')
         app.settings = {'basic_number_printing': 'mbasic'}
         app.basic_output = Mock()
         app.basic_output.get.return_value = 'ansi'
@@ -99,7 +99,7 @@ class NumberPrintingTest(ReaderTestCase):
         import subprocess
         import sys
         from support import REPO_DIR
-        result = subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl', '--print-style', 'mbasic'], input='PRINT "A";19;"B"\nQUIT\n', cwd=REPO_DIR, capture_output=True, text=True, timeout=20)
+        result = subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl', '--print-style', 'mbasic'], input='a=19:print "A";A;"B"\nQUIT\n', cwd=REPO_DIR, capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('A 19 B\n', result.stdout)
 
@@ -119,3 +119,11 @@ class NumberPrintingTest(ReaderTestCase):
         self.mbasic()
         self.ev('(bbc-set-print-style! :bbc)')
         self.assertEqual(self.run_bbc('a=2:A=1:PRINT a;A'), '         21\n')
+
+    def test_mbasic_procedure_and_local_names(self):
+        self.mbasic()
+        self.assertEqual(self.run_bbc('procHello(3)\nend\ndef PROCheLLo(Value)\nlocal Tmp\ntMP=value+1\nprint tmp\nendproc'), ' 4 \n')
+
+    def test_mbasic_comments_and_lowercase_exponent(self):
+        self.mbasic()
+        self.assertEqual(self.run_bbc('remMixedCase @ ignored\nprint 1e2'), ' 100 \n')

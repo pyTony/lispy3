@@ -594,6 +594,10 @@
 
 (define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
 
+;; The shared MBASIC option folds syntax names, never string/DATA contents.
+(define (bbc-normalize-name name)
+  (if (eq? bbc-number-print-style :mbasic) (string-upcase name) name))
+
 (define (bbc-tokenize text)
   (let [toks (list)
         n (length text)
@@ -601,6 +605,10 @@
         line 1
         line-start #t]
     (define (emit kind value) (bbc-push! toks (list kind value line)))
+    (define (emit-name kind value raw)
+      (if (eq? bbc-number-print-style :mbasic)
+          (bbc-push! toks (list kind value line raw))
+          (emit kind value)))
     (define (char-at j) (if (< j n) (string-ref text j) #\nul))
     (define (digit-at? j) (let [d (char-at j)] (d/isdigit)))
     (define (scan-while j ok?) (while (and (< j n) (ok? (string-ref text j))) (set! j (+ j 1))) j)
@@ -633,7 +641,7 @@
              (set! i j)))
           ((or (c/isdigit) (and (eq? c #\.) (digit-at? (+ i 1))))
            (let [j (scan-while i (lambda (d) (or (d/isdigit) (eq? d #\.))))]
-             (if (and (eq? (char-at j) #\E)
+             (if (and (or (eq? (char-at j) #\E) (and (eq? bbc-number-print-style :mbasic) (eq? (char-at j) #\e)))
                       (or (digit-at? (+ j 1))
                           (and (member (char-at (+ j 1)) (list #\+ #\-)) (digit-at? (+ j 2)))))
                  (set! j (scan-while (+ j 2) (lambda (d) (d/isdigit)))))
@@ -653,15 +661,15 @@
           ((or (c/isalpha) (eq? c #\_))
            (let [j (scan-while i bbc-name-char?)]
              (set! j (bbc-name-end text i j (char-at j) (char-at (+ j 1))))
-             (let [name (substring text i j)]
+             (let [raw (substring text i j) name (bbc-normalize-name raw)]
                (cond ((and (>= (length name) 3) (equal? (substring name 0 3) "REM"))
                       (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
-                     ((member name bbc-keywords) (emit :kw name))
+                     ((member name bbc-keywords) (emit-name :kw name raw))
                      ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
-                      (emit :proc (substring name 4)))
+                      (emit-name :proc (substring name 4) raw))
                      ((and (> (length name) 2) (equal? (substring name 0 2) "FN"))
-                      (emit :fn (substring name 2)))
-                     (else (emit :id name))))
+                      (emit-name :fn (substring name 2) raw))
+                     (else (emit-name :id name raw))))
              (set! line-start #f)
              (set! i j)))
           ((eq? c #\:)
