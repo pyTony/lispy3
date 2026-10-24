@@ -321,3 +321,29 @@ class OnScrollTest(LispyTestCase):
         self.ev("(onscroll (lambda (x y step) step))")
         self.ev("(onscroll #f)")
         self.assertEqual(turtle_stub.canvas.bindings, {})
+
+    def test_window_close_during_redraw_is_quiet_and_releases_busy_flag(self):
+        calls = []
+        def redraw(*args):
+            calls.append(args)
+            if len(calls) == 1:
+                raise turtle_stub.Terminator()
+        lispy3.onscroll(redraw)
+        wheel = turtle_stub.canvas.bindings['<MouseWheel>']
+        event = types.SimpleNamespace(num='??', delta=120, x=5, y=20)
+        wheel(event)  # Normal window closure must not escape to Tk's callback reporter.
+        wheel(event)  # The finally path still releases the callback guard.
+        self.assertEqual(len(calls), 2)
+
+    def test_redraw_program_errors_are_not_hidden_and_release_busy_flag(self):
+        calls = []
+        def redraw(*args):
+            calls.append(args)
+            raise ValueError('redraw failed')
+        lispy3.onscroll(redraw)
+        wheel = turtle_stub.canvas.bindings['<MouseWheel>']
+        event = types.SimpleNamespace(num='??', delta=120, x=0, y=0)
+        for _ in range(2):
+            with self.assertRaisesRegex(ValueError, 'redraw failed'):
+                wheel(event)
+        self.assertEqual(len(calls), 2)
