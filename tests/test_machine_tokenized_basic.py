@@ -34,6 +34,32 @@ class TokenizedBasicTest(TestCase):
         patterns = machine.source_filetypes()[0][1]
         self.assertIn('*.bbc', patterns); self.assertIn('*.BBC', patterns)
 
+    def test_bbc_is_in_basic_filter_without_separate_tokenized_choice(self):
+        groups = dict(machine.source_filetypes())
+        self.assertIn('*.bbc', groups['BBC BASIC'])
+        self.assertIn('*.BBC', groups['BBC BASIC'])
+        self.assertNotIn('Tokenised BBC BASIC', groups)
+
+    def test_save_filters_exclude_tokenized_files(self):
+        for label, patterns in machine.source_filetypes(tokenized=False):
+            self.assertNotIn('*.bbc', patterns, label)
+            self.assertNotIn('*.BBC', patterns, label)
+
+    def test_save_rejection_explains_reserved_extension(self):
+        with patch.object(machine.messagebox, 'showerror') as error:
+            self.assertFalse(machine.LispMachine._save_tab_to_path(Mock(), Mock(), 'example.bBc'))
+        self.assertIn('.bbc is reserved for tokenized programs', error.call_args.args[1])
+        self.assertIn('.bas', error.call_args.args[1])
+
+    def test_open_through_regular_dialog_automatically_decodes_bbc(self):
+        app = Mock(tabs={}, settings={})
+        app._open_source_path.side_effect = lambda path: machine.LispMachine._open_source_path(app, path)
+        with patch.object(machine.filedialog, 'askopenfilename', return_value='example.BBC'), \
+                patch.object(BR, 'detokenize_bbc', return_value='10 END\n') as decode:
+            machine.LispMachine.open_file(app)
+        decode.assert_called_once()
+        app.new_buffer.assert_called_once_with('example.bas', '10 END\n', path=None)
+
     def test_command_line_input_uses_the_same_decoder(self):
         with patch.object(BR, 'detokenize_bbc', return_value='10 END\n'):
             self.assertEqual(machine.read_file_arg('cli.BBC'), ('cli.bas', '10 END\n', None))
