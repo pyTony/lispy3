@@ -1,5 +1,8 @@
 """Non-executing Lisp delimiter checks and conservative indentation helpers."""
 import re
+import ast
+import io
+import tokenize
 from lispy_support import syntax_highlight as SH
 
 _languages, _ = SH.load_languages()
@@ -278,6 +281,70 @@ def next_indent(text, basic=False):
     depth = sum((1 if c in '([{' else -1 if c in ')]}' else 0)
                 for i,c in enumerate(text) if not mask[i])
     return 2*max(0, depth)
+
+
+def indent_python(text, source_name='<buffer>', first_line=0, stop_line=None):
+    """Normalize valid Python block indentation; never guess missing structure."""
+    original = ast.parse(text, filename=source_name)
+    lines = text.splitlines(keepends=True)
+    protected, indents, levels = set(), {}, [0]
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type == tokenize.INDENT:
+            levels.append(len(token.string.expandtabs(8)))
+        elif token.type == tokenize.DEDENT:
+            levels.pop()
+        elif token.type == tokenize.STRING and token.end[0] > token.start[0]:
+            protected.update(range(token.start[0]+1, token.end[0]+1))
+        if token.type not in (tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER,
+                              tokenize.NEWLINE, tokenize.NL, tokenize.ENCODING):
+            row = token.start[0]
+            if row <= len(lines) and row not in indents:
+                line = lines[row-1]
+                width = len(line[:len(line)-len(line.lstrip(' \t'))].expandtabs(8))
+                level = len(levels)-1
+                while level and width < levels[level]:
+                    level -= 1
+                indents[row] = 4*level + max(0, width-levels[level])
+    stop = len(lines) if stop_line is None else stop_line
+    for index in range(first_line, min(stop, len(lines))):
+        row = index+1
+        if row in indents and row not in protected:
+            lines[index] = ' '*indents[row] + lines[index].lstrip(' \t')
+    result = ''.join(lines)
+    if ast.dump(ast.parse(result, filename=source_name)) != ast.dump(original):
+        raise SyntaxError('Python indentation would change program structure; reindent the whole buffer instead')
+    return result
+
+
+def next_python_indent(text):
+    """Indent Return after a Python suite header or inside open brackets."""
+    last = text.split('\n')[-1]
+    current = len(last[:len(last)-len(last.lstrip(' \t'))].expandtabs(8))
+    tokens, brackets = [], []
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(text).readline):
+            if token.type == tokenize.OP:
+                if token.string in '([{':
+                    brackets.append(token)
+                elif token.string in ')]}' and brackets:
+                    brackets.pop()
+            if token.type not in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE,
+                                  tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER):
+                tokens.append(token)
+    except tokenize.TokenError as error:
+        if 'multi-line string' in str(error):
+            return current
+    except IndentationError:
+        pass  # The prefix at the caret is normally an incomplete program.
+    if brackets:
+        opener = brackets[-1]
+        line = text.split('\n')[opener.start[0]-1]
+        rest = line[opener.end[1]:].strip()
+        base = len(line[:len(line)-len(line.lstrip(' \t'))].expandtabs(8))
+        return len(line[:opener.end[1]].expandtabs(8)) if rest else base+4
+    if tokens and tokens[-1].string == ':' and tokens[-1].end[0] == len(text.split('\n')):
+        return current+4
+    return current
 
 
 def file_reference_at_cursor(text, offset, language='Lisp'):
