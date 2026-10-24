@@ -585,3 +585,9 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 
 - [x] Handle normal turtle window closure inside mouse-wheel redraw without a Tk traceback.
 - [x] Keep callback program errors visible and release the reentrancy guard on both paths.
+
+### BASIC RND (2026-10-24)
+
+- [x] Add bare, fractional, bounded, repeat-last and negatively seeded RND forms.
+- [x] Keep state local to the BASIC instance and exclude random FNs from automatic caching.
+- [x] Test syntax diagnostics, argument evaluation, state isolation and selective imports.

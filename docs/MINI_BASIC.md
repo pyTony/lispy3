@@ -16,6 +16,37 @@ mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.
 
+## Random numbers
+
+BBC `RND` is supported in BASIC source:
+
+| Form | Result |
+| --- | --- |
+| `RND` | Next signed 32-bit integer |
+| `RND(1)` | Next floating-point value, at least 0 and below 1 |
+| `RND(n)`, `n > 1` | Next integer from 1 through n, inclusive |
+| `RND(0)` | Last generated value in 0-to-1 format, without advancing |
+| `RND(-n)` | Reseed deterministically and return the negative integer argument |
+
+```basic
+seed = RND(-123)
+PRINT RND(6)
+PRINT RND(1)
+PRINT RND(0)
+```
+
+Numeric arguments are truncated to integers. Empty parentheses, extra arguments
+and string arguments report RND-specific errors. Functions that call RND bypass
+automatic memoization because they depend on changing state.
+
+State belongs to the loaded BASIC library/workspace and persists across
+`bbc-run` calls. A fresh instance starts at seed 1 with last value 0; use negative
+seeding to reproduce a sequence. Workspaces do not share their generator state.
+The portable generator is a 32-bit linear congruential generator (multiplier
+1664525, increment 1013904223), not BBCSDL's generator: supported forms and ranges
+follow BBC behavior, but seeded values are not bit-for-bit BBCSDL results.
+See [the BBC BASIC author's RND reference](https://www.bbcbasic.net/wiki/doku.php?id=notes_20on_20the_20use_20of_20rnd).
+
 ## String-case compatibility extensions
 
 `UCASE$(s$)` and `LCASE$(s$)` return upper/lower-case strings without modifying
