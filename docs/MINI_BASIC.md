@@ -16,6 +16,48 @@ mini-basic reads a subset of BBC BASIC text and expands it into lispy3 code.
 It is separate from the Python `pyTony/mini_basic` interpreter: features in that
 project are not automatically available here.
 
+## Optional MBASIC compatibility
+
+Choose **Eval → BASIC Settings… → Lispy BASIC compatibility → MBASIC**.
+The saved preference applies to subsequent Lispy BASIC buffer and REPL runs,
+including output sent to the ANSI terminal. **BBC** is the default and restores
+the existing right-justification/semicolon behavior.
+
+In MBASIC spacing mode, nonnegative decimal numbers have a leading space, negative
+numbers have their minus sign, and every number has a trailing space. Thus an old
+line such as `PRINT "DESTROY THE";19;"KLINGON WARSHIPS"` prints
+`DESTROY THE 19 KLINGON WARSHIPS` without editing the source. Adjacent positive
+numbers naturally have two spaces between them. This follows Microsoft's
+[numeric PRINT spacing rules](https://www.pcjs.org/documents/books/mspl13/basic/b7lang/).
+
+For Lisp-driven BASIC:
+
+```lisp
+(import (only mini-basic bbc-run bbc-set-print-style!))
+(bbc-set-print-style! :mbasic)
+(bbc-run "PRINT \"DESTROY THE\";19;\"KLINGON WARSHIPS\"")
+(bbc-set-print-style! :bbc)
+```
+
+The standalone BASIC REPL accepts:
+
+```text
+python -m lispy_support.basic_repl --print-style mbasic
+```
+
+The same MBASIC option also makes keywords, variable names, array names and
+PROC/FN names case-insensitive: `A=1:print a` prints ` 1 `. Quoted strings,
+comments and unquoted DATA values retain their spelling. Selecting BBC restores
+case-sensitive syntax. Change the option before loading/running definitions;
+previously defined names are not renamed retroactively.
+
+This is a limited compatibility option, not a complete MBASIC dialect.
+Strings, `STR$`,
+explicit hexadecimal/USING formatting and existing comma-zone widths retain
+their current behavior. Cursor tracking includes the added spaces, so TAB/SPC
+still use the actual output column. It does not change RND or other dialect
+semantics, or configure the external Python/native BBC backends.
+
 ## Random numbers
 
 BBC `RND` is supported in BASIC source:
