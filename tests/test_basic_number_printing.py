@@ -102,3 +102,20 @@ class NumberPrintingTest(ReaderTestCase):
         result = subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl', '--print-style', 'mbasic'], input='PRINT "A";19;"B"\nQUIT\n', cwd=REPO_DIR, capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('A 19 B\n', result.stdout)
+
+    def test_mbasic_same_option_accepts_lowercase_keywords_and_names(self):
+        self.mbasic()
+        self.assertEqual(self.run_bbc('A=1:print a'), ' 1 \n')
+
+    def test_mbasic_preserves_strings_and_unquoted_data(self):
+        self.mbasic()
+        self.assertEqual(self.run_bbc('data MixedCase,print\nread a$,B$\nprint A$;"/";b$;"/MiXeD"'), 'MixedCase/print/MiXeD\n')
+
+    def test_mbasic_arrays_loops_and_functions(self):
+        self.mbasic()
+        self.assertEqual(self.run_bbc('dim Values(2)\nfor I=1 to 2\nvalues(i)=I\nnext i\ndef FNdouble(N)=n*2\nprint fnDOUBLE(VALUES(2))'), ' 4 \n')
+
+    def test_bbc_option_restores_case_sensitive_variables(self):
+        self.mbasic()
+        self.ev('(bbc-set-print-style! :bbc)')
+        self.assertEqual(self.run_bbc('a=2:A=1:PRINT a;A'), '         21\n')
