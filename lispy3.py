@@ -364,6 +364,8 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("map?", "(map? x) - true for a map"),
     ],
     "Vectors, time and output": [
+        ("aref", "(aref v i j ...) - item of a vector, or of nested vectors one index per level, as in Common Lisp"),
+        ("mat*", "(mat* a b) - matrix product of nested vectors/lists, like BBC a() . b(); (mat* a b out) writes it into out"),
         ("make-vector", "(make-vector n fill) - n items, all fill (0 if left out), numbered from 0"),
         ("vector-ref", "(vector-ref v i) - item i of v"),
         ("vector-set!", "(vector-set! v i x) - put x into item i of v"),
@@ -422,7 +424,7 @@ CL_ALIASES = {'null': 'null?', 'listp': 'list?', 'consp': 'pair?', 'eq': 'eq?', 
               'integerp': 'integer?', 'stringp': 'string?', 'symbolp': 'symbol?',
               'mapcar': 'map', 'remove-if-not': 'filter', 'rem': 'remainder',
               'string-upcase': 'upcase', 'string-downcase': 'downcase', 'intern': 'string->symbol',
-              'terpri': 'newline', 'aref': 'vector-ref'}
+              'terpri': 'newline'}
 for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset': 'reinit-turtle',
                       '>': '<', '<=': '<', '>=': '<', 'fold': 'reduce', 'downcase': 'upcase',
                       'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
@@ -974,6 +976,41 @@ def _get_internal_run_time() -> int:
     return int(time.process_time() * INTERNAL_TIME_UNITS_PER_SECOND)
 
 _RUN_START = time.perf_counter()
+
+def aref(array, *indices):
+    """(aref a i j ...): Common Lisp's element of a nested vector, a(i)(j)..."""
+    for i in indices:
+        array = array[i]
+    return array
+
+
+def mat_mul(a, b, out=None):
+    """(mat* a b [out]): matrix product of nested lists/vectors, as BBC BASIC's
+    a() . b(). A flat a is a row, a flat b a column. With out, the result is
+    written into that array (which may be a or b) and out is returned."""
+    flat_a, flat_b = not isinstance(a[0], list), not isinstance(b[0], list)
+    rows = [a] if flat_a else a
+    columns = list(zip(*([[x] for x in b] if flat_b else b)))
+    if len(rows[0]) != len(columns[0]):
+        raise ValueError(f"mat*: {len(rows[0])} columns cannot multiply {len(columns[0])} rows")
+    product = [[sum(x * y for x, y in zip(row, column)) for column in columns] for row in rows]
+    if flat_b:
+        product = [row[0] for row in product]
+    if flat_a:
+        product = product[0]
+    if out is None:
+        return Vector(Vector(row) if isinstance(row, list) else row for row in product)
+    if len(out) != len(product):
+        raise ValueError("mat*: result array has the wrong size")
+    for i, row in enumerate(product):
+        if isinstance(row, list):
+            if len(out[i]) != len(row):
+                raise ValueError("mat*: result array has the wrong size")
+            out[i][:] = row
+        else:
+            out[i] = row
+    return out
+
 
 def _clock() -> float:
     """(clock) - seconds since Lispy started, for timing."""
@@ -1713,6 +1750,8 @@ def standard_env() -> Env:
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
         'vector-ref': lambda v, i: v[i],
         'vector-set!': lambda v, i, x: v.__setitem__(i, x),
+        'mat*': mat_mul,
+        'aref': aref,
         'clock': _clock,
         'clock->string': _clock_to_string,
         'universal-time->string': _universal_time_to_string,
@@ -2047,6 +2086,22 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
 SPECIAL_FORMS = frozenset({'_setf-call', '_loop', '_defun', 'quote', 'quasiquote', 'if', 'cond', 'and', 'or', 'define', 'define-macro',
                            'set!', 'lambda', 'begin', 'let', 'dotimes', 'while', 'try', 'save', 'load', 'define-library', 'import', 'new-workspace', 'workspace-push', 'workspace-pop', 'unload', 'reload'})
 
+# Runtime macro expansions, kept per form object: a loop body that uses macros
+# is expanded once, not on every pass. Entries hold the form, so its id stays
+# unique, and the macro, so a redefined macro expands again.
+_expansions: dict = {}
+_EXPANSION_LIMIT = 200_000
+
+def _expand_runtime_macro(x, macro):
+    entry = _expansions.get(id(x))
+    if entry is not None and entry[0] is x and entry[1] is macro:
+        return entry[2]
+    expansion = macro(*x[1:])
+    if len(_expansions) >= _EXPANSION_LIMIT:
+        _expansions.clear()
+    _expansions[id(x)] = (x, macro, expansion)
+    return expansion
+
 # --- Evaluation Engine with Proper Tail Call Optimization (TCO) ---
 def eval_exp(x: Exp, env: 'Env' = None) -> Any:
     """Evaluate an expression in an environment with TCO loop and Structural Pattern Matching."""
@@ -2068,7 +2123,7 @@ def eval_exp(x: Exp, env: 'Env' = None) -> Any:
             if not (isinstance(proc_exp, str) and (proc_exp in SPECIAL_FORMS or proc_exp.startswith(':')
                                                or ('/' in proc_exp and proc_exp != '/'))):
                 if isinstance(proc_exp, str) and (macro := library_system.runtime_macro(proc_exp, env)) is not None:
-                    x = macro(*x[1:])
+                    x = _expand_runtime_macro(x, macro)
                     continue
                 proc = eval_exp(proc_exp, env)
                 args = [eval_exp(arg, env) for arg in x[1:]]

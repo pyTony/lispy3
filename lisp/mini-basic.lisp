@@ -38,13 +38,21 @@
 
 ;;; Transform graphics commands directly to the framebuffer backend, not ANSI/VDU.
 
-(define-macro (MODE n) `(bbc-graphics-mode ,n))
+(define-macro (MODE n) `(begin (set! bbc-text-background 0) (bbc-graphics-mode ,n)))
 (define-macro (GCOL & values) `(graphics-gcol ,@values))
 (define-macro (MOVE x y) `(graphics-move ,x ,y))
 (define-macro (DRAW x y) `(graphics-draw ,x ,y))
 (define-macro (PLOT & values) `(graphics-plot ,@values))
 (define-macro (ORIGIN x y) `(graphics-origin ,x ,y))
 (define-macro (CLG) `(graphics-clg))
+;; OFF / ON hide and show the text cursor; the Listener has none to hide.
+(define-macro (CURSOR on) ''())
+(define-macro (CIRCLE fill x y r)
+  (if fill `(graphics-virtual-circle-fill ,x ,y ,r) `(graphics-virtual-circle ,x ,y ,r)))
+(define-macro (RECTANGLE fill & values)
+  `(graphics-virtual-rectangle ,@values ,@(if fill '(() #t) '())))
+(define-macro (WAIT & time) `(bbc-wait ,@time))
+(define-macro (OSCLI command) `(bbc-oscli ,command))
 
 ;;; --- Run-time support ---
 
@@ -147,10 +155,30 @@
 (define (bbc-ansi control)
   (format #t "~a" (str (bbc-chr 27) "[" control)))
 
+;; COLOUR 128+n sets it; CLS clears a graphics window to it
+(define bbc-text-background 0)
+
 (define (bbc-cls)
   (bbc-ansi "2J")
   (bbc-ansi "H")
+  (graphics-cls bbc-text-background)
   (set! bbc-col 0))
+
+(define (bbc-wait & time)
+  ;; WAIT n pauses n centiseconds
+  (sleep (if (null? time) 0 (/ (max 0 (car time)) 100.0))))
+
+(define (bbc-oscli command)
+  ;; *REFRESH [OFF|ON] controls when the graphics window shows the picture
+  (let [text (string-upcase (str command))
+        words (map str (text/split))]
+    (cond ((null? words) #f)
+          ((and (equal? (car words) "REFRESH") (null? (cdr words))) (graphics-refresh))
+          ((equal? (car words) "REFRESH")
+           (cond ((equal? (bbc-second words) "OFF") (graphics-refresh #f))
+                 ((equal? (bbc-second words) "ON") (graphics-refresh #t))
+                 (else (error (str "*REFRESH expects OFF or ON, not " (bbc-second words))))))
+          (else (error (str "unsupported * command: " (car words)))))))
 
 (define (bbc-colour value)
   (let [n (bbc-int value)]
@@ -159,6 +187,7 @@
         (error "COLOUR: expected 0..15 or 128..143"))
     (let [background (>= n 128)
           colour (if (>= n 128) (- n 128) n)]
+      (if background (set! bbc-text-background colour))
       (bbc-ansi (str (+ (if background 40 30)
                        (if (>= colour 8) 60 0)
                        (modulo colour 8)) "m")))))
@@ -498,7 +527,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(MODE GCOL MOVE DRAW PLOT ORIGIN CLG graphics-plot graphics-draw graphics-move graphics-gcol graphics-origin graphics-clg bbc-graphics-mode PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set! bbc-rnd) body))
+         (not (bbc-uses? '(MODE GCOL MOVE DRAW PLOT ORIGIN CLG CIRCLE RECTANGLE WAIT OSCLI CURSOR graphics-plot graphics-draw graphics-move graphics-gcol graphics-origin graphics-clg bbc-graphics-mode PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set! bbc-rnd) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -585,18 +614,31 @@
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
     "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
+    "CIRCLE" "RECTANGLE" "FILL" "WAIT" "OSCLI" "SUM"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI" "RND"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
 (define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
-(define bbc-one-char-ops "+-*/^(),;'=<>~#")
+(define bbc-one-char-ops "+-*/^(),;'=<>~#.")
 
 (define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
 
 ;; The shared MBASIC option folds syntax names, never string/DATA contents.
 (define (bbc-normalize-name name)
   (if (eq? bbc-number-print-style :mbasic) (string-upcase name) name))
+
+;; BBC reads SQR5 as SQR 5: a keyword followed only by digits is not a name
+(define (bbc-digit? d) (d/isdigit))
+
+(define (bbc-keyword-digits-end text start j)
+  (let [name (substring text start j)
+        k (- j start)]
+    (while (and (> k 0) (bbc-digit? (string-ref name (- k 1)))) (set! k (- k 1)))
+    (if (and (> k 0) (< k (- j start))
+             (member (bbc-normalize-name (substring name 0 k)) bbc-keywords))
+        (+ start k)
+        j)))
 
 (define (bbc-tokenize text)
   (let [toks (list)
@@ -612,6 +654,11 @@
     (define (char-at j) (if (< j n) (string-ref text j) #\nul))
     (define (digit-at? j) (let [d (char-at j)] (d/isdigit)))
     (define (scan-while j ok?) (while (and (< j n) (ok? (string-ref text j))) (set! j (+ j 1))) j)
+    (define (statement-start?)
+      (or (null? toks)
+          (let [last (nth toks (- (length toks) 1))]
+            (or (member (car last) '(:eol :colon :line))
+                (bbc-tok? last :kw "THEN") (bbc-tok? last :kw "ELSE")))))
     (while (< i n)
       (let [c (string-ref text i)]
         (cond
@@ -658,8 +705,15 @@
              (emit :num (bbc-hex-constant (substring text (+ i 1) j)))
              (set! line-start #f)
              (set! i j)))
+          ((and (eq? c #\*) (statement-start?))
+           ;; *command: the rest of the line, as OSCLI would get it
+           (let [j (scan-while i (lambda (d) (not (eq? d #\newline))))]
+             (emit :star (substring text (+ i 1) j))
+             (set! line-start #f)
+             (set! i j)))
           ((or (c/isalpha) (eq? c #\_))
            (let [j (scan-while i bbc-name-char?)]
+             (set! j (bbc-keyword-digits-end text i j))
              (set! j (bbc-name-end text i j (char-at j) (char-at (+ j 1))))
              (let [raw (substring text i j) name (bbc-normalize-name raw)]
                (cond ((and (>= (length name) 3) (equal? (substring name 0 3) "REM"))
@@ -710,6 +764,12 @@
   (and (eq? (car tok) kind) (or (not value) (equal? (nth tok 1) value))))
 
 (define (bbc-at? kind value) (bbc-tok? (bbc-peek) kind value))
+
+;; An unknown word used as a statement says so, rather than asking for =
+(define (bbc-fail-assign name)
+  (bbc-fail (if (bbc-at-stmt-end?)
+                (str "unknown statement " name)
+                (str "expected = after the variable " name))))
 
 (define (bbc-accept! kind value)
   (if (bbc-at? kind value) (begin (bbc-advance!) #t) #f))
@@ -942,7 +1002,7 @@
           ((bbc-accept! :op "+=")
            (list 'LET var (list (if (bbc-string-name? name) 'string-append '+) var (bbc-value (bbc-p-expr)))))
           ((bbc-accept! :op "-=") (list 'LET var (list '- var (bbc-value (bbc-p-expr)))))
-          (else (bbc-fail "expected = after the variable")))))
+          (else (bbc-fail-assign name)))))
 
 (define (bbc-p-time-assign)
   (bbc-expect! :kw "TIME" "TIME")
@@ -1105,7 +1165,11 @@
         (let [tok (bbc-peek)
               kind (car tok)
               value (nth tok 1)]
-          (cond ((eq? kind :id) (bbc-p-assign))
+          (cond ((eq? kind :star) (bbc-advance!) (list 'OSCLI value))
+                ((and (eq? kind :id) (equal? value "OFF")
+                      (member (car (nth bbc-toks (+ bbc-pos 1))) '(:colon :eol :eof)))
+                 (bbc-advance!) (list 'CURSOR #f))
+                ((eq? kind :id) (bbc-p-assign))
                 ((eq? kind :proc)
                  (bbc-advance!)
                  (append (list 'PROC (string->symbol value)) (bbc-p-args)))
@@ -1119,6 +1183,14 @@
                 ((equal? value "MODE")
                  (bbc-advance!) (list 'MODE (bbc-value (bbc-p-expr))))
                 ((equal? value "CLG") (bbc-advance!) (list 'CLG))
+                ((member value '("CIRCLE" "RECTANGLE"))
+                 (bbc-advance!)
+                 (let [fill (bbc-accept! :kw "FILL")]
+                   (append (list (string->symbol value) fill) (bbc-p-value-list))))
+                ((equal? value "WAIT")
+                 (bbc-advance!)
+                 (if (bbc-at-stmt-end?) (list 'WAIT) (list 'WAIT (bbc-value (bbc-p-expr)))))
+                ((equal? value "OSCLI") (bbc-advance!) (list 'OSCLI (bbc-value (bbc-p-expr))))
                 ((member value '("GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN"))
                  (bbc-advance!) (cons (string->symbol value) (bbc-p-value-list)))
                 ((equal? value "CLS") (bbc-advance!) (list 'CLS))

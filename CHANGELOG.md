@@ -4,6 +4,19 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Graphics: the soccer ball FPS test runs in BASIC (`basic/graphics/soccerball.bas`,
+  from BBC BASIC for SDL) and natively in Lispy (`lisp/programs/soccer-ball.lisp`,
+  about 210 frames per second). Drawing no longer waits for the window's
+  thread, lines are about 3.7 times faster, and new primitives fill
+  rectangles, triangles, polygons and circles, draw polylines and control
+  refresh (`graphics-refresh`). New `mat*` matrix product and multi-index
+  `aref`. Runtime macro expansions are kept per form, so loops expand once.
+- mini-basic: OFF/ON, PLOT 85, CIRCLE [FILL], RECTANGLE [FILL], WAIT,
+  `*REFRESH`/OSCLI, CLS clearing the graphics window, whole arrays
+  (`a() = list`, `c() = a() . b()`, element-wise + - * /), `SUM`, DATA items
+  as expressions for READ and `SQR5` as `SQR 5`. An unknown word used as a
+  statement now says "unknown statement X".
+
 - mini-basic: labels follow BBC BASIC in every mode. Define a label only as
   `(name)`; `GOTO`, `GOSUB`, `RESTORE` and `ON ... GOTO/GOSUB` jump to it by
   its bare name, which is no longer read as a variable. A parenthesized

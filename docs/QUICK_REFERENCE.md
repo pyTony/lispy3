@@ -100,6 +100,8 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(make-vector n fill)` | `n` items of `fill` (default 0) |
 | `(vector-ref v i)` | item `i`, counting from 0 |
 | `(vector-set! v i x)` | store `x` at `i` |
+| `(aref v i j ...)` | item of nested vectors, one index per level: `(aref m 1 0)` is row 1, column 0 |
+| `(mat* a b)` | matrix product of nested vectors or lists; a flat `a` is a row, a flat `b` a column. `(mat* a b out)` writes the result into `out`, which may be `a` or `b` |
 | `(vector 1 2)` `(vector? v)` `(vector-length v)` | make a vector, test for one, its length |
 | `(vector->list v)` `(list->vector lst)` | convert between vectors and lists |
 | `(clock)` | seconds since Lispy started, for timing |

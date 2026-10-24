@@ -41,6 +41,13 @@ Only opening a window requires pygame, for example `python -m pip install pygame
 | PLOT 69,x,y / PLOT x,y | Draw a point, then move cursor |
 | ORIGIN x,y | Set coordinate offset, preserving the existing physical cursor |
 | CLG | Clear graphics to the selected background |
+| PLOT 85,x,y | Fill the triangle made by the last two points visited and x,y |
+| CIRCLE [FILL] x,y,r | Circle outline or disc around x,y, radius r units |
+| RECTANGLE [FILL] x,y,w[,h] | Rectangle from corner x,y, w wide and h (default w) high |
+| CLS | In a graphics mode also clears the window to the COLOUR 128+n background |
+| \*REFRESH OFF / ON / \*REFRESH | Show only finished frames; automatic showing; show this frame now. `OSCLI "REFRESH ..."` is the same |
+| WAIT n | Pause n centiseconds |
+| OFF / ON | Hide/show the text cursor (accepted, nothing to hide in the Listener) |
 
 Graphics coordinates span 1280 by 1024 units with a bottom-left origin;
 framebuffer inspection uses top-left pixel coordinates. Dimensions are
@@ -51,8 +58,8 @@ This is a static palette approximation: flashing and a full Archimedes palette
 are not implemented. The preview uses indices 1–7 only.
 
 Unsupported MODE numbers, nonzero GCOL drawing actions and unsupported PLOT
-codes report errors. Relative BY forms, other plotting operations, rectangles,
-circles, graphics text, programmable palettes, graphics VDU controls and native
+codes report errors. Relative BY forms, other plotting operations, ellipses,
+graphics text, programmable palettes, graphics VDU controls and native
 BBCSDL pixel equivalence remain future work. Closing a window does not reopen
 it on subsequent drawing; MODE or graphics-open explicitly opens it again.
 
@@ -79,12 +86,63 @@ virtual width/height. `graphics-rgb-mode` accepts width/height for a custom RGB
 surface. `graphics-pixel`, `graphics-line`, `graphics-clear` take explicit RGB
 channels. `graphics-virtual-pixel`, `graphics-virtual-line`, `graphics-plot`,
 `graphics-origin` and `graphics-clg` expose the corresponding drawing operations.
+
+Filled shapes take pixel coordinates and optional RGB channels (white by
+default): `(graphics-fill-rect x0 y0 x1 y1 r g b)`,
+`(graphics-triangle x0 y0 x1 y1 x2 y2 r g b)`,
+`(graphics-polygon points r g b)` and `(graphics-circle-fill x y radius r g b)`.
+`(graphics-lines points r g b)` draws a joined line through all points in one
+call. Points are a flat list `(x0 y0 x1 y1 ...)` or pairs `((x0 y0) ...)`.
+`(graphics-refresh #f)` stops showing every change, `(graphics-refresh)` then
+shows the finished frame and `(graphics-refresh #t)` returns to automatic.
 `graphics-window-open?` reports window state. Each standard environment owns
 its framebuffer (including an imported mini-basic library environment); pygame has one active display, so opening another closes the
-previous window while keeping its framebuffer. GUI primitives dispatch to the
-Tk/SDL-owning thread. In a terminal REPL, call graphics-present during a long
+previous window while keeping its framebuffer. Window primitives (mode
+changes, open, present, close and `graphics-window-open?`) dispatch to the
+Tk/SDL-owning thread; drawing runs on the calling thread. In a terminal REPL, call graphics-present during a long
 non-drawing computation to pump events; the blocking input prompt does not
 run a GUI event loop.
+
+## Soccer ball FPS test
+
+`basic/graphics/soccerball.bas` is BBC BASIC for SDL's
+`examples/graphics/soccerball.bbc` (zlib licence) without its ON ERROR line.
+It rotates the ball with whole-array matrix maths and draws each frame with
+CIRCLE FILL and PLOT 85 under `*REFRESH OFF`. The BASIC features it needs:
+
+- `b() = 1, 2, 3, ...` fills an array row by row (one value fills it all);
+  `c() = b() . c()` is the matrix product; `a() = b()`, `a() = b() * 2`,
+  `a() = b() + c()` work element by element. `a()` and `a` are separate
+  variables, as in BBC BASIC.
+- `SUM(a())` and `SUM(a(i, lo TO hi))`.
+- DATA items such as `t, -p, 2*q` are expressions that a numeric READ
+  evaluates; a string READ gets their text.
+- `SQR5` reads as `SQR 5`: a keyword followed only by digits is not a name.
+
+`lisp/programs/soccer-ball.lisp` is the same ball written in Lispy, using
+`mat*`, `graphics-polygon`, `graphics-circle-fill` and `graphics-refresh`. It
+prints the frames per second after 300 frames:
+
+```console
+python lispy3.py lisp/programs/soccer-ball.lisp
+```
+
+Timings on the development container with the SDL dummy driver: the Lispy
+version computes about 210 frames per second, also inside Lispy Machine; the
+BASIC original about 40 per second without its `WAIT 1` (26 with it). Inside
+Lispy Machine the window itself is redrawn up to 50 times a second.
+
+### Why it is faster
+
+- Drawing only writes the framebuffer, so it runs on the Lisp thread. Only
+  opening, presenting and closing the window go to the Tk/SDL thread; before,
+  every PLOT or line waited for a round trip there.
+- Lines write the bytes directly (about 3.7 times faster), and fills draw
+  whole rows at once. The window is redrawn only when the picture changed.
+- With `*REFRESH OFF` / `(graphics-refresh #f)` the window shows only frames
+  handed over by `*REFRESH` / `(graphics-refresh)`, so nothing flickers.
+- Lispy keeps each runtime macro expansion with its form, so a loop body is
+  expanded once. BASIC array access compiles to the native `aref`.
 
 ## Plain GUI output and terminal REPL
 
@@ -123,7 +181,7 @@ arguments are usage errors; a failing CLI startup does not enter the REPL.
 - [x] Six-row BASIC Mandelbrot file checked by interior/exterior pixels.
 - [x] Separate plain GUI output from raw ANSI output.
 - [x] Per-launch startup override for CLI and GUI.
-- [ ] Larger graphics command batch selected after this subset is reviewed.
+- [x] Soccer ball batch: fills, refresh control, whole arrays, SUM, DATA expressions.
 
 A native BBCSDL cursor probe (`MODE 9:MOVE 0,0:ORIGIN 4,0:DRAW 4,0`,
 then reset ORIGIN and query POINT at x=0,4,8, y=0) returned foreground colour
