@@ -49,12 +49,14 @@ class BasicInputTest(ReaderTestCase):
                 self.run_bbc('INPUT s$')
 
     def test_primes_visual_runs_with_enter_pause_enabled(self):
-        source = (Path(__file__).resolve().parents[1]/'basic/examples/primes_visual.bas').read_text()
-        source = source.replace('L = 1000', 'L = 30')
+        # User-facing demos are editable; regression inputs must stay independent.
+        source = (Path(__file__).parent/'fixtures/basic/primes_input.bas').read_text(encoding='utf-8')
         self.assertIn('50 INPUT "PRESS ENTER", L$', source)
-        output = self.input_bbc(source, '')
-        self.assertIn('9 primes.', output)
+        output = self.input_bbc(source, '30', '')
+        self.assertIn('10 primes.', output)
+        self.assertIn('LIMIT ?', output)
         self.assertIn('PRESS ENTER?', output)
+        self.assertTrue(output.rstrip().endswith('BYE!'))
 
     def test_numeric_input_uses_value_prefix_without_evaluating_code(self):
         self.assertEqual(self.input_bbc(
