@@ -8,6 +8,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import json
+import secrets
 
 
 def error_source_line(source, message, first_line=1, numbered=False):
@@ -70,8 +72,9 @@ def run_python_basic(source, write, *, cwd, executable=None, package_root='', di
         return _stream_command(command, write, cwd, env)
 
 
-def _stream_command(command, write, cwd, env):
-    process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+def _stream_command(command, write, cwd, env, *, read_input=None, input_marker=None):
+    process = subprocess.Popen(command, cwd=cwd, env=env,
+        stdin=subprocess.PIPE if input_marker else subprocess.DEVNULL,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace',
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
     process.stdout.reconfigure(newline='')  # Preserve ANSI carriage returns.
@@ -94,7 +97,18 @@ def _stream_command(command, write, cwd, env):
                 continue
             if line is None:
                 break
-            write(line)
+            if input_marker and input_marker in line:
+                prompt, _, _ = line.partition(input_marker)
+                if prompt:
+                    write(prompt)
+                try:
+                    reply = read_input() if read_input is not None else None
+                except EOFError:
+                    reply = None
+                process.stdin.write(json.dumps(reply, ensure_ascii=True)+'\n')
+                process.stdin.flush()
+            else:
+                write(line)
         return process.wait()
     finally:
         if process.poll() is None:
@@ -106,9 +120,11 @@ def _stream_command(command, write, cwd, env):
                 process.wait()
         reader.join(timeout=2)
         process.stdout.close()
+        if process.stdin is not None:
+            process.stdin.close()
 
 
-def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>', source_line=1):
+def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>', source_line=1, read_input=None):
     """Run unsaved Python in a fresh process, retaining source traceback lines."""
     import textwrap
     from lispy_support.lispy_terminal import console_python
@@ -116,13 +132,29 @@ def run_python_source(source, write, *, cwd, executable=None, filename='<buffer>
     with tempfile.TemporaryDirectory(prefix='lispy-python-') as folder:
         path = Path(folder)/'buffer.py'
         path.write_text('\n'*(source_line-1)+textwrap.dedent(source), encoding='utf-8')
-        wrapper = ("import pathlib,sys,types; p=sys.argv[1]; filename=sys.argv[2]; "
-                   "sys.path[0]=sys.argv[3]; sys.argv=[filename]; "
-                   "module=types.ModuleType('__main__'); module.__file__=filename; "
-                   "sys.modules['__main__']=module; "
-                   "exec(compile(pathlib.Path(p).read_text(encoding='utf-8'),filename,'exec'),module.__dict__)")
-        command = [executable or console_python(), '-u', '-c', wrapper, str(path), filename, cwd]
-        return _stream_command(command, write, cwd, env)
+        marker = '\x1eLISPY_INPUT_'+secrets.token_hex(16)
+        wrapper = '''import builtins,json,pathlib,sys,types
+p,filename,cwd,marker=sys.argv[1:]
+def console_input(prompt=''):
+    print(prompt,end='',flush=True)
+    print(marker,file=sys.stderr,flush=True)
+    line=sys.stdin.readline()
+    if not line:
+        raise EOFError('End of input')
+    value=json.loads(line)
+    if value is None:
+        raise EOFError('End of input')
+    return value
+builtins.input=console_input
+sys.path[0]=cwd
+sys.argv=[filename]
+module=types.ModuleType('__main__')
+module.__file__=filename
+sys.modules['__main__']=module
+exec(compile(pathlib.Path(p).read_text(encoding='utf-8'),filename,'exec'),module.__dict__)
+'''
+        command = [executable or console_python(), '-u', '-c', wrapper, str(path), filename, cwd, marker]
+        return _stream_command(command, write, cwd, env, read_input=read_input, input_marker=marker)
 
 
 def default_bbcsdl():
