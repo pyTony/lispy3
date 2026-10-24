@@ -21,10 +21,8 @@
   (if (and (exact? x) (integer? x)) x (trunc x)))
 
 (define (bbc-in-range x low high)
-  (let [n (bbc-whole x)]
-    (if (or (< n low) (> n high))
-        (error "Number too big")
-        n)))
+  (let [n (trunc x)]
+    (if (<= low n high) n (error "Number too big"))))
 
 (define (bbc-int32 x) (bbc-in-range x bbc-int32-min bbc-int32-max))
 (define (bbc-int64 x) (bbc-in-range x bbc-int64-min bbc-int64-max))
