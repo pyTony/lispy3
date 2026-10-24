@@ -52,3 +52,25 @@ class BasicRndTest(ReaderTestCase):
         for source in ('PRINT RND()', 'PRINT RND(1,2)', 'PRINT RND("bad")'):
             with self.subTest(source=source), self.assertRaisesRegex(Exception, 'RND'):
                 self.run_bbc(source)
+
+    def test_another_workspace_does_not_advance_this_generator(self):
+        self.run_bbc('seed=RND(-7)')
+        first = self.run_bbc('PRINT ;RND')
+        second = self.run_bbc('PRINT ;RND')
+        self.run_bbc('seed=RND(-7)')
+        self.assertEqual(self.run_bbc('PRINT ;RND'), first)
+        other = L.workspaces.create('other random state')
+        self.addCleanup(L.workspaces.discard, other)
+        with L.workspaces.use(other):
+            L.load_workspace('mini-basic', silent=True)
+            self.run_bbc('seed=RND(-99):PRINT ;RND:PRINT ;RND')
+        self.assertEqual(self.run_bbc('PRINT ;RND'), second)
+
+    def test_selective_library_import_resolves_private_rnd_runtime(self):
+        import contextlib
+        import io
+        self.ev('(import (prefix (only mini-basic bbc-run) random-basic:))')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.ev('(random-basic:bbc-run "PRINT ;RND(6)")')
+        self.assertIn(int(out.getvalue().strip()), range(1, 7))

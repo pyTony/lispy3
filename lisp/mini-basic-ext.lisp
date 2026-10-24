@@ -473,6 +473,7 @@
           ((bbc-accept! :kw "TRUE") (bbc-num -1))
           ((bbc-accept! :kw "FALSE") (bbc-num 0))
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
+          ((bbc-accept! :kw "RND") (bbc-p-rnd))
           ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)

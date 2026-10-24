@@ -57,6 +57,27 @@
 (define (bbc-int x)
   (trunc x))
 
+;; Portable 32-bit random state, owned by this BASIC library/workspace.
+;; Ranges/seeding follow BBC BASIC; the sequence is not BBCSDL's bit pattern.
+(define bbc-rnd-state 1)
+(define bbc-rnd-last 0.0)
+
+(define (bbc-rnd &optional (argument :bare))
+  (if (and (not (eq? argument :bare)) (not (number? argument)))
+      (error "RND: expected a numeric argument"))
+  (let [bare (eq? argument :bare)
+        n (if (eq? argument :bare) 1 (bbc-int argument))]
+    (cond ((< n 0)
+           (set! bbc-rnd-state (modulo n 4294967296))
+           n)
+          ((and (not bare) (= n 0)) bbc-rnd-last)
+          (else
+           (set! bbc-rnd-state (modulo (+ (* 1664525 bbc-rnd-state) 1013904223) 4294967296))
+           (set! bbc-rnd-last (/ (float bbc-rnd-state) 4294967296))
+           (cond (bare (if (>= bbc-rnd-state 2147483648) (- bbc-rnd-state 4294967296) bbc-rnd-state))
+                 ((= n 1) bbc-rnd-last)
+                 (else (+ 1 (floor (* n bbc-rnd-last)))))))))
+
 ;; BASIC TIME is an assignable elapsed-real-time clock, in centiseconds.
 ;; Keep integer host ticks so reads do not accumulate floating-point drift.
 ;; It persists between bbc-run/bbc-load calls until assigned or reloaded.
@@ -467,7 +488,7 @@
         own (bbc-adjoin (bbc-collect '(LOCAL) cdr body '()) (cdr head))
         calls (bbc-collect '(FN) (lambda (f) (list (bbc-second f))) body '())]
     (and (eq? (car def) 'DEF-FN)
-         (not (bbc-uses? '(MODE GCOL MOVE DRAW PLOT ORIGIN CLG graphics-plot graphics-draw graphics-move graphics-gcol graphics-origin graphics-clg bbc-graphics-mode PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set!) body))
+         (not (bbc-uses? '(MODE GCOL MOVE DRAW PLOT ORIGIN CLG graphics-plot graphics-draw graphics-move graphics-gcol graphics-origin graphics-clg bbc-graphics-mode PRINT PROC END GOSUB ON-GOSUB RETURN CLS COLOUR COLOR VDU ANSI ANSI-RESET bbc-cls bbc-colour bbc-vdu bbc-ansi bbc-ansi-bytes bbc-time-read bbc-time-set! bbc-rnd) body))
          (not (bbc-any? (lambda (v) (and (member v vars) (not (member v own))))
                         (bbc-symbols body '())))
          (not (bbc-any? (lambda (f) (not (eq? f (car head)))) calls)))))
@@ -554,7 +575,7 @@
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
     "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
-    "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI"
+    "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI" "RND"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
@@ -844,6 +865,18 @@
         (bbc-fail (str (car entry) " needs " (nth entry 2) " to " (nth entry 3) " arguments")))
     (bbc-e (cons lisp-name args) (nth entry 4))))
 
+(define (bbc-p-rnd)
+  ;; Unlike other unary functions, RND without parentheses is a complete call.
+  (if (not (bbc-accept! :op "("))
+      (bbc-num '(bbc-rnd))
+      (begin
+        (if (bbc-at? :op ")") (bbc-fail "RND needs one numeric argument"))
+        (let [argument (bbc-p-expr)]
+          (if (eq? (bbc-type argument) :str) (bbc-fail "RND needs a numeric argument"))
+          (if (bbc-at? :op ",") (bbc-fail "RND needs one numeric argument"))
+          (bbc-expect! :op ")" "RND closing )")
+          (bbc-num (list 'bbc-rnd (bbc-value argument)))))))
+
 (define (bbc-p-primary)
   (let [tok (bbc-peek)
         kind (car tok)
@@ -865,6 +898,7 @@
           ((bbc-accept! :kw "TRUE") (bbc-num -1))
           ((bbc-accept! :kw "FALSE") (bbc-num 0))
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
+          ((bbc-accept! :kw "RND") (bbc-p-rnd))
           ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)
