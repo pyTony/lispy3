@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: labels follow BBC BASIC in every mode. Define a label only as
+  `(name)`; `GOTO`, `GOSUB`, `RESTORE` and `ON ... GOTO/GOSUB` jump to it by
+  its bare name, which is no longer read as a variable. A parenthesized
+  target such as `GOTO (n*10)` is a calculated jump to a line number.
+  `GOSUB dest` with `dest=100` must now be written `GOSUB (dest)`; `(10)` is
+  no longer accepted as a label definition.
+
 - Lispy Machine: **Eval → Buffer run echo** chooses how running a buffer shows
   its forms: laid out over several lines like the editor's Reindent (new
   default, no more `...` truncation), on one line, or silent like `load`

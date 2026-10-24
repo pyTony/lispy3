@@ -128,6 +128,60 @@ class NestedJumpRegressionTest(ReaderTestCase):
             self.run_bbc('10 WHILE TRUE\n20 GOTO 999\n30 ENDWHILE')
 
 
+class LabelSyntaxTest(ReaderTestCase):
+    """BBC labels: define with (name), jump with a bare name, calculate with ()."""
+
+    def test_goto_bare_label(self):
+        self.assertEqual(self.run_bbc(
+            'GOTO skip\nPRINT "wrong"\n(skip) PRINT "hit"'), 'hit\n')
+
+    def test_bare_label_ignores_variable_of_same_name(self):
+        self.assertEqual(self.run_bbc(
+            'skip=10 : GOTO skip\n10 PRINT "wrong" : END\n(skip) PRINT ;skip'),
+            '10\n')
+
+    def test_label_name_is_not_a_variable(self):
+        with self.assertRaisesRegex(Exception, 'Undefined symbol: top'):
+            self.run_bbc('(top) PRINT ;top')
+
+    def test_calculated_goto_and_gosub(self):
+        self.assertEqual(self.run_bbc(
+            '10 n=2 : GOTO (n*10+10)\n20 PRINT "wrong" : END\n'
+            '30 GOSUB (n*50) : PRINT "back" : END\n100 PRINT "sub" : RETURN'),
+            'sub\nback\n')
+
+    def test_calculated_goto_to_unknown_line_reports_target(self):
+        with self.assertRaisesRegex(Exception, 'GOTO: unknown label 42'):
+            self.run_bbc('n=42 : GOTO (n)')
+
+    def test_bare_variable_is_a_label_not_a_line(self):
+        with self.assertRaisesRegex(Exception, 'GOTO: unknown label n'):
+            self.run_bbc('10 n=20 : GOTO n\n20 PRINT "wrong"')
+
+    def test_on_goto_and_gosub_accept_all_target_forms(self):
+        self.assertEqual(self.run_bbc(
+            '10 k=100 : ON 2 GOSUB 200,sub,(k) : ON 3 GOSUB 200,sub,(k)\n'
+            '20 ON 1 GOTO done,30\n30 PRINT "wrong"\n'
+            '(done) PRINT "done" : END\n'
+            '100 PRINT "calc" : RETURN\n200 PRINT "wrong" : RETURN\n'
+            '(sub) PRINT "label" : RETURN'),
+            'label\ncalc\ndone\n')
+
+    def test_restore_accepts_all_target_forms(self):
+        self.assertEqual(self.run_bbc(
+            '10 DATA 1\n20 DATA 2\n(three) DATA 3\n'
+            '30 RESTORE three : READ a\n40 RESTORE 20 : READ b\n'
+            '50 n=10 : RESTORE (n) : READ c\n60 PRINT ;a;b;c'), '321\n')
+
+    def test_parenthesized_label_definition_needs_a_name(self):
+        with self.assertRaisesRegex(Exception, 'expected a label name'):
+            self.run_bbc('(10) PRINT "x"')
+
+    def test_jump_needs_a_target(self):
+        with self.assertRaisesRegex(Exception, 'expected a line number, label or'):
+            self.run_bbc('GOTO "x"')
+
+
 class NumberedCaseRegressionTest(ReaderTestCase):
     """Numbered clause headers, including the confirmed BBCSDL case 9."""
 
@@ -239,7 +293,7 @@ class SubroutineAcceptanceTest(ReaderTestCase):
 
     def test_variable_and_symbolic_targets(self):
         self.assertEqual(self.run_bbc(
-            '10 dest=100 : GOSUB dest : GOSUB sub : PRINT "back" : END\n'
+            '10 dest=100 : GOSUB (dest) : GOSUB sub : PRINT "back" : END\n'
             '100 PRINT "numeric" : RETURN\n(sub) PRINT "symbolic" : RETURN'),
             'numeric\nsymbolic\nback\n')
 
