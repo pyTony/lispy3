@@ -1,6 +1,10 @@
 ;;; mini-basic-ext.lisp - Step 3 extensions for mini-basic.lisp
 ;;;
-;;; Step 3a: SDL parenthesized labels (label), line labels, DATA, READ, RESTORE
+;;; Step 3a: BBC labels and line numbers, DATA, READ, RESTORE
+;;;
+;;; A label is defined only as (name) at the start of a statement. GOTO,
+;;; GOSUB, RESTORE and ON ... GOTO/GOSUB take a line number, a bare label
+;;; name (never evaluated as a variable) or a calculated (expression).
 ;;; Step 3b: DIM and multi-dimensional arrays
 ;;; Step 3d: GOSUB / RETURN and ON ... GOSUB with scoped call continuations
 
@@ -128,13 +132,6 @@
                        ((eq? (car form) 'INPUT) (map bbc-lhs-var (cdr (cdr (cdr (cdr form))))))
                        ((eq? (car form) 'DIM) (map car (cdr form)))
                        (else (cdr (bbc-second form)))))
-               stmts '()))
-
-(define (bbc-label-vars stmts)
-  ;; Symbolic (LABEL name) items share the variable namespace
-  (bbc-collect '(LABEL)
-               (lambda (form)
-                 (if (symbol? (bbc-second form)) (list (bbc-second form)) '()))
                stmts '()))
 
 (define (bbc-collect-data stmts)
@@ -342,7 +339,6 @@
 
 (define-macro (bbc-program & stmts)
   (let [vars (bbc-assigned-vars stmts)
-        lbls (filter (lambda (l) (not (member l vars))) (bbc-label-vars stmts))
         data-info (bbc-collect-data stmts)
         data-items (car data-info)
         data-lbls (bbc-second data-info)
@@ -354,7 +350,6 @@
                 (bbc-body-code main))]
     `(begin
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
-       ,@(map (lambda (l) `(define ,l ',l)) lbls)
        (set! bbc-data (list->vector ',data-items))
        (set! bbc-data-ptr 0)
        (set! bbc-data-labels ,data-lbls)
@@ -365,14 +360,21 @@
        
 ;;; --- Parser extensions for (label), DATA, READ, RESTORE, DIM, arrays ---
 
+(define (bbc-at-label-name?)
+  (member (car (bbc-peek)) '(:id :proc :fn)))
+
 (define (bbc-p-label-name)
-  ;; Inside (label): accept an identifier, keyword, or number
-  (let [tok (bbc-advance!)
-        kind (car tok)
-        val (nth tok 1)]
-    (cond ((eq? kind :num) val)
-          ((member kind '(:id :kw :proc :fn)) (bbc-var val))
-          (else (bbc-fail "expected a label name inside ()")))))
+  ;; The name in a (label) definition or after a jump keyword
+  (if (bbc-at-label-name?)
+      (bbc-var (nth (bbc-advance!) 1))
+      (bbc-fail "expected a label name")))
+
+(define (bbc-p-jump-target)
+  ;; A line number, a bare label name, or a calculated (expression)
+  (cond ((bbc-at? :num #f) (nth (bbc-advance!) 1))
+        ((bbc-at-label-name?) (list 'quote (bbc-p-label-name)))
+        ((bbc-at? :op "(") (bbc-value (bbc-p-expr)))
+        (else (bbc-fail "expected a line number, label or (expression)"))))
 
 (define (bbc-p-data-item)
   (cond ((bbc-accept! :op "-")
@@ -397,9 +399,7 @@
 (define (bbc-p-restore)
   (if (bbc-at-stmt-end?)
       (list 'RESTORE)
-      (if (bbc-at? :num #f)
-          (list 'RESTORE (nth (bbc-advance!) 1))
-          (list 'RESTORE (bbc-var (bbc-p-variable))))))
+      (list 'RESTORE (bbc-p-jump-target))))
 
 (define (bbc-p-dim-item)
   (let [tok (bbc-expect! :id #f "an array name")
@@ -524,14 +524,8 @@
                            (and (pair? stmt) (eq? (car stmt) 'LABEL))))
                   (bbc-fail "unexpected text after the statement"))))))
     stmts))
-(define (bbc-p-goto-target)
-  ;; Accept a line number, a (parenthesized) label, or a variable/expression
-  (if (bbc-at? :num #f)
-      (nth (bbc-advance!) 1)
-      (bbc-value (bbc-p-expr))))
-
 (define (bbc-p-goto)
-  (list 'GOTO (bbc-p-goto-target)))
+  (list 'GOTO (bbc-p-jump-target)))
 
 (define (bbc-p-on)
   (let [idx (bbc-value (bbc-p-expr))
@@ -539,9 +533,9 @@
                        ((bbc-accept! :kw "GOSUB") 'ON-GOSUB)
                        (else #f))]
     (if transfer
-        (let [targets (list (bbc-p-goto-target))]
+        (let [targets (list (bbc-p-jump-target))]
           (while (bbc-accept! :op ",")
-            (bbc-push! targets (bbc-p-goto-target)))
+            (bbc-push! targets (bbc-p-jump-target)))
           (let [else-part (if (bbc-accept! :kw "ELSE") (bbc-p-line-stmts) (list))]
             (list transfer idx targets else-part)))
         (bbc-fail "expected GOTO or GOSUB after ON expression"))))
@@ -565,7 +559,7 @@
           ((equal? value "DIM") (bbc-advance!) (bbc-p-dim))
           ((equal? value "GOTO") (bbc-advance!) (bbc-p-goto))
           ((equal? value "GOSUB")
-           (bbc-advance!) (list 'GOSUB (bbc-p-goto-target)))
+           (bbc-advance!) (list 'GOSUB (bbc-p-jump-target)))
           ((equal? value "RETURN") (bbc-advance!) (list 'RETURN))
           ((equal? value "ON") (bbc-advance!) (bbc-p-on))
           (else #f))))

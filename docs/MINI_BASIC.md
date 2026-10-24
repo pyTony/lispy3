@@ -142,7 +142,7 @@ lispy3's Lisp loader.
 | Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
-| Jumps | Labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE; implicit `IF condition THEN 100 ELSE 200` |
+| Jumps | Line numbers and `(label)` labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE, calculated `GOTO (expression)`; implicit `IF condition THEN 100 ELSE 200`; see [Labels and jumps](#labels-and-jumps) |
 | Data | DATA/READ/RESTORE; DIM arrays with inclusive upper bounds |
 | Timing | Assignable TIME in whole centiseconds |
 
@@ -150,6 +150,29 @@ PROC/FN parameters and LOCAL variables restore their previous values on normal
 return, BASIC runtime errors and END, including nested calls. This cleanup is
 a Lispy execution guarantee, not a claim to reproduce BBCSDL shared-stack error
 semantics. Host interrupts such as KeyboardInterrupt are outside this guarantee.
+
+### Labels and jumps
+
+Labels follow BBC BASIC in every mode, including MBASIC. A label is defined
+only by its name in parentheses at the start of a statement, and is jumped to
+by its bare name. A target in parentheses is a calculated jump: the expression
+is evaluated and must give a line number.
+
+```basic
+10 n = 2
+20 GOTO (n * 10 + 20)  : REM calculated: jumps to line 40
+30 PRINT "skipped"
+40 GOSUB greet : GOTO done
+(greet) PRINT "hello" : RETURN
+(done) RESTORE values : READ a : PRINT a
+(values) DATA 42
+```
+
+The same three target forms (line number, bare `label`, `(expression)`) work
+for `GOTO`, `GOSUB`, `RESTORE` and every target of `ON ... GOTO/GOSUB`.
+A bare name is always a label and never reads a variable of the same name, so
+`dest = 100 : GOSUB dest` looks for a label `(dest)`; write `GOSUB (dest)`
+to jump to line 100. Label names are not variables either.
 
 A numeric destination immediately after single-line `THEN` or `ELSE` is an
 implicit `GOTO`, as in [BBC BASIC](https://www.bbcbasic.co.uk/bbcbasic/manual/bbckey4.html#then).
