@@ -63,6 +63,23 @@ class LanguageRunTest(TestCase):
             machine.LispMachine.eval_buffer(app, basic=True, basic_backend='python')
         self.assertIn(';; Python mini_basic finished (console hold requested).\n', app.lines)
 
+    def test_run_as_python_dialect_passes_dialect_once(self):
+        app = _FakeMachine('PRINT 42')
+        app.eval_buffer = lambda **kwargs: machine.LispMachine.eval_buffer(app, **kwargs)
+        app.settings = {}
+        with patch.object(machine.BR, 'run_python_basic', return_value=0) as external:
+            machine.LispMachine.eval_basic_buffer_as(app, backend='python', dialect='mini')
+            self.assertEqual(external.call_args.kwargs['dialect'], 'mini')
+            machine.LispMachine.eval_buffer(app, basic=True, basic_backend='python')
+            self.assertIsNone(external.call_args.kwargs['dialect'])
+        self.assertEqual(app.settings, {})
+
+    def test_run_as_menu_lists_mini_mbasic_and_bbc(self):
+        labels = [label for label, _ in machine.BASIC_DIALECT_RUNS]
+        self.assertTrue(any('MBASIC' in label for label in labels))
+        self.assertTrue(any('mini dialect' in label for label in labels))
+        self.assertTrue(any('BBC' in label for label in labels))
+
     def test_python_script_exit_10_is_not_basic_hold(self):
         app = _FakeMachine('raise SystemExit(10)')
         app.tab.name = 'example.py'

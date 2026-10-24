@@ -393,6 +393,11 @@ means normal completion with a console-hold request, rather than an error.
 no saved backend selector. **BASIC Settings** retains Python executable/project
 locations and the optional SDL window. **F6 → Listener** and **Shift+F6 → ANSI terminal** run the buffer and save the destination for F5/F7/F8 and Listener evaluations. There is no separate output selector in BASIC Settings.
 
+**Eval → Run BASIC buffer as** runs the whole buffer once as Lispy BASIC
+with BBC or MBASIC compatibility, or as Python mini_basic forced to the mini
+or BBC dialect (`--dialect`). BASIC Settings are not changed, so the next
+F6/F8 run uses the saved choice again.
+
 **Eval → Real BBC BASIC for SDL buffer** uses the actual BBCSDL executable in its own window. Configure it and the native text loader in BASIC Settings; see [one-time setup](docs/BBCSDL.md).
 For terminal-only programs turn SDL graphics off: enabling it mirrors PRINT
 through the SDL window and terminal, which can have very different performance.
