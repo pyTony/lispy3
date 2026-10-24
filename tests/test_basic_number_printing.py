@@ -68,6 +68,20 @@ class NumberPrintingTest(ReaderTestCase):
         machine.LispMachine.eval_buffer(app)
         self.assertIn('A 19 B\n', ''.join(app.lines))
 
+    def test_run_as_mbasic_is_one_off(self):
+        from test_machine_args import machine
+        from test_machine_basic_buffer import _FakeMachine
+        app = _FakeMachine('A=19:PRINT "A";A;"B"')
+        app.tab.name = 'example.bas'
+        app.settings = {'basic_number_printing': 'bbc'}
+        app.eval_buffer = lambda **kwargs: machine.LispMachine.eval_buffer(app, **kwargs)
+        machine.LispMachine.eval_basic_buffer_as(app, backend='lispy', print_style='mbasic')
+        self.assertIn('A 19 B\n', ''.join(app.lines))
+        self.assertEqual(app.settings, {'basic_number_printing': 'bbc'})
+        app.lines.clear()
+        machine.LispMachine.eval_buffer(app)
+        self.assertIn('A19B\n', ''.join(app.lines))
+
     def test_editor_terminal_buffer_uses_saved_style(self):
         from unittest.mock import Mock
         from test_machine_args import machine
