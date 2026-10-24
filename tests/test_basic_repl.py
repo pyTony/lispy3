@@ -48,6 +48,23 @@ class BasicReplTest(LispyTestCase):
             session.submit('LOAD "relative.bas"')
             self.assertEqual(session.source(), '10 PRINT 42\n')
 
+    def test_save_rejects_reserved_bbc_without_creating_or_overwriting(self):
+        self.submit('10 PRINT 42')
+        with tempfile.TemporaryDirectory() as directory:
+            self.repl.directory = Path(directory)
+            for name in ('new.bbc', 'existing.BBC', 'mixed.bBc'):
+                with self.subTest(name=name):
+                    path = Path(directory)/name
+                    if name.startswith('existing'):
+                        path.write_bytes(b'original tokenized program')
+                    with self.assertRaisesRegex(ValueError, r'\.bbc is reserved for tokenized programs.*\.bas'):
+                        self.submit('SAVE "'+name+'"')
+                    if name.startswith('existing'):
+                        self.assertEqual(path.read_bytes(), b'original tokenized program')
+                    else:
+                        self.assertFalse(path.exists())
+            self.assertEqual(self.repl.source(), '10 PRINT 42\n')
+
     def test_lines_replace_delete_sort_list_and_run(self):
         self.assertEqual(self.submit('30 PRINT "old"', '10 PRINT "first"',
             '20 PRINT "deleted"', '20', '30 PRINT "last"', 'LIST', 'RUN'),

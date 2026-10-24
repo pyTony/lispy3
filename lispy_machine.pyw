@@ -107,7 +107,7 @@ DEFAULT_LANGUAGE = SH.language_for("untitled.lisp", LANGUAGES) or SH.Language({"
 
 
 def source_filetypes(languages=LANGUAGES, *, tokenized=True):
-    """Use the installed syntax definitions for source-file dialog filters."""
+    """Group BASIC input together; .bbc imports are decoded by extension."""
     groups = []
     for language in languages:
         patterns = tuple(dict.fromkeys(pattern for extension in language.extensions
@@ -115,7 +115,12 @@ def source_filetypes(languages=LANGUAGES, *, tokenized=True):
         if patterns:
             groups.append((language.name, patterns))
     if tokenized:
-        groups.append(('Tokenised BBC BASIC', ('*.bbc', '*.BBC')))
+        for index, (name, patterns) in enumerate(groups):
+            if name == 'BBC BASIC':
+                groups[index] = (name, tuple(dict.fromkeys(patterns + ('*.bbc', '*.BBC'))))
+                break
+        else:
+            groups.append(('BBC BASIC', ('*.bbc', '*.BBC')))
     supported = tuple(dict.fromkeys(pattern for _, patterns in groups for pattern in patterns))
     return ([('Supported source files', supported)] if supported else []) + groups + [('All files', '*')]
 
@@ -2262,7 +2267,7 @@ class LispMachine(tk.Tk):
 
     def _save_tab_to_path(self, tab, path):
         if os.path.splitext(path)[1].lower() == '.bbc':
-            messagebox.showerror('Save failed', 'BBC files contain tokenised BASIC. Save editable text as .bas; native tokenised output is not supported.')
+            messagebox.showerror('Save failed', '.bbc is reserved for tokenized programs. Save editable text as .bas.')
             return False
         try:
             with open(path, "w", encoding="utf-8") as f:
