@@ -54,6 +54,8 @@ class NumberPrintingTest(ReaderTestCase):
         with contextlib.redirect_stdout(output):
             repl.submit('10 PRINT "A";19;"B"')
             repl.submit('RUN')
+            repl.submit('NEW')
+            repl.submit('10 PRINT "A";19;"B"')
             repl.submit('RUN')
         self.assertEqual(output.getvalue(), 'A 19 B\nA 19 B\n')
 
@@ -65,3 +67,38 @@ class NumberPrintingTest(ReaderTestCase):
         app.settings = {'basic_number_printing': 'mbasic'}
         machine.LispMachine.eval_buffer(app)
         self.assertIn('A 19 B\n', ''.join(app.lines))
+
+    def test_editor_terminal_buffer_uses_saved_style(self):
+        from unittest.mock import Mock
+        from test_machine_args import machine
+        from test_machine_basic_buffer import _FakeMachine
+        app = _FakeMachine('PRINT "A";19;"B"')
+        app.settings = {'basic_number_printing': 'mbasic'}
+        app.basic_output = Mock()
+        app.basic_output.get.return_value = 'ansi'
+        terminal = io.StringIO()
+        @contextlib.contextmanager
+        def output():
+            with contextlib.redirect_stdout(terminal), patch.object(machine.lispy_terminal, 'terminal_output_active', return_value=True):
+                yield
+        with patch.object(machine.lispy_terminal, 'ansi_terminal_output', output):
+            machine.LispMachine.eval_buffer(app, basic=True)
+        self.assertEqual(terminal.getvalue(), 'A 19 B\n')
+
+    def test_gui_choice_updates_session_and_persisted_setting(self):
+        from types import SimpleNamespace
+        from test_machine_args import machine
+        app = SimpleNamespace(settings={}, basic_repl=SimpleNamespace(print_style='bbc'))
+        with patch.object(machine, 'save_settings') as save:
+            machine.LispMachine._set_basic_number_printing(app, 'MBASIC')
+        self.assertEqual(app.settings['basic_number_printing'], 'mbasic')
+        self.assertEqual(app.basic_repl.print_style, 'mbasic')
+        save.assert_called_once_with(app.settings)
+
+    def test_standalone_repl_flag(self):
+        import subprocess
+        import sys
+        from support import REPO_DIR
+        result = subprocess.run([sys.executable, '-m', 'lispy_support.basic_repl', '--print-style', 'mbasic'], input='PRINT "A";19;"B"\nQUIT\n', cwd=REPO_DIR, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('A 19 B\n', result.stdout)

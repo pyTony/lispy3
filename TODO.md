@@ -591,3 +591,10 @@ no visual desktop smoke test was performed. Local SDL/demo edits were excluded.
 - [x] Add bare, fractional, bounded, repeat-last and negatively seeded RND forms.
 - [x] Keep state local to the BASIC instance and exclude random FNs from automatic caching.
 - [x] Test syntax diagnostics, argument evaluation, state isolation and selective imports.
+
+### MBASIC number printing option (2026-10-24)
+
+- [x] Add opt-in Microsoft-style numeric PRINT spaces, keeping BBC the default.
+- [x] Persist the editor choice and apply it in Listener and ANSI runs.
+- [x] Add standalone REPL --print-style and exported Lisp configuration API.
+- [x] Reproduce unchanged Star Trek lines and verify sign/zero/fraction, STR$, TAB and RUN-reset behavior.

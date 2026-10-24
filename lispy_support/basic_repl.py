@@ -12,7 +12,11 @@ class LoadedProgram:
 
 
 class BasicRepl:
-    def __init__(self, runtime, read_source=None, directory=None, get_current_source=None):
+    def __init__(self, runtime, read_source=None, directory=None, get_current_source=None, print_style='bbc'):
+        print_style = str(print_style).lower()
+        if print_style not in ('bbc', 'mbasic'):
+            raise ValueError('number print style must be bbc or mbasic')
+        self.print_style = print_style
         self.runtime = runtime
         self.get_current_source = get_current_source
         self.manager = runtime.workspaces
@@ -38,13 +42,14 @@ class BasicRepl:
         self.workspace = self.manager.create('BASIC REPL')
         with self.manager.use(self.workspace):
             r = self.runtime
-            r.eval_exp(r.parse('(import (only mini-basic bbc-run))'), r.global_env)
+            r.eval_exp(r.parse('(import (only mini-basic bbc-run bbc-set-print-style!))'), r.global_env)
 
     def _execute(self, source):
         if self.workspace is None:
             self._fresh()
         with self.manager.use(self.workspace):
             r = self.runtime
+            r.eval_exp(['bbc-set-print-style!', ':'+self.print_style], r.global_env)
             form = r.expand(['bbc-run', r.String(source)], toplevel=True)
             r.eval_exp(form, r.global_env)
 
@@ -169,9 +174,13 @@ def setup_completion(directory=None):
     return True
 
 
-def main():
+def main(argv=None):
+    import argparse
     import lispy3
-    session = BasicRepl(lispy3)
+    parser = argparse.ArgumentParser(description='Lispy mini-basic REPL')
+    parser.add_argument('--print-style', choices=('bbc', 'mbasic'), default='bbc', help='numeric PRINT spacing (default: bbc)')
+    args = parser.parse_args(argv)
+    session = BasicRepl(lispy3, print_style=args.print_style)
     setup_completion(session.directory)
     print('Lispy mini-basic. HELP for commands; QUIT to exit.')
     try:

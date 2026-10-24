@@ -238,11 +238,21 @@
                  (str (car parts) "E" (string->number (nth parts 1))))
                text)))))
 
+(define bbc-number-print-style :bbc)
+
+(define (bbc-set-print-style! style)
+  (if (not (member style '(:bbc :mbasic)))
+      (error "number print style must be :bbc or :mbasic"))
+  (set! bbc-number-print-style style)
+  #f)
+
 (define (bbc-print-value v justify)
   (if (string? v)
       (bbc-write v)
       (let [text (bbc-str v)]
-        (bbc-write (if justify (text/rjust bbc-zone-width) text)))))
+        (bbc-write (if (eq? bbc-number-print-style :mbasic)
+                       (str (if (eq? (string-ref text 0) #\-) "" " ") text " ")
+                       (if justify (text/rjust bbc-zone-width) text))))))
 
 ;;; --- Helpers the macros use while they expand ---
 

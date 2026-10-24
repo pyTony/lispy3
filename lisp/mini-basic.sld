@@ -1,5 +1,5 @@
 (define-library mini-basic
-  (export bbc-run bbc-load bbc-expand bbc-program
+  (export bbc-run bbc-load bbc-expand bbc-program bbc-set-print-style!
           CLS COLOUR COLOR ANSI VDU ANSI-RESET
           LET PRINT IF FOR REPEAT WHILE CASE
           EXIT-FOR EXIT-REPEAT EXIT-WHILE END ENDPROC FN=

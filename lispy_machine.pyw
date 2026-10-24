@@ -1516,7 +1516,7 @@ class LispMachine(tk.Tk):
             plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('lispy_support.basic_repl', False)
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
         self.basic_repl_mode = tk.BooleanVar(self, value=False)
-        self.basic_repl = BasicRepl(L, self._read_basic_repl_source, get_current_source=self._get_basic_buffer_text)
+        self.basic_repl = BasicRepl(L, self._read_basic_repl_source, get_current_source=self._get_basic_buffer_text, print_style=self.settings.get('basic_number_printing', 'bbc'))
         self.listener_mode = tk.StringVar(self, value='basic' if self.basic_repl_mode.get() else
                                          'lisp' if self.plain_repl.get() else 'listener')
         self.repl_pending = ""      # lines of an unfinished form in the plain REPL
@@ -2739,6 +2739,14 @@ class LispMachine(tk.Tk):
         self._output_mode = self.basic_output.get()
         save_settings(self.settings)
 
+    def _set_basic_number_printing(self, style):
+        style = str(style).lower()
+        if style not in ('bbc', 'mbasic'):
+            raise ValueError('number print style must be bbc or mbasic')
+        self.settings['basic_number_printing'] = style
+        self.basic_repl.print_style = style
+        save_settings(self.settings)
+
     def _open_basic_settings(self):
         if self.basic_settings_window is not None and self.basic_settings_window.winfo_exists():
             self.basic_settings_window.lift()
@@ -2750,6 +2758,18 @@ class LispMachine(tk.Tk):
         frame.pack(fill='both', expand=True)
         ttk.Label(frame, text='BASIC: F5/F6 use Lispy mini-basic; F7/F8 use Python mini_basic.').pack(anchor='w', pady=(0,12))
         status = tk.StringVar(window, value='Settings are saved automatically.')
+        numbers = ttk.Frame(frame)
+        numbers.pack(fill='x', pady=(0,12))
+        ttk.Label(numbers, text='Lispy BASIC number printing').pack(side='left', padx=(0,8))
+        number_style = tk.StringVar(window, value=self.settings.get('basic_number_printing', 'bbc').upper())
+        choices = ttk.Combobox(numbers, textvariable=number_style, values=('BBC', 'MBASIC'), state='readonly', width=12)
+        choices.pack(side='left')
+        def change_number_style(event=None):
+            style = number_style.get().lower()
+            self._set_basic_number_printing(style)
+            status.set('Saved number printing: '+style.upper()+'. Applies to the next run.')
+        choices.bind('<<ComboboxSelected>>', change_number_style)
+
 
         examples = ttk.Frame(frame)
         examples.pack(fill='x', pady=(0,12))
@@ -2968,8 +2988,11 @@ class LispMachine(tk.Tk):
             if basic:
                 # Quote source as a Lisp string; never parse BASIC as Lisp or
                 # insert Lisp closing brackets into the user's BASIC buffer.
+                style = getattr(self, 'settings', {}).get('basic_number_printing', 'bbc')
+                style = style if style in ('bbc', 'mbasic') else 'bbc'
                 forms = self._parse_top_level_forms(
-                    '(import (prefix (only mini-basic bbc-run) editor-basic:))\n'
+                    '(import (prefix (only mini-basic bbc-run bbc-set-print-style!) editor-basic:))\n'
+                    '(editor-basic:bbc-set-print-style! :'+style+')\n'
                     '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
             else:
                 forms = self._parse_top_level_forms(content, source_name=getattr(tab, 'path', None) or tab.name)
@@ -3344,6 +3367,9 @@ class LispMachine(tk.Tk):
         self._cached_basic_buffer = tab.get_content() if tab is not None else ''
 
     def _basic_feed(self, lines, source=None, source_line=1):
+        style = getattr(self, 'settings', {}).get('basic_number_printing')
+        if style in ('bbc', 'mbasic'):
+            self.basic_repl.print_style = style
         if self._busy():
             self._show_prompt()
             return
