@@ -796,6 +796,8 @@ class EditorTab(tk.Frame):
         prefix = t.get('1.0', 'insert')
         if self.language.name in ('Lisp', 'BBC BASIC'):
             target_indent = ET.next_indent(prefix, basic=self.language.name == 'BBC BASIC')
+        elif self.language.name == 'Python':
+            target_indent = ET.next_python_indent(prefix)
         else:
             line = prefix.split('\n')[-1]
             target_indent = len(line)-len(line.lstrip())
@@ -2644,6 +2646,8 @@ class LispMachine(tk.Tk):
             if tab.language.name == 'Lisp':
                 # Also breaks one-line definitions and over-long lines.
                 formatted = ET.reindent_lisp(source, tab.path or tab.name, first, stop)
+            elif tab.language.name == 'Python':
+                formatted = ET.indent_python(source, tab.path or tab.name, first, stop)
             elif tab.language.name == 'BBC BASIC':
                 formatted = ET.indent_basic(source)
                 if selection:
@@ -2652,7 +2656,7 @@ class LispMachine(tk.Tk):
                     original_lines[first:stop] = new_lines[first:stop]
                     formatted = ''.join(original_lines)
             else:
-                self.listener_write(';; Reindent supports Lisp and BASIC buffers.\n', 'info')
+                self.listener_write(';; Reindent supports Lisp, BASIC and Python buffers.\n', 'info')
                 return
         except SyntaxError as error:
             self._editor_syntax_error(tab, error)
@@ -2856,6 +2860,41 @@ class LispMachine(tk.Tk):
 
         def work():
             started = time.perf_counter() if timed else None
+            input_state = []
+            def begin_python_input(replies):
+                if not input_state:
+                    pending = self._console_input() if self.console_ready else ''
+                    input_state.append((self.plain_repl.get(), self.basic_repl_mode.get(),
+                                        self.listener_mode.get(), pending))
+                if self.console_ready:
+                    self.listener_text.delete('prompt_start', 'end-1c')
+                    self.console_ready = False
+                self._begin_basic_input(replies)
+                self.basic_repl_mode.set(input_state[0][1])
+                self.listener_mode.set(input_state[0][2])
+            def read_python_input():
+                if terminal:
+                    return lispy_terminal.read_line()
+                replies = queue.Queue()
+                try:
+                    self._ui(begin_python_input, replies)
+                    while True:
+                        try:
+                            return replies.get(timeout=0.05)
+                        except queue.Empty:
+                            pass
+                finally:
+                    self._ui(self._end_basic_input, replies)
+            def restore_python_input():
+                if input_state:
+                    plain, basic, mode, pending = input_state[0]
+                    self.plain_repl.set(plain)
+                    self.basic_repl_mode.set(basic)
+                    self.listener_mode.set(mode)
+                    self._basic_input_used = False
+                    self._apply_repl_mode()
+                    if plain:
+                        self._set_console_input(pending)
             def write(line):
                 if terminal:
                     sys.stdout.write(line)
@@ -2878,7 +2917,8 @@ class LispMachine(tk.Tk):
                 with output:
                     if python_source:
                         status = BR.run_python_source(source, write, cwd=cwd,
-                            executable=settings.get('basic_python'), filename=filename, source_line=source_line)
+                            executable=settings.get('basic_python'), filename=filename, source_line=source_line,
+                            read_input=read_python_input)
                     else:
                         status = BR.run_python_basic(source, write, cwd=cwd,
                             executable=settings.get('basic_python'),
@@ -2890,6 +2930,8 @@ class LispMachine(tk.Tk):
             except Exception as error:
                 self._ui(self._report_form_error, error)
             finally:
+                if python_source and input_state:
+                    self._ui(restore_python_input)
                 if started is not None:
                     self._ui(self.listener_write, f';; Buffer elapsed time: {time.perf_counter()-started:.3f} s\n', 'info')
         self._start(work)
