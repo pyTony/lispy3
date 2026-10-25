@@ -57,11 +57,12 @@ def install(env, Procedure, String):
         try:
             mode = MODES[int(mode)]
         except KeyError:
-            raise ValueError(f"unsupported graphics MODE {mode}; choose 0, 1, 2 or 9") from None
+            raise ValueError(f"unsupported graphics MODE {mode}; choose 0, 1, 2, 8 or 9") from None
         old = current["graphics"]
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["palette"] = list(mode.palette)
         current["basic"] = False
         current["colour"] = mode.colours - 1
         current["background"] = 0
@@ -75,6 +76,7 @@ def install(env, Procedure, String):
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["palette"] = list(mode.palette)
         current["basic"] = False
         current["colour"] = 1
         current["pen"] = current["previous"] = (0, 0)
@@ -92,7 +94,13 @@ def install(env, Procedure, String):
         i = int(index)
         if not 0 <= i < m.colours or i >= len(m.palette):
             raise ValueError(f"palette index {i} invalid for mode {m.number}")
-        return m.palette[i]
+        return current["palette"][i]
+
+    def set_palette(index, r, g, b):
+        """BBC COLOUR n,r,g,b: logical colour n becomes that RGB colour."""
+        palette_color(index)
+        current["palette"][int(index)] = rgb(r, g, b)
+        return []
 
     def open_window(w=None, h=None):
         return bool(gfx().open(None if w is None else int(w), None if h is None else int(h)))
@@ -269,7 +277,7 @@ def install(env, Procedure, String):
         """BBC RECTANGLE [FILL] x,y,w[,h]: (x,y) is a corner, w and h the size."""
         g = gfx()
         x, y, w = int(x), int(y), int(w)
-        h = w if h is None else int(h)
+        h = w if h is None or h == [] else int(h)
         colour = palette_color(current["colour"])
         if fill and fill != []:
             (x0, y0), (x1, y1) = (g.virtual_to_pixel(x, y), g.virtual_to_pixel(x + w, y + h))
@@ -332,6 +340,7 @@ def install(env, Procedure, String):
         "graphics-virtual-rectangle": v_rect,
         "graphics-cls": cls,
         "graphics-refresh": refresh,
+        "graphics-palette": set_palette,
     }
     for name, func in primitives.items():
         if name not in WINDOW_PRIMITIVES:

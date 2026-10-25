@@ -37,7 +37,8 @@ Only opening a window requires pygame, for example `python -m pip install pygame
 
 | Command | Behavior |
 | --- | --- |
-| MODE 0/1/2/9 | Reset framebuffer, origin, pen and colours; open SDL window |
+| MODE 0/1/2/8/9 | Reset framebuffer, origin, pen and colours; open SDL window |
+| COLOUR n,r,g,b | Make logical colour n that RGB colour until the next MODE |
 | GCOL c / GCOL 0,c | Select foreground logical colour |
 | GCOL 128+c | Select background logical colour for CLG |
 | MOVE x,y / PLOT 4,x,y | Move the graphics cursor |
@@ -55,9 +56,11 @@ Only opening a window requires pygame, for example `python -m pip install pygame
 
 Graphics coordinates span 1280 by 1024 units with a bottom-left origin;
 framebuffer inspection uses top-left pixel coordinates. Dimensions are
-640x256 (MODE 0), 320x256 (MODE 1), 160x256 (MODE 2), and 320x256 (MODE 9).
+640x256 (MODE 0), 320x256 (MODE 1), 160x256 (MODE 2), 640x512 (MODE 8) and 320x256 (MODE 9).
 MODE 0 has black/white; MODE 1 has black/red/yellow/white. MODE 2/9 use
-black, red, green, yellow, blue, magenta, cyan, white, repeated at indices 8–15.
+black, red, green, yellow, blue, magenta, cyan, white, repeated at indices 8–15;
+MODE 8 has the same 16. `COLOUR n,r,g,b` (Lisp: `(graphics-palette n r g b)`)
+changes one entry, as `basic/graphics/random-shapes.bas` does for each shape.
 This is a static palette approximation: flashing and a full Archimedes palette
 are not implemented. The preview uses indices 1–7 only.
 

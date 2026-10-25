@@ -200,3 +200,30 @@ class LispGraphicsPrimitivesTest(LispyTestCase):
         finally:
             B.set_dispatcher(None)
         self.assertEqual(len(calls), 1)
+
+
+class BasicPaletteTest(LispyTestCase):
+    def setUp(self):
+        super().setUp()
+        L.load_workspace('mini-basic')
+
+    basic = BasicGraphicsTest.basic
+    pixel = BasicGraphicsTest.pixel
+
+    def test_colour_n_rgb_sets_the_logical_colour_for_drawing(self):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic('MODE 8:COLOUR 1,10,20,30:GCOL 0,1:PLOT 0,0')
+            self.assertEqual(self.ev('(graphics-mode-info)'), [8,640,512,16,1280,1024])
+            self.assertEqual(self.pixel(0,511), [10,20,30])
+            self.basic('MODE 8:GCOL 1:PLOT 0,0')
+            self.assertEqual(self.pixel(0,511), [255,0,0])
+        with self.assertRaisesRegex(Exception, 'COLOUR takes n or n,r,g,b'):
+            self.basic('COLOUR 1,2')
+
+    def test_random_shapes_example_runs(self):
+        from pathlib import Path
+        from support import REPO_DIR
+        source=(Path(REPO_DIR)/'basic/graphics/random-shapes.bas').read_text().replace('COUNT%=300','COUNT%=5')
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic(source)
+        self.assertEqual(self.ev('(graphics-mode-info)')[0], 8)
