@@ -1527,6 +1527,8 @@ class LispMachine(tk.Tk):
         self.guide_window = None    # the Help window, made the first time it is opened
         self._job = None            # the thread running Lisp code, while it runs
         self._calls = queue.Queue() # what that thread hands to the Tk thread: (fn, args, box, done)
+        self._output_lock = threading.Lock()
+        self._pending_output = None # Listener text not yet shown: [tag, pieces], joined into one write
         L.global_env['help'] = self.lisp_help
         L.global_env['sleep'] = self._sleep
         from lispy_support.lispy_graphics_bindings import set_dispatcher
@@ -2381,6 +2383,7 @@ class LispMachine(tk.Tk):
         """Call fn(*args) on the Tk thread and return its result. From the Lisp thread this waits."""
         if threading.current_thread() is threading.main_thread():
             return fn(*args)
+        LispMachine._end_output_batch(self)
         box, done = {}, threading.Event()
         self._calls.put((fn, args, box, done))
         while not done.wait(0.05):          # short waits let Stop's exception in
@@ -2393,8 +2396,39 @@ class LispMachine(tk.Tk):
         """Call fn(*args) on the Tk thread without waiting for it (Listener output)."""
         if threading.current_thread() is threading.main_thread():
             fn(*args)
+        elif fn == self.listener_write and hasattr(self, '_output_lock'):
+            LispMachine._post_output(self, *args)
         else:
+            LispMachine._end_output_batch(self)
             self._calls.put((fn, args, None, None))
+
+    def _post_output(self, text, tag=None):
+        """Queue Listener text, joined with text written before the Tk thread shows it.
+
+        Each Listener write costs Tk work, so a program printing one character
+        at a time would otherwise spend most of its time in the Tk thread.
+        """
+        with self._output_lock:
+            batch = self._pending_output
+            if batch is not None and batch[0] == tag:
+                batch[1].append(text)
+                return
+            batch = self._pending_output = [tag, [text]]
+        self._calls.put((LispMachine._show_output, (self, batch), None, None))
+
+    def _show_output(self, batch):
+        with self._output_lock:
+            if self._pending_output is batch:
+                self._pending_output = None
+            text = ''.join(batch[1])
+        self.listener_write(text, batch[0])
+
+    def _end_output_batch(self):
+        """Text written after another Tk call must not join output queued before it."""
+        lock = getattr(self, '_output_lock', None)
+        if lock is not None:
+            with lock:
+                self._pending_output = None
 
     def _sleep(self, seconds):
         """(sleep seconds) that Stop can cut short."""
