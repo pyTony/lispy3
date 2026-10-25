@@ -57,6 +57,62 @@
         (vector-set! cur (bbc-int (car idxs)) val)
         (loop (vector-ref cur (bbc-int (car idxs))) (cdr idxs)))))
 
+;;; --- Whole-array operations: a() = list, a() = b() op c, a() = b() . c(), SUM ---
+
+(define (bbc-array-fill! arr values)
+  ;; a() = v1, v2, ...: row by row; a single value fills every element
+  (let [all (null? (cdr values)) rest values]
+    (define (fill! v)
+      (dotimes [i (vector-length v)]
+        (cond ((vector? (vector-ref v i)) (fill! (vector-ref v i)))
+              ((not (null? rest))
+               (vector-set! v i (car rest))
+               (if (not all) (set! rest (cdr rest)))))))
+    (fill! arr)))
+
+(define (bbc-array-op! dest op a b)
+  ;; dest() = a() op b, b an array or a number; no op copies a()
+  (if (not (= (vector-length dest) (vector-length a)))
+      (error "Type mismatch: arrays differ in size"))
+  (dotimes [i (vector-length dest)]
+    (let [x (vector-ref a i)
+          y (if (vector? b) (vector-ref b i) b)]
+      (if (vector? x)
+          (bbc-array-op! (vector-ref dest i) op x y)
+          (vector-set! dest i (if op (op x y) x))))))
+
+(define (bbc-array-sum arr)
+  (let [total 0]
+    (dotimes [i (vector-length arr)]
+      (let [x (vector-ref arr i)]
+        (set! total (+ total (if (vector? x) (bbc-array-sum x) x)))))
+    total))
+
+(define (bbc-array-sum-range arr lead lo hi)
+  ;; SUM(a(i, lo TO hi)): elements lo..hi of the row a(i, ...)
+  (let [row (apply bbc-aref (cons arr lead)) total 0]
+    (for-each (lambda (i) (set! total (+ total (vector-ref row i))))
+              (range (bbc-int lo) (+ (bbc-int hi) 1)))
+    total))
+
+;;; --- DATA items that are expressions: READ evaluates them, as BBC does ---
+
+(define (bbc-data-expr? x) (and (pair? x) (eq? (car x) 'bbc-data-expr)))
+(define (bbc-data-string x) (if (bbc-data-expr? x) (bbc-second x) (str x)))
+(define (bbc-data-number x)
+  (cond ((bbc-data-expr? x) ((nth x 2)))
+        ((string? x) (bbc-val x))
+        (else x)))
+
+(define (bbc-data-code item vars)
+  ;; A word that no statement assigns stays text, as before
+  (if (and (pair? item) (eq? (car item) 'DATA-EXPR))
+      (let [raw (bbc-second item) form (nth item 2)]
+        (if (and (symbol? form) (not (member form vars)))
+            raw
+            `(list 'bbc-data-expr ,raw (lambda () ,form))))
+      (list 'quote item)))
+
 ;;; --- Macros for LABEL, DATA, READ, RESTORE, DIM, AREF, ASET! ---
 
 (define-macro (LABEL name) '#f)
@@ -70,12 +126,24 @@
                 `(set! ,var (bbc-make-array (list ,@dims) ,(bbc-default var)))))
             specs)))
 
+(define (bbc-butlast lst)
+  (if (null? (cdr lst)) '() (cons (car lst) (bbc-butlast (cdr lst)))))
+
+(define (bbc-index-code index)
+  ;; Subscripts truncate; whole numbers and integer variables need no trunc
+  (if (or (integer? index) (and (symbol? index) (bbc-suffix? index #\%)))
+      index
+      `(trunc ,index)))
+
 (define-macro (AREF var & indices)
-  `(bbc-aref ,var ,@indices))
+  `(aref ,var ,@(map bbc-index-code indices)))
 
 (define-macro (ASET! var val & indices)
-  (let [coerced (if (bbc-suffix? var #\%) `(bbc-int ,val) val)]
-    `(bbc-aset! ,var ,coerced ,@indices)))
+  (let [coerced (if (bbc-suffix? var #\%) `(bbc-int ,val) val)
+        codes (map bbc-index-code indices)
+        last (nth codes (- (length codes) 1))
+        lead (bbc-butlast codes)]
+    `(vector-set! (aref ,var ,@lead) ,last ,coerced)))
 
 (define (bbc-lhs-var target)
   ;; Extract the variable symbol from either var or (AREF var i ...)
@@ -89,8 +157,8 @@
               (let [raw (gensym "dat")
                     var (bbc-lhs-var t)
                     coerced (if (bbc-suffix? var #\$)
-                                `(str ,raw)
-                                `(if (string? ,raw) (bbc-val ,raw) ,raw))]
+                                `(bbc-data-string ,raw)
+                                `(bbc-data-number ,raw))]
                 `(let ((,raw (bbc-read!)))
                    ,(if (and (pair? t) (eq? (car t) 'AREF))
                         `(ASET! ,var ,coerced ,@(cdr (cdr t)))
@@ -350,7 +418,7 @@
                 (bbc-body-code main))]
     `(begin
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
-       (set! bbc-data (list->vector ',data-items))
+       (set! bbc-data (list->vector (list ,@(map (lambda (item) (bbc-data-code item vars)) data-items))))
        (set! bbc-data-ptr 0)
        (set! bbc-data-labels ,data-lbls)
        ,@defs
@@ -376,19 +444,34 @@
         ((bbc-at? :op "(") (bbc-value (bbc-p-expr)))
         (else (bbc-fail "expected a line number, label or (expression)"))))
 
+(define (bbc-data-item-end? offset)
+  (let [tok (nth bbc-toks (+ bbc-pos offset))]
+    (or (bbc-tok? tok :op ",") (member (car tok) '(:colon :eol :eof)))))
+
+(define (bbc-tokens-text start end)
+  ;; Source-like text of tokens start..end-1, for READ into a string
+  (str/join (map (lambda (tok)
+                   (cond ((> (length tok) 3) (nth tok 3))
+                         ((eq? (car tok) :str) (str "\"" (nth tok 1) "\""))
+                         (else (str (nth tok 1)))))
+                 (map (lambda (i) (nth bbc-toks i)) (range start end)))))
+
 (define (bbc-p-data-item)
-  (cond ((bbc-accept! :op "-")
-         (let [tok (bbc-expect! :num #f "a number after - in DATA")]
-           (- (nth tok 1))))
-        ((bbc-accept! :op "+")
-         (let [tok (bbc-expect! :num #f "a number after + in DATA")]
-           (nth tok 1)))
-        ((bbc-at? :num #f) (nth (bbc-advance!) 1))
+  (cond ((and (bbc-at? :num #f) (bbc-data-item-end? 1)) (nth (bbc-advance!) 1))
+        ((and (bbc-at? :op "-") (bbc-tok? (nth bbc-toks (+ bbc-pos 1)) :num #f) (bbc-data-item-end? 2))
+         (bbc-advance!) (- (nth (bbc-advance!) 1)))
+        ((and (bbc-at? :op "+") (bbc-tok? (nth bbc-toks (+ bbc-pos 1)) :num #f) (bbc-data-item-end? 2))
+         (bbc-advance!) (nth (bbc-advance!) 1))
         ((bbc-at? :str #f) (nth (bbc-advance!) 1))
-        ((or (bbc-at? :id #f) (bbc-at? :kw #f))
+        ((and (bbc-at? :kw #f) (bbc-data-item-end? 1))
          (let [tok (bbc-advance!)]
            (nth tok (if (> (length tok) 3) 3 1))))
-        (else "")))
+        ((bbc-data-item-end? 0) "")
+        (else
+         ;; t, -p, 2*q ...: READ evaluates it when it reads the item
+         (let [start bbc-pos
+               e (bbc-value (bbc-p-expr))]
+           (list 'DATA-EXPR (bbc-tokens-text start bbc-pos) e)))))
 
 (define (bbc-p-data)
   (let [items (list (bbc-p-data-item))]
@@ -403,7 +486,7 @@
 
 (define (bbc-p-dim-item)
   (let [tok (bbc-expect! :id #f "an array name")
-        var (bbc-var (nth tok 1))]
+        var (bbc-array-var (nth tok 1))]
     (if (not (bbc-at? :op "("))
         (bbc-fail "expected ( after array name in DIM"))
     (cons var (bbc-p-args))))
@@ -414,14 +497,49 @@
       (bbc-push! specs (bbc-p-dim-item)))
     (cons 'DIM specs)))
 
+(define (bbc-array-var name)
+  ;; a() and a are different variables in BBC BASIC
+  (bbc-var (str "array-" name)))
+
 (define (bbc-p-target)
   ;; Parse either a scalar variable or an array element var(i, ...)
   (let [tok (bbc-expect! :id #f "a variable")
         name (nth tok 1)
-        var (bbc-var name)]
-    (if (bbc-at? :op "(")
-        (list (append (list 'AREF var) (bbc-p-args)) name var)
-        (list var name var))))
+        var (if (bbc-at? :op "(") (bbc-array-var name) (bbc-var name))]
+    (cond ((and (bbc-at? :op "(") (bbc-tok? (nth bbc-toks (+ bbc-pos 1)) :op ")"))
+           (bbc-advance!) (bbc-advance!)
+           (list (list 'WHOLE var) name var))
+          ((bbc-at? :op "(")
+           (list (append (list 'AREF var) (bbc-p-args)) name var))
+          (else (list var name var)))))
+
+(define (bbc-at-whole-array?)
+  (and (bbc-at? :id #f)
+       (bbc-tok? (nth bbc-toks (+ bbc-pos 1)) :op "(")
+       (bbc-tok? (nth bbc-toks (+ bbc-pos 2)) :op ")")))
+
+(define (bbc-p-whole-array)
+  (let [tok (bbc-advance!)]
+    (bbc-advance!) (bbc-advance!)
+    (bbc-array-var (nth tok 1))))
+
+(define (bbc-p-array-assign dest)
+  ;; dest() = b() . c() | b() [op b()/expr] | value, value, ...
+  (if (bbc-at-whole-array?)
+      (let [a (bbc-p-whole-array)]
+        (cond ((bbc-accept! :op ".")
+               (if (not (bbc-at-whole-array?)) (bbc-fail "expected an array() after ."))
+               (list 'mat* a (bbc-p-whole-array) dest))
+              ((bbc-at-stmt-end?) (list 'bbc-array-op! dest #f a #f))
+              (else
+               (let [op (cond ((bbc-accept! :op "+") '+)
+                              ((bbc-accept! :op "-") '-)
+                              ((bbc-accept! :op "*") '*)
+                              ((bbc-accept! :op "/") '(lambda (x y) (/ (float x) y)))
+                              (else (bbc-fail "expected . + - * or / after the array")))
+                     b (if (bbc-at-whole-array?) (bbc-p-whole-array) (bbc-value (bbc-p-expr)))]
+                 (list 'bbc-array-op! dest op a b)))))
+      (list 'bbc-array-fill! dest (cons 'list (bbc-p-value-list)))))
 
 (define (bbc-p-assign)
   (let [target-info (bbc-p-target)
@@ -429,7 +547,10 @@
         name (nth target-info 1)
         var (nth target-info 2)
         is-arr (and (pair? lhs) (eq? (car lhs) 'AREF))]
-    (cond ((bbc-accept! :op "=")
+    (cond ((and (pair? lhs) (eq? (car lhs) 'WHOLE))
+           (bbc-expect! :op "=" "= after the whole array")
+           (bbc-p-array-assign var))
+          ((bbc-accept! :op "=")
            (let [rhs (bbc-value (bbc-p-expr))]
              (if is-arr
                  (append (list 'ASET! var rhs) (cdr (cdr lhs)))
@@ -449,7 +570,7 @@
                    `(let ,(map list idxs (cdr (cdr lhs)))
                       (ASET! ,var (- (AREF ,var ,@idxs) ,rhs) ,@idxs)))
                  (list 'LET var (list '- var rhs)))))
-          (else (bbc-fail "expected = after the variable")))))
+          (else (bbc-fail-assign name)))))
 
 (define (bbc-p-primary)
   (let [tok (bbc-peek)
@@ -463,7 +584,7 @@
              e))
           ((eq? kind :id)
            (bbc-advance!)
-           (let [var (bbc-var value)
+           (let [var (if (bbc-at? :op "(") (bbc-array-var value) (bbc-var value))
                  vtype (if (bbc-string-name? value) :str :num)]
              (if (bbc-at? :op "(")
                  (bbc-e (append (list 'AREF var) (bbc-p-args)) vtype)
@@ -477,10 +598,30 @@
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
           ((bbc-accept! :kw "RND") (bbc-p-rnd))
           ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
+          ((bbc-accept! :kw "SUM") (bbc-num (bbc-p-sum)))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)
            (bbc-p-function (bbc-lookup value bbc-functions)))
           (else (bbc-fail "expected an expression")))))
+
+(define (bbc-p-sum)
+  ;; SUM(a()) or SUM(a(i, lo TO hi))
+  (bbc-expect! :op "(" "( after SUM")
+  (let [var (bbc-array-var (nth (bbc-expect! :id #f "an array name") 1))
+        result #f]
+    (bbc-expect! :op "(" "( after the array name")
+    (if (bbc-accept! :op ")")
+        (set! result (list 'bbc-array-sum var))
+        (let [lead (list) lo #f hi #f]
+          (while (not hi)
+            (let [e (bbc-value (bbc-p-expr))]
+              (cond ((bbc-accept! :kw "TO") (set! lo e) (set! hi (bbc-value (bbc-p-expr))))
+                    ((bbc-accept! :op ",") (bbc-push! lead e))
+                    (else (bbc-fail "SUM of part of an array needs a range: a(i, lo TO hi)")))))
+          (bbc-expect! :op ")" ")")
+          (set! result (list 'bbc-array-sum-range var (cons 'list lead) lo hi))))
+    (bbc-expect! :op ")" ")")
+    result))
 
 (define (bbc-p-read)
   (let [targets (list (car (bbc-p-target)))]
@@ -561,5 +702,7 @@
           ((equal? value "GOSUB")
            (bbc-advance!) (list 'GOSUB (bbc-p-jump-target)))
           ((equal? value "RETURN") (bbc-advance!) (list 'RETURN))
-          ((equal? value "ON") (bbc-advance!) (bbc-p-on))
+          ((equal? value "ON")
+           (bbc-advance!)
+           (if (bbc-at-stmt-end?) (list 'CURSOR #t) (bbc-p-on)))
           (else #f))))

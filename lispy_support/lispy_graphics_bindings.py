@@ -12,13 +12,37 @@ def set_dispatcher(dispatcher):
     _dispatcher = dispatcher
 
 
+# Only these talk to SDL; drawing just writes the framebuffer, so it runs on the
+# calling thread instead of waiting for a round trip to the window's thread.
+WINDOW_PRIMITIVES = frozenset({
+    "graphics-mode", "bbc-graphics-mode", "graphics-rgb-mode", "graphics-open",
+    "graphics-present", "graphics-close", "graphics-window-open?"})
+
+
+def _points(values):
+    """Flat (x0 y0 x1 y1 ...) or nested ((x0 y0) ...) coordinates as pairs."""
+    values = list(values)
+    if values and isinstance(values[0], (list, tuple)):
+        return [(p[0], p[1]) for p in values]
+    if len(values) % 2:
+        raise ValueError("points need an even number of coordinates")
+    return list(zip(values[0::2], values[1::2]))
+
+
 def install(env, Procedure, String):
     """Install native functions into a single lispy3 environment.
 
-    No global singleton: each environment owns its framebuffer. All GUI calls
-    must run on the SDL-owning thread (handled by the Lispy Machine patch).
+    No global singleton: each environment owns its framebuffer. Window calls
+    run on the SDL-owning thread through the dispatcher (the Lispy Machine
+    sets one); drawing runs directly and the host's window poller shows it.
     """
-    current = {"graphics": None, "colour": 1, "pen": (0, 0), "background": 0}
+    current = {"graphics": None, "colour": 1, "pen": (0, 0), "background": 0,
+               "previous": (0, 0)}
+
+    def shown(g):
+        """Without a host poller, present now and then while drawing (CLI)."""
+        if _dispatcher is None:
+            g.maybe_present()
 
     def gfx():
         if current["graphics"] is None:
@@ -36,7 +60,7 @@ def install(env, Procedure, String):
         current["graphics"] = Graphics(mode)
         current["colour"] = mode.colours - 1
         current["background"] = 0
-        current["pen"] = (0, 0)
+        current["pen"] = current["previous"] = (0, 0)
         return mode.number
 
     def rgb_mode(w, h):
@@ -47,7 +71,7 @@ def install(env, Procedure, String):
             old.close()
         current["graphics"] = Graphics(mode)
         current["colour"] = 1
-        current["pen"] = (0, 0)
+        current["pen"] = current["previous"] = (0, 0)
         return [w, h]
 
     def mode_info(mode=None):
@@ -73,17 +97,17 @@ def install(env, Procedure, String):
 
     def pixel(x, y, r=255, g=255, b=255):
         gfx().pixel(x, y, rgb(r, g, b))
-        gfx().maybe_present()
+        shown(gfx())
         return []
 
     def line(x0, y0, x1, y1, r=255, g=255, b=255):
         gfx().line(x0, y0, x1, y1, rgb(r, g, b))
-        gfx().maybe_present()
+        shown(gfx())
         return []
 
     def v_pixel(x, y, colour=1):
         gfx().virtual_pixel(x, y, palette_color(colour))
-        gfx().maybe_present()
+        shown(gfx())
         return []
 
     def v_line(x0, y0, x1, y1, colour=1):
@@ -107,9 +131,13 @@ def install(env, Procedure, String):
         current["background" if colour >= 128 else "colour"] = index
         return []
 
+    def visit(x, y):
+        current["previous"] = current["pen"]
+        current["pen"] = (int(x), int(y))
+
     def move(x, y):
         gfx()
-        current["pen"] = (int(x), int(y))
+        visit(x, y)
         return []
 
     def draw(x, y):
@@ -117,8 +145,8 @@ def install(env, Procedure, String):
         dest = (int(x), int(y))
         start = current["pen"]
         g.virtual_line(*start, *dest, palette_color(current["colour"]))
-        current["pen"] = dest
-        g.maybe_present()
+        visit(*dest)
+        shown(g)
         return []
 
     def origin(x, y):
@@ -128,6 +156,8 @@ def install(env, Procedure, String):
         pen_x, pen_y = current["pen"]
         # The coordinate system changes; the existing physical cursor does not.
         current["pen"] = (pen_x + old_x - x, pen_y + old_y - y)
+        prev_x, prev_y = current["previous"]
+        current["previous"] = (prev_x + old_x - x, prev_y + old_y - y)
         g.set_origin(x, y)
         return []
 
@@ -141,7 +171,7 @@ def install(env, Procedure, String):
             current["graphics"].close()
         current["graphics"] = None
         current["colour"] = 1
-        current["pen"] = (0, 0)
+        current["pen"] = current["previous"] = (0, 0)
         return []
 
     def get_pixel(x, y):
@@ -154,7 +184,7 @@ def install(env, Procedure, String):
 
     def clg():
         gfx().clear(palette_color(current["background"]))
-        gfx().maybe_present()
+        shown(gfx())
         return []
 
     def plot(*args):
@@ -171,9 +201,98 @@ def install(env, Procedure, String):
             return draw(x, y)
         if code == 69:
             v_pixel(x, y, current["colour"])
-            current["pen"] = (int(x), int(y))
+            visit(x, y)
             return []
-        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW) or 69 (point)")
+        if code == 85:
+            g = gfx()
+            corners = (current["previous"], current["pen"], (int(x), int(y)))
+            g.fill_polygon([g.virtual_to_pixel_centre(*p) for p in corners],
+                           palette_color(current["colour"]))
+            visit(x, y)
+            shown(g)
+            return []
+        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW), 69 (point) or 85 (triangle)")
+
+    def fill_rect(x0, y0, x1, y1, r=255, g=255, b=255):
+        gfx().fill_rect(x0, y0, x1, y1, rgb(r, g, b))
+        shown(gfx())
+        return []
+
+    def triangle(x0, y0, x1, y1, x2, y2, r=255, g=255, b=255):
+        gfx().fill_triangle(x0, y0, x1, y1, x2, y2, rgb(r, g, b))
+        shown(gfx())
+        return []
+
+    def polygon(points, r=255, g=255, b=255):
+        gfx().fill_polygon(_points(points), rgb(r, g, b))
+        shown(gfx())
+        return []
+
+    def lines(points, r=255, g=255, b=255):
+        """Polyline through all points with one call."""
+        pts, colour = _points(points), rgb(r, g, b)
+        surface = gfx()
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            surface.line(x0, y0, x1, y1, colour)
+        shown(surface)
+        return []
+
+    def circle_fill(x, y, radius, r=255, g=255, b=255):
+        gfx().fill_circle(x, y, radius, rgb(r, g, b))
+        shown(gfx())
+        return []
+
+    def v_circle_fill(x, y, radius, colour=None):
+        g = gfx()
+        cx, cy = g.virtual_to_pixel_centre(x, y)
+        g.fill_circle(cx, cy, float(radius) * g.width / g.mode.virtual_width,
+                      palette_color(current["colour"] if colour is None else colour))
+        shown(g)
+        return []
+
+    def v_circle(x, y, radius, colour=None):
+        g = gfx()
+        cx, cy = g.virtual_to_pixel_centre(x, y)
+        g.circle(cx, cy, float(radius) * g.width / g.mode.virtual_width,
+                 palette_color(current["colour"] if colour is None else colour))
+        shown(g)
+        return []
+
+    def v_rect(x, y, w, h=None, fill=False):
+        """BBC RECTANGLE [FILL] x,y,w[,h]: (x,y) is a corner, w and h the size."""
+        g = gfx()
+        x, y, w = int(x), int(y), int(w)
+        h = w if h is None else int(h)
+        colour = palette_color(current["colour"])
+        if fill and fill != []:
+            (x0, y0), (x1, y1) = (g.virtual_to_pixel(x, y), g.virtual_to_pixel(x + w, y + h))
+            g.fill_rect(x0, y0, x1, y1, colour)
+        else:
+            corners = ((x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y))
+            for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+                g.virtual_line(ax, ay, bx, by, colour)
+        shown(g)
+        return []
+
+    def cls(colour=0):
+        """BBC CLS in a graphics mode also clears the window to text background."""
+        if current["graphics"] is not None:
+            current["graphics"].clear(palette_color(colour))
+            shown(current["graphics"])
+        return []
+
+    def refresh(*args):
+        """(graphics-refresh) shows the frame; #f/#t turn automatic showing off/on."""
+        g = current["graphics"]
+        if g is None:
+            return []
+        if args:
+            g.set_auto_refresh(args[0] is not False and args[0] != [])
+        else:
+            g.refresh()
+            if _dispatcher is None and g.window_open:
+                g.present()
+        return []
 
     primitives = {
         "graphics-mode": select,
@@ -196,8 +315,21 @@ def install(env, Procedure, String):
         "graphics-window-open?": lambda: current["graphics"] is not None and current["graphics"].window_open,
         "graphics-get-pixel": get_pixel,
         "graphics-close": close,
+        "graphics-fill-rect": fill_rect,
+        "graphics-triangle": triangle,
+        "graphics-polygon": polygon,
+        "graphics-lines": lines,
+        "graphics-circle-fill": circle_fill,
+        "graphics-virtual-circle-fill": v_circle_fill,
+        "graphics-virtual-circle": v_circle,
+        "graphics-virtual-rectangle": v_rect,
+        "graphics-cls": cls,
+        "graphics-refresh": refresh,
     }
     for name, func in primitives.items():
+        if name not in WINDOW_PRIMITIVES:
+            env[name] = Procedure(parms=["*args"], body=None, env=env, native_fn=func, name=name)
+            continue
         def call(*args, function=func):
             if _dispatcher is not None:
                 return _dispatcher(function, *args)
