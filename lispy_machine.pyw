@@ -2375,11 +2375,14 @@ class LispMachine(tk.Tk):
     def _poll_graphics(self):
         """Pump SDL on its owning Tk thread, also while evaluation is idle."""
         from lispy_support.lispy_graphics import pump_windows
+        window_open = False
         try:
-            pump_windows()
+            window_open = pump_windows()
         except Exception as error:
             self.listener_write(f'Graphics: {error}\n', 'error')
-        self.after(20, self._poll_graphics)
+        # With a window open, show each *REFRESH frame within a few ms; 20 ms
+        # beat against a program's own frame rate and dropped frames unevenly.
+        self.after(5 if window_open else 20, self._poll_graphics)
 
     def _gui_builtins_on_main(self, env=None):
         """Make the turtle and window built-ins run on the Tk thread, whichever thread calls them."""
