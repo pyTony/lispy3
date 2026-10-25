@@ -82,6 +82,12 @@ class RunTest(ReaderTestCase):
                   'PRINT y1%; " "; DEG PI; " "; DEG(ACS(0)); " "; DEG ASN 1; " "; RAD 180')
         self.assertEqual(self.run_bbc(source), '        50 180 90 90 3.14159265\n')
 
+    def test_angle_functions_survive_turtle_radians(self):
+        # Graphics bind turtle's zero-argument radians and degrees over math's
+        self.ev('(define (radians) 0)')
+        self.ev('(define (degrees) 0)')
+        self.assertEqual(self.run_bbc('PRINT DEG PI; " "; RAD 180'), '       180 3.14159265\n')
+
     def test_exit_and_repeat(self):
         source = 'REPEAT : n += 1 : IF n = 4 THEN EXIT REPEAT\nUNTIL FALSE\nPRINT n'
         self.assertEqual(self.run_bbc(source), '         4\n')
@@ -202,7 +208,7 @@ class KeywordPrefixNameTest(ReaderTestCase):
 
     def test_keyword_prefixes_are_rejected(self):
         for source, word in (('TOTAL=1', 'TO'), ('PRINT ORDER', 'OR'), ('TIME%=1', 'TIME'),
-                             ('X=DEG5', 'DEG'), ('DIM ELSEWHERE(3)', 'ELSE')):
+                             ('X=SWAPS', 'SWAP'), ('DIM ELSEWHERE(3)', 'ELSE')):
             with self.subTest(source=source):
                 with self.assertRaisesRegex(lispy3.LispyError, ' starts with the keyword ' + word + ','):
                     self.run_bbc(source)
@@ -212,6 +218,10 @@ class KeywordPrefixNameTest(ReaderTestCase):
         # no name character follows; lowercase and mixed-case names are never keywords
         self.assertEqual(self.run_bbc('COUNTER=2:TIMER=3:PIE=4:ENDX=5\nPRINT ;COUNTER+TIMER+PIE+ENDX'), '14\n')
         self.assertEqual(self.run_bbc('count%=2:Count%=3:total=4\nPRINT ;count%+Count%+total'), '9\n')
+
+    def test_supported_keyword_runs_into_its_argument(self):
+        # As in BBCSDL, DEG5 is DEG 5, like COS0
+        self.assertEqual(self.run_bbc('X=DEG5:PRINT ;INT X;" ";COS0'), '286 1\n')
 
     def test_unquoted_data_words_are_not_names(self):
         self.assertEqual(self.run_bbc('READ a$\nPRINT a$\nDATA TOTAL'), 'TOTAL\n')
