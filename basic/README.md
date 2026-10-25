@@ -1,13 +1,12 @@
-# BASIC examples and compatibility checks
+# BASIC examples
 
-BASIC source and reference evidence for lispy3 mini-basic live here. The
+BASIC source for lispy3 mini-basic lives here. The
 separate Python mini_basic repository is not vendored here.
 
 | Directory | Contents |
 |---|---|
 | [examples/](examples/) | BASIC examples; .out files beside golden-output fixtures |
 | [bench/](bench/) | BASIC timing comparison programs |
-| [reference/](reference/README.md) | BBCSDL runners, tokenised fixtures, extracted Python tests and recorded results |
 
 From the repository root:
 
@@ -24,11 +23,4 @@ file defines procedures; its Lisp launchers remain under lisp/programs/.
 The Lisp implementation stays in lisp/mini-basic.lisp, mini-basic-ext.lisp
 and mini-basic.sld (the Scheme-style library/export declaration).
 Cross-Lisp implementations and Lisp-form comparison programs stay under
-[compare/](../compare/README.md). Python tests stay in tests/; run
-`python -m pytest tests -q` from the repository root.
-
-These files moved from compare/basic/, compare/bench/, compare/reference/
-and lisp/programs/mandelbrot-terminal.bas. Historical JSON manifests and raw
-logs retain original paths and timestamps as recorded evidence; use the new
-paths when repeating a run. Sources, tokenised fixtures and captured outputs
-were moved without changing their contents.
+[compare/](../compare/README.md).

@@ -134,8 +134,6 @@ source with its imports instead. Reload/unload, library version declarations,
 syntax-rules and portable serialization remain future work. Both the normal
 interpreter and the optional NumPy evaluator support the import forms.
 
-Regression checks: `python -m pytest tests/test_libraries.py -q`.
-
 ## Plain file modules and lifecycle
 
 A string import naming a plain `.lisp` file now creates a private module without

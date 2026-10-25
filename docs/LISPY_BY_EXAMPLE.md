@@ -2,7 +2,7 @@
 
 Short, runnable examples, one idea at a time. Type them at the `lispy3>` prompt or in the Listener of the editor; the line after each prompt is what Lispy answers. Start with the [Quick Start](QUICK_START.md) if you have never used Lispy; look names up in the [Quick Reference](QUICK_REFERENCE.md), or type `(help)`.
 
-Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do it today. The same list is in [TODO.md](../TODO.md).
+Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do it today.
 
 ## Contents
 
@@ -714,5 +714,5 @@ Lispy adds what lis.py does not have: strings and characters, `[vectors]`, `{map
 ## Further reading
 
 - Norvig, [(How to Write a (Lisp) Interpreter (in Python))](https://norvig.com/lispy.html) and [the sequel](https://norvig.com/lispy2.html): where Lispy comes from.
-- [fluentpython/lispy](https://github.com/fluentpython/lispy): `lis.py` with type hints and pattern matching (`original/py3.10`), `cond`/`and`/`or` and tail calls (`mylis/mylis_2`), example programs, tests, and a reading list (SICP, The Little Schemer, How to Design Programs, ...). Most of Lispy's [TODO list](../TODO.md) points there for a reference implementation.
+- [fluentpython/lispy](https://github.com/fluentpython/lispy): `lis.py` with type hints and pattern matching (`original/py3.10`), `cond`/`and`/`or` and tail calls (`mylis/mylis_2`), example programs, tests, and a reading list (SICP, The Little Schemer, How to Design Programs, ...). Most of the TO BE IMPLEMENTED features have a reference implementation there.
 - Abelson and Sussman, [Structure and Interpretation of Computer Programs](https://mitpress.mit.edu/sites/default/files/sicp/index.html): the classic for head and tail recursion.

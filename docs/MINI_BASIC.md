@@ -147,8 +147,7 @@ when no letter, digit or `_` follows, so `COUNTER`, `TIMER` and `ENDING` are
 names. Keywords are uppercase only, so lowercase or mixed-case names
 (`count%`, `Count%`) never clash; they are the safer choice.
 
-MBASIC compatibility is tested against MBASIC 5.21 output: see
-[MBASIC_COMPAT.md](MBASIC_COMPAT.md).
+MBASIC compatibility is tested against MBASIC 5.21 output.
 
 ## Current language support
 
@@ -198,8 +197,7 @@ continues to the next line. Unknown destinations report the normal GOTO error.
 Bare numeric statements elsewhere remain invalid.
 Use structured exits where possible. Jumps into inactive structured bodies are
 outside the supported control-flow model. BBCSDL's shared-stack edge cases do
-not imply equivalent behavior here; see the
-[reference checks](../basic/reference/README.md) for recorded results and limits.
+not imply equivalent behavior here.
 
 Graphics, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
@@ -454,19 +452,6 @@ PRINT applies to the one item after it, as in BBCSDL 1.44a. Arrays (`DIM a%(9)`)
 these types. The SBCL and Clojure comparison backends have them too
 (see [compare/README.md](../compare/README.md)).
 
-## Tests and progress
-
-Acceptance tests are ordinary tests: unfinished behavior should fail before the
-implementation is added, rather than being hidden by skip/xfail.
-
-```powershell
-python -m pytest tests/test_mini_basic.py tests/test_mini_basic_reader.py tests/test_mini_basic_tdd.py tests/test_mini_basic_time.py tests/test_mini_basic_ansi.py tests/test_mini_basic_output_cleanup.py -q
-```
-
-[TODO.md](../TODO.md) records completed fixes and remaining compatibility work.
-The reference directory records native BBCSDL observations separately from
-lispy3 tests. Prioritize demonstrated errors over expanding the language.
-
 ### Lisp factorial and memoization
 
 A normal Lisp `(define fact (lambda (n) ...))` creates an ordinary procedure.
@@ -493,8 +478,7 @@ misreporting the next line as an incomplete DEF header. See the
 BBCSDL 1.44a matches ten shared fixtures for structured EXIT, early FN/PROC
 returns and parameter/LOCAL restoration. Abandoning an inner FOR before an
 outer ENDWHILE is a separate diagnostic: BBCSDL reports error 46; lispy3 keeps
-its clean structured continuation as an intentional extension. See
-[reference sources, raw results and reproduction](../basic/reference/README.md#structured-exits-returns-and-local-restoration).
+its clean structured continuation as an intentional extension.
 Prefer structured exits or normal loop termination for portable programs.
 
 ## Interactive BASIC

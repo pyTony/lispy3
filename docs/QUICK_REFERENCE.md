@@ -168,7 +168,7 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 
 ## TO BE IMPLEMENTED
 
-Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md), the list in [TODO.md](../TODO.md)):
+Not in Lispy yet (details and workarounds in [Lispy by Example](LISPY_BY_EXAMPLE.md)):
 `cond`, `and`, `or`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).
 
 Most of these have a reference implementation in [fluentpython/lispy](https://github.com/fluentpython/lispy), a set of `lis.py` variants close to Lispy; [Coming from Scheme or lis.py](LISPY_BY_EXAMPLE.md#coming-from-scheme-or-lispy) shows how to translate their examples.
