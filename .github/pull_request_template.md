@@ -1,3 +1,5 @@
+Base branch: `dev`. Release PRs into `main` come from `tools/release_main.py`.
+
 ## Change and validation
 
 Describe the problem, resulting behavior and relevant validation.

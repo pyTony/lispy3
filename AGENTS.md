@@ -3,6 +3,9 @@
 Before editing, read [docs/AGENT_COORDINATION.md](docs/AGENT_COORDINATION.md).
 This applies to Codex, Claude and other assistants equally.
 
+- Branch from `dev` and open PRs into `dev`. `main` is the pruned release tree
+  and is updated only with `python tools/release_main.py`; never merge `main`
+  into `dev`. See [repository layout](docs/REPOSITORY_LAYOUT.md#branches).
 - Inspect open PRs, their coordination blocks, and local worktree status first.
 - An open PR reserves its declared scope until merged, closed or explicitly
   handed off. Draft means unfinished; ready for review does not mean unowned.

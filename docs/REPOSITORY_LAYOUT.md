@@ -45,3 +45,32 @@ working directory, as required by external terminal windows.
 
 This reorganization leaves personal programs and unrelated local modifications
 untouched. Settings files and startup behavior are unchanged.
+
+## Branches
+
+`dev` holds the whole project and is where work happens: branch from `dev`
+and open pull requests into `dev`.
+
+`main` is the release tree for people who use Lispy without developing it. It
+has the same files as `dev` minus the developer-only ones listed in `DEV_ONLY`
+in `tools/release_main.py`: agent instructions, `TODO.md`, `pytest.ini`,
+`tests/`, `.github/`, `basic/reference/`, the developer docs and the release
+tools themselves. Its README and manual pages do not link to those files.
+
+To update `main` from `dev`:
+
+```text
+python tools/release_main.py --push
+```
+
+then open a pull request from the `release/<date>` branch it prints into
+`main`. The script merges `origin/dev` into a branch made from `origin/main`
+and removes the developer-only paths, which also settles the expected
+"deleted in main, modified in dev" conflicts. Any other conflict (usually the
+README) stops it with a list of files to fix and commit by hand. It warns
+about Markdown links that would point at a removed file.
+
+Never merge `main` into `dev`: that would delete the developer files from
+`dev`. If a fix is made directly on `main`, bring it to `dev` with
+`git cherry-pick`. When you add a developer-only file or folder on `dev`, add
+it to `DEV_ONLY`; `tests/test_repository_layout.py` checks the list.
