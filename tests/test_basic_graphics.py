@@ -104,6 +104,23 @@ class BasicGraphicsTest(LispyTestCase):
         self.assertEqual(self.pixel(98,254), [0,0,0])
         self.assertEqual(self.pixel(90,170), [0,0,0])
 
+    def test_closing_the_window_ends_an_endless_basic_program(self):
+        from lispy_support.lispy_graphics import Graphics
+        original, frames = Graphics.clear, []
+
+        def clear(g, color=None):
+            original(g, color)
+            frames.append(1)
+            if len(frames) == 3:
+                g.closed_by_user = True     # as present() does on the close box
+        with patch('lispy_support.lispy_graphics.Graphics.open'), \
+             patch('lispy_support.lispy_graphics.Graphics.clear', clear):
+            self.basic('MODE 9\nREPEAT\nCLS\nPRINT "frame"\nUNTIL FALSE\nPRINT "after"')
+        self.assertEqual(len(frames), 3)
+        # A Lisp program keeps its own loop test: drawing goes on headless.
+        self.ev('(graphics-mode 9)')
+        self.ev('(graphics-pixel 0 0)')
+
 
 class LispGraphicsPrimitivesTest(LispyTestCase):
     def pixel(self, x, y):
@@ -183,3 +200,30 @@ class LispGraphicsPrimitivesTest(LispyTestCase):
         finally:
             B.set_dispatcher(None)
         self.assertEqual(len(calls), 1)
+
+
+class BasicPaletteTest(LispyTestCase):
+    def setUp(self):
+        super().setUp()
+        L.load_workspace('mini-basic')
+
+    basic = BasicGraphicsTest.basic
+    pixel = BasicGraphicsTest.pixel
+
+    def test_colour_n_rgb_sets_the_logical_colour_for_drawing(self):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic('MODE 8:COLOUR 1,10,20,30:GCOL 0,1:PLOT 0,0')
+            self.assertEqual(self.ev('(graphics-mode-info)'), [8,640,512,16,1280,1024])
+            self.assertEqual(self.pixel(0,511), [10,20,30])
+            self.basic('MODE 8:GCOL 1:PLOT 0,0')
+            self.assertEqual(self.pixel(0,511), [255,0,0])
+        with self.assertRaisesRegex(Exception, 'COLOUR takes n or n,r,g,b'):
+            self.basic('COLOUR 1,2')
+
+    def test_random_shapes_example_runs(self):
+        from pathlib import Path
+        from support import REPO_DIR
+        source=(Path(REPO_DIR)/'basic/graphics/random-shapes.bas').read_text().replace('COUNT%=300','COUNT%=5')
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic(source)
+        self.assertEqual(self.ev('(graphics-mode-info)')[0], 8)

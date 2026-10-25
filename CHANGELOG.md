@@ -12,6 +12,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   `with-input-from-string`, `make-string-output-stream`,
   `get-output-stream-string`, `make-string-input-stream`);
   `*standard-output*`, `*standard-input*` and the stream predicates.
+- mini-basic graphics: MODE 8 (640x512, 16 colours) and `COLOUR n,r,g,b`
+  to set a logical colour, so `basic/graphics/random-shapes.bas` runs.
+- mini-basic: closing the graphics window opened by `MODE` (or pressing
+  Escape in it) ends the BASIC program like `END`; the soccer ball no longer
+  runs on without a window. `?` at the start of a statement is short for
+  `PRINT` (`?BOGOTO`).
 
 - Graphics: the soccer ball FPS test runs in BASIC (`basic/graphics/soccerball.bas`,
   from BBC BASIC for SDL) and natively in Lispy (`lisp/programs/soccer-ball.lisp`,

@@ -37,7 +37,7 @@ def install(env, Procedure, String):
     sets one); drawing runs directly and the host's window poller shows it.
     """
     current = {"graphics": None, "colour": 1, "pen": (0, 0), "background": 0,
-               "previous": (0, 0)}
+               "previous": (0, 0), "basic": False}
 
     def shown(g):
         """Without a host poller, present now and then while drawing (CLI)."""
@@ -47,17 +47,23 @@ def install(env, Procedure, String):
     def gfx():
         if current["graphics"] is None:
             raise RuntimeError("Call (graphics-mode 1) or (graphics-rgb-mode w h) first")
-        return current["graphics"]
+        g = current["graphics"]
+        if current["basic"] and g.closed_by_user:
+            # BBC BASIC quits when its window is closed; the program catches this as END.
+            raise RuntimeError("bbc:end")
+        return g
 
     def select(mode):
         try:
             mode = MODES[int(mode)]
         except KeyError:
-            raise ValueError(f"unsupported graphics MODE {mode}; choose 0, 1, 2 or 9") from None
+            raise ValueError(f"unsupported graphics MODE {mode}; choose 0, 1, 2, 8 or 9") from None
         old = current["graphics"]
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["palette"] = list(mode.palette)
+        current["basic"] = False
         current["colour"] = mode.colours - 1
         current["background"] = 0
         current["pen"] = current["previous"] = (0, 0)
@@ -70,6 +76,8 @@ def install(env, Procedure, String):
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["palette"] = list(mode.palette)
+        current["basic"] = False
         current["colour"] = 1
         current["pen"] = current["previous"] = (0, 0)
         return [w, h]
@@ -86,7 +94,13 @@ def install(env, Procedure, String):
         i = int(index)
         if not 0 <= i < m.colours or i >= len(m.palette):
             raise ValueError(f"palette index {i} invalid for mode {m.number}")
-        return m.palette[i]
+        return current["palette"][i]
+
+    def set_palette(index, r, g, b):
+        """BBC COLOUR n,r,g,b: logical colour n becomes that RGB colour."""
+        palette_color(index)
+        current["palette"][int(index)] = rgb(r, g, b)
+        return []
 
     def open_window(w=None, h=None):
         return bool(gfx().open(None if w is None else int(w), None if h is None else int(h)))
@@ -180,6 +194,7 @@ def install(env, Procedure, String):
     def bbc_mode(number):
         result = select(number)
         open_window()
+        current["basic"] = True
         return result
 
     def clg():
@@ -262,7 +277,7 @@ def install(env, Procedure, String):
         """BBC RECTANGLE [FILL] x,y,w[,h]: (x,y) is a corner, w and h the size."""
         g = gfx()
         x, y, w = int(x), int(y), int(w)
-        h = w if h is None else int(h)
+        h = w if h is None or h == [] else int(h)
         colour = palette_color(current["colour"])
         if fill and fill != []:
             (x0, y0), (x1, y1) = (g.virtual_to_pixel(x, y), g.virtual_to_pixel(x + w, y + h))
@@ -283,9 +298,9 @@ def install(env, Procedure, String):
 
     def refresh(*args):
         """(graphics-refresh) shows the frame; #f/#t turn automatic showing off/on."""
-        g = current["graphics"]
-        if g is None:
+        if current["graphics"] is None:
             return []
+        g = gfx()
         if args:
             g.set_auto_refresh(args[0] is not False and args[0] != [])
         else:
@@ -325,6 +340,7 @@ def install(env, Procedure, String):
         "graphics-virtual-rectangle": v_rect,
         "graphics-cls": cls,
         "graphics-refresh": refresh,
+        "graphics-palette": set_palette,
     }
     for name, func in primitives.items():
         if name not in WINDOW_PRIMITIVES:

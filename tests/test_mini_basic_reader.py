@@ -53,6 +53,10 @@ class RunTest(ReaderTestCase):
     def test_print(self):
         self.assertEqual(self.run_bbc('PRINT "A";1;"B" : PRINT 1,2 : PRINT ;7'), 'A1B\n         1         2\n7\n')
 
+    def test_question_mark_is_print_at_statement_start(self):
+        self.assertEqual(self.run_bbc('BOGOTO=23\n?BOGOTO\nA=1:?A;"x"\nIF A THEN ?"yes" ELSE ?"no"'),
+                         '        23\n         1x\nyes\n')
+
     def test_multi_line_if_inside_a_procedure(self):
         source = ('PROCcheck(5) : PROCcheck(-1)\nEND\n'
                   'DEF PROCcheck(x)\n'

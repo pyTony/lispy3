@@ -47,6 +47,8 @@ class Graphics:
         self._size = None
         self._origin = (0, 0)
         self._closed = False
+        # Set when the user shut the window (close box or Escape), not close().
+        self.closed_by_user = False
         self._last_present = 0.0
         # Every drawing call bumps version; present() blits only a changed picture.
         self.version = 0
@@ -270,6 +272,7 @@ class Graphics:
         self._size = size
         self._screen = pygame.display.set_mode(self._size)
         self._closed = False
+        self.closed_by_user = False
         self._shown = None
         pygame.display.set_caption(title)
         _active = self
@@ -287,6 +290,7 @@ class Graphics:
                (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE)
                for event in events):
             self.close()
+            self.closed_by_user = True
             return events
         if any(event.type in (pygame.VIDEOEXPOSE, getattr(pygame, 'WINDOWEXPOSED', -1))
                for event in events):
