@@ -34,6 +34,25 @@ def _rgb(value):
     return tuple(value)
 
 
+def _open_vsync_window(pygame, size):
+    """A window whose flip waits for the screen refresh, so moving pictures do
+    not tear (BBCSDL does the same). pygame offers vsync only with SCALED; the
+    window is then set back to the requested size. Without vsync, a plain window."""
+    import warnings
+    with warnings.catch_warnings():
+        # "no fast renderer" (no GPU) and from_display_module's deprecation
+        warnings.simplefilter('ignore')
+        try:
+            screen = pygame.display.set_mode(size, pygame.SCALED, vsync=1)
+        except pygame.error:
+            return pygame.display.set_mode(size)
+        try:
+            pygame.Window.from_display_module().size = size
+        except (AttributeError, pygame.error):
+            pass                             # older pygame: SDL's own scale
+    return screen
+
+
 class Graphics:
     """RGB framebuffer. Drawing only touches the bytearray, so any thread may draw;
     open/present/close talk to SDL and belong to the window's owning thread."""
@@ -272,7 +291,7 @@ class Graphics:
         self._pygame = pygame
         pygame.display.init()
         self._size = size
-        self._screen = pygame.display.set_mode(self._size)
+        self._screen = _open_vsync_window(pygame, self._size)
         self._closed = False
         self.closed_by_user = False
         self._shown = None
