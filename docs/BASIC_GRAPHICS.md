@@ -22,6 +22,10 @@ python lispy3.py lisp/programs/mandelbrot-basic-graphics-preview.lisp
 
 Close the SDL window or press Escape when done. CLI program execution holds the
 window open after evaluation; Lispy Machine pumps window events even while idle.
+As in BBC BASIC for SDL, closing the window that `MODE` opened ends a running
+BASIC program like `END`, so an endless `REPEAT ... UNTIL FALSE` loop such as
+the soccer ball stops instead of drawing on without a window. Lisp programs
+are not stopped; they test `(graphics-window-open?)` themselves.
 The six-row native SDL-dummy run took about 0.52 seconds inside BASIC (about
 0.77 seconds including library setup) on the development machine. These are
 smoke-run timings, not a cross-backend benchmark.

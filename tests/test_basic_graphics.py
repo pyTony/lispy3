@@ -104,6 +104,23 @@ class BasicGraphicsTest(LispyTestCase):
         self.assertEqual(self.pixel(98,254), [0,0,0])
         self.assertEqual(self.pixel(90,170), [0,0,0])
 
+    def test_closing_the_window_ends_an_endless_basic_program(self):
+        from lispy_support.lispy_graphics import Graphics
+        original, frames = Graphics.clear, []
+
+        def clear(g, color=None):
+            original(g, color)
+            frames.append(1)
+            if len(frames) == 3:
+                g.closed_by_user = True     # as present() does on the close box
+        with patch('lispy_support.lispy_graphics.Graphics.open'), \
+             patch('lispy_support.lispy_graphics.Graphics.clear', clear):
+            self.basic('MODE 9\nREPEAT\nCLS\nPRINT "frame"\nUNTIL FALSE\nPRINT "after"')
+        self.assertEqual(len(frames), 3)
+        # A Lisp program keeps its own loop test: drawing goes on headless.
+        self.ev('(graphics-mode 9)')
+        self.ev('(graphics-pixel 0 0)')
+
 
 class LispGraphicsPrimitivesTest(LispyTestCase):
     def pixel(self, x, y):

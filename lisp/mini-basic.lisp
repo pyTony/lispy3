@@ -544,7 +544,8 @@
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
        ,@defs
        (set! bbc-col 0)
-       ,(if (bbc-uses? '(END) stmts) (bbc-catch "bbc:end" run #f) run)
+       ;; Closing a MODE window ends the program like END (see graphics bindings)
+       ,(if (bbc-uses? '(END MODE) stmts) (bbc-catch "bbc:end" run #f) run)
        #f)))
 
 ;;; ===================================================================
@@ -705,6 +706,11 @@
              (emit :num (bbc-hex-constant (substring text (+ i 1) j)))
              (set! line-start #f)
              (set! i j)))
+          ((and (eq? c #\?) (statement-start?))
+           ;; ? at the start of a statement is the common shorthand for PRINT
+           (emit-name :kw "PRINT" "?")
+           (set! line-start #f)
+           (set! i (+ i 1)))
           ((and (eq? c #\*) (statement-start?))
            ;; *command: the rest of the line, as OSCLI would get it
            (let [j (scan-while i (lambda (d) (not (eq? d #\newline))))]

@@ -138,7 +138,7 @@ lispy3's Lisp loader.
 | Area | Implemented |
 |------|-------------|
 | Values | Numeric and string variables; `%` 32-bit, `%%` 64-bit, `&` byte, `#` float and `$` string suffixes; see [Numbers](#numbers) |
-| Output | PRINT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
+| Output | PRINT (`?` at the start of a statement is short for PRINT), SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
 | Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
