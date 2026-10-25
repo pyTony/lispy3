@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 import select
+import threading
 import time
 if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -199,9 +200,26 @@ def _console_read_line(connection=None):
             return input()
 
 
+# Program output is joined until this many characters are waiting (or a short
+# delay passes) before the Listener or terminal shows it. 0 shows every write.
+output_buffer = 256
+
+
 class TerminalWriter(io.TextIOBase):
+    """Send program output to the viewer, joining writes made within a short delay.
+
+    One message per character made the viewer redraw its console for each one,
+    so a program printing a character at a time ran far slower than its work.
+    """
+    delay = 0.03
+
     def __init__(self, connection):
         self.connection = connection
+        self._lock = threading.Lock()
+        self._pending = []
+        self._size = 0
+        self._timer = None
+        self._error = None
 
     @property
     def encoding(self):
@@ -214,14 +232,39 @@ class TerminalWriter(io.TextIOBase):
         return True
 
     def write(self, text):
-        try:
-            _send_message(self.connection, 'output', text)
-        except OSError as error:
-            raise TerminalError('ANSI terminal was closed while the program was writing') from error
+        if self._error is not None:
+            raise TerminalError('ANSI terminal was closed while the program was writing') from self._error
+        with self._lock:
+            self._pending.append(text)
+            self._size += len(text)
+            full = self._size >= max(output_buffer, 1)
+            if not full and self._timer is None:
+                self._timer = threading.Timer(self.delay, self._send_later)
+                self._timer.daemon = True
+                self._timer.start()
+        if full:
+            self.flush()
         return len(text)
 
+    def _send_later(self):
+        try:
+            self.flush()
+        except TerminalError:
+            pass                                 # the next write reports it
+
     def flush(self):
-        pass
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            text, self._pending, self._size = ''.join(self._pending), [], 0
+            if not text:
+                return
+            try:
+                _send_message(self.connection, 'output', text)
+            except OSError as error:
+                self._error = error
+                raise TerminalError('ANSI terminal was closed while the program was writing') from error
 
 
 def launch_viewer(port, token, cwd):
@@ -281,16 +324,21 @@ def ansi_terminal_output(timeout=10):
                     raise TerminalError('ANSI terminal authentication failed')
                 connection.settimeout(None)
                 replies = _messages(connection, interruptible=True)
-                input_token = _input_reader.set(lambda: _read_terminal_line(connection, replies))
-                with contextlib.redirect_stdout(TerminalWriter(connection)), basic_io.input_from(read_line):
+                writer = TerminalWriter(connection)
+                def read_terminal_line():
+                    writer.flush()                       # the prompt comes before the input request
+                    return _read_terminal_line(connection, replies)
+                input_token = _input_reader.set(read_terminal_line)
+                with contextlib.redirect_stdout(writer), basic_io.input_from(read_line):
                     try:
                         yield
                     finally:
                         _input_reader.reset(input_token)
                         # Restore the viewer's terminal even if Lisp raises or is stopped.
                         try:
-                            _send_message(connection, 'output', '\x1b[0m')
-                        except OSError:
+                            writer.write('\x1b[0m')
+                            writer.flush()
+                        except TerminalError:
                             pass
     finally:
         _active.reset(token)

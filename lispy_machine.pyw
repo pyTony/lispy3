@@ -1540,7 +1540,7 @@ class LispMachine(tk.Tk):
         self._job = None            # the thread running Lisp code, while it runs
         self._calls = queue.Queue() # what that thread hands to the Tk thread: (fn, args, box, done)
         self._output_lock = threading.Lock()
-        self._pending_output = None # Listener text not yet shown: [tag, pieces], joined into one write
+        self._pending_output = None # Listener text not yet shown: [tag, pieces, length], joined into one write
         L.global_env['help'] = self.lisp_help
         L.global_env['sleep'] = self._sleep
         from lispy_support.lispy_graphics_bindings import set_dispatcher
@@ -1785,6 +1785,15 @@ class LispMachine(tk.Tk):
             echo_m.add_radiobutton(label=label, value=value, variable=self.buffer_echo,
                                    command=self._save_buffer_echo)
         eval_m.add_cascade(label="Buffer run echo", menu=echo_m)
+        size = self.settings.get('output_buffer', 256)
+        lispy_terminal.output_buffer = size if isinstance(size, int) and size >= 0 else 256
+        self.output_buffer = tk.IntVar(self, value=lispy_terminal.output_buffer)
+        buffer_m = tk.Menu(eval_m, tearoff=0)
+        for label, value in [("Unbuffered (show every write)", 0), ("64 characters", 64),
+                             ("256 characters (default)", 256), ("1024 characters", 1024), ("4096 characters", 4096)]:
+            buffer_m.add_radiobutton(label=label, value=value, variable=self.output_buffer,
+                                     command=self._save_output_buffer)
+        eval_m.add_cascade(label="Output buffer", menu=buffer_m)
         eval_m.add_command(label="Run form / selection / line", accelerator="F5", command=self.eval_form_at_cursor)
         eval_m.add_command(label="Run program → ANSI terminal (fresh workspace)", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Run program → Listener (fresh workspace)", accelerator="F6", command=self.eval_buffer_listener)
@@ -2418,18 +2427,28 @@ class LispMachine(tk.Tk):
             LispMachine._end_output_batch(self)
             self._calls.put((fn, args, None, None))
 
+    def _save_output_buffer(self):
+        lispy_terminal.output_buffer = self.output_buffer.get()
+        self.settings['output_buffer'] = lispy_terminal.output_buffer
+        save_settings(self.settings)
+
     def _post_output(self, text, tag=None):
         """Queue Listener text, joined with text written before the Tk thread shows it.
 
         Each Listener write costs Tk work, so a program printing one character
         at a time would otherwise spend most of its time in the Tk thread.
         """
+        limit = lispy_terminal.output_buffer
         with self._output_lock:
             batch = self._pending_output
             if batch is not None and batch[0] == tag:
                 batch[1].append(text)
+                batch[2] += len(text)
+                if batch[2] >= limit:
+                    self._pending_output = None
                 return
-            batch = self._pending_output = [tag, [text]]
+            batch = [tag, [text], len(text)]
+            self._pending_output = batch if 0 < len(text) < limit else None
         self._calls.put((LispMachine._show_output, (self, batch), None, None))
 
     def _show_output(self, batch):
