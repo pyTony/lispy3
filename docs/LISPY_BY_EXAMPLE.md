@@ -578,6 +578,30 @@ The names live only inside the one body expression; use `begin` inside `let` for
 
 `save` writes all your definitions as Lisp code; `load` runs any `.lisp` file. From the command line: `python lispy3.py prog.lisp`, or `python lispy3.py -i prog.lisp` to stay at the prompt afterwards.
 
+### Text files and streams
+
+Text files work as in Common Lisp: `with-open-file` opens a stream, runs the body and always closes the file.
+
+    lispy3> (with-open-file (out "notes.txt" :direction :output)
+              (write-line "first line" out)
+              (format out "~a squared is ~a~%" 7 49))
+    lispy3> (with-open-file (in "notes.txt")
+              (let ((line (read-line in nil #f)))
+                (while line
+                  (display "> " line)
+                  (set! line (read-line in nil #f)))))
+    > first line
+    > 7 squared is 49
+
+`:if-exists :append` adds to the end of a file instead of replacing it. `(read-line in nil #f)` gives `#f` at the end of the file; plain `(read-line in)` stops with an error there. Without a stream, `read-line`, `write-line`, `princ` and `format t` use the console, which is also `*standard-input*` and `*standard-output*`.
+
+A string can be a stream too:
+
+    lispy3> (with-output-to-string (s) (princ 1 s) (write-char #\- s) (princ 2 s))
+    "1-2"
+    lispy3> (with-input-from-string (s "a\nb") (read-line s) (read-line s))
+    "b"
+
 ## Turtle graphics
 
 Every name in Python's `turtle` module is a Lispy function:
