@@ -36,3 +36,17 @@ class RepositoryLayoutTest(TestCase):
                     result = subprocess.run([sys.executable, str(Path(REPO_DIR)/launcher), option], cwd=directory, text=True, capture_output=True, timeout=20)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertNotIn('ModuleNotFoundError', result.stderr)
+
+    def test_release_dev_only_paths_exist(self):
+        # tools/release_main.py removes these from main; a rename on dev must update the list.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('release_main', Path(REPO_DIR) / 'tools' / 'release_main.py')
+        release_main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(release_main)
+        for path in release_main.DEV_ONLY:
+            with self.subTest(path=path):
+                self.assertTrue((Path(REPO_DIR) / path).exists())
+        for path in ('lispy3.py', 'lispy_machine.pyw', 'lispy_support/guide.py', 'lisp', 'docs/QUICK_START.md',
+                     'tools/make_shortcut.py', 'tools/bbcsdl-basrun.bas', 'compare/sbcl/run.lisp'):
+            with self.subTest(kept=path):
+                self.assertFalse(release_main.is_dev_only(path))
