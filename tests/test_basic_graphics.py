@@ -223,7 +223,7 @@ class BasicPaletteTest(LispyTestCase):
     def test_random_shapes_example_runs(self):
         from pathlib import Path
         from support import REPO_DIR
-        source=(Path(REPO_DIR)/'basic/graphics/random-shapes.bas').read_text().replace('COUNT%=300','COUNT%=5')
+        source=(Path(REPO_DIR)/'basic/graphics/random-shapes.bas').read_text().replace('count%=300','count%=5')
         with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic(source)
         self.assertEqual(self.ev('(graphics-mode-info)')[0], 8)

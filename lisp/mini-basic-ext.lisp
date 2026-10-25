@@ -599,6 +599,7 @@
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
           ((bbc-accept! :kw "RND") (bbc-p-rnd))
           ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
+          ((bbc-accept! :kw "COUNT") (bbc-num 'bbc-col))
           ((bbc-accept! :kw "SUM") (bbc-num (bbc-p-sum)))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)

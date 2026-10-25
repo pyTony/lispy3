@@ -184,3 +184,32 @@ class RemPrefixTest(ReaderTestCase):
 
     def test_embedded_rem_does_not_change_variable_names(self):
         self.assertEqual(self.run_bbc('PREM=7:PRINT ;PREM'), '7\n')
+
+
+class KeywordPrefixNameTest(ReaderTestCase):
+    """BBCSDL reads an uppercase name that starts with a keyword as that keyword."""
+
+    def test_count_percent_is_rejected_like_bbcsdl(self):
+        with self.assertRaisesRegex(lispy3.LispyError,
+                                    r'line 2: COUNT% starts with the keyword COUNT.*count% or Count%'):
+            self.run_bbc('PRINT 1\nCOUNT%=3')
+
+    def test_keyword_prefixes_are_rejected(self):
+        for source, word in (('TOTAL=1', 'TO'), ('PRINT ORDER', 'OR'), ('TIME%=1', 'TIME'),
+                             ('X=DEG5', 'DEG'), ('DIM ELSEWHERE(3)', 'ELSE')):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(lispy3.LispyError, ' starts with the keyword ' + word + ','):
+                    self.run_bbc(source)
+
+    def test_names_bbcsdl_accepts(self):
+        # A keyword marked conditional in BBCSDL's table is only a keyword when
+        # no name character follows; lowercase and mixed-case names are never keywords
+        self.assertEqual(self.run_bbc('COUNTER=2:TIMER=3:PIE=4:ENDX=5\nPRINT ;COUNTER+TIMER+PIE+ENDX'), '14\n')
+        self.assertEqual(self.run_bbc('count%=2:Count%=3:total=4\nPRINT ;count%+Count%+total'), '9\n')
+
+    def test_unquoted_data_words_are_not_names(self):
+        self.assertEqual(self.run_bbc('READ a$\nPRINT a$\nDATA TOTAL'), 'TOTAL\n')
+
+    def test_count_is_characters_since_the_last_new_line(self):
+        self.assertEqual(self.run_bbc('PRINT "abc";:c%=COUNT:PRINT\nPRINT "é★";:d%=COUNT:PRINT\nPRINT ;c%;" ";d%;" ";COUNT'),
+                         'abc\né★\n3 2 4\n')  # the last COUNT follows "3 2 "
