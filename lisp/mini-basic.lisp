@@ -108,7 +108,9 @@
 ;; Values passed out of an FN by (FN= exp) before the early return
 (define bbc-fn-value 0)
 
-;; The output column, for :comma zones, TAB and PRINT's right-justified numbers
+;; Characters printed since the last new line: the output column for :comma
+;; zones, TAB and PRINT's right-justified numbers, and the value of COUNT.
+;; Unicode text counts characters, where BBCSDL in UTF-8 mode counts bytes.
 (define bbc-col 0)
 (define bbc-zone-width 10)
 (define bbc-blank "")
@@ -625,7 +627,7 @@
     "WHILE" "ENDWHILE" "CASE" "OF" "WHEN" "OTHERWISE" "ENDCASE" "DEF" "ENDPROC" "LOCAL"
     "END" "STOP" "EXIT" "AND" "OR" "EOR" "NOT" "DIV" "MOD" "TRUE" "FALSE" "TAB" "SPC"
     "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
-    "CIRCLE" "RECTANGLE" "FILL" "WAIT" "OSCLI" "SUM"
+    "CIRCLE" "RECTANGLE" "FILL" "WAIT" "OSCLI" "SUM" "COUNT"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI" "RND"
     "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"))
 
@@ -651,12 +653,57 @@
         (+ start k)
         j)))
 
+;; BBCSDL's keyword table (keywds in bbmain.c), in its search order. BBCSDL
+;; makes any uppercase name that starts with one of these a keyword, so TOTAL
+;; is TO TAL. An entry ending in a space only counts when no name character
+;; follows it: COUNTER and TIMER are names, but COUNT% and TIME% are not.
+(define bbc-sdl-keywords
+  '("AND" "ABS" "ACS" "ADVAL" "ASC" "ASN" "ATN" "BGET " "BPUT " "BY " "COLOUR" "COLOR"
+    "CALL" "CASE" "CHAIN" "CHR$" "CLEAR " "CLOSE " "CLG " "CLS " "COS" "COUNT " "CIRCLE"
+    "DATA" "DEG" "DEF" "DIV" "DIM" "DRAW" "ENDPROC " "ENDWHILE " "ENDCASE " "ENDIF "
+    "END " "ENVELOPE" "ELSE" "EVAL" "ERL " "ERROR" "EOF " "EOR" "ERR " "EXIT " "EXP"
+    "EXT " "ELLIPSE" "FOR" "FALSE " "FILL" "FN" "GOTO" "GET$" "GET" "GOSUB" "GCOL"
+    "HIMEM " "INPUT" "IF" "INKEY$" "INKEY" "INT" "INSTR(" "INSTALL" "LINE" "LOMEM "
+    "LOCAL" "LEFT$(" "LEN" "LET" "LOG" "LN" "MID$(" "MODE" "MOD" "MOVE" "MOUSE" "NEXT"
+    "NOT" "ON" "OFF " "OF " "ORIGIN" "OR" "OPENIN" "OPENOUT" "OPENUP" "OSCLI"
+    "OTHERWISE" "PRINT" "PAGE " "PRIVATE" "PTR " "PI " "PLOT" "POINT(" "PROC" "POS "
+    "QUIT " "RETURN " "REPEAT" "REPORT " "READ" "REM" "RUN " "RAD" "RESTORE" "RIGHT$("
+    "RND " "RECTANGLE" "STEP" "SGN" "SIN" "SQR" "SPC" "STR$" "STRING$(" "SOUND" "STOP "
+    "SUM" "SWAP" "SYS" "TAN" "TAB(" "THEN" "TIME " "TINT" "TO" "TRACE" "TRUE " "UNTIL"
+    "USR" "VDU" "VAL" "VPOS " "WHILE" "WHEN" "WAIT " "WIDTH"))
+
+(define (bbc-sdl-keyword-at text start)
+  ;; The BBCSDL keyword that text has at start, or #f
+  (let [n (length text) found #f entries bbc-sdl-keywords]
+    (while (and (not found) (not (null? entries)))
+      (let [entry (car entries)]
+        (let [word (entry/rstrip " ")]
+          (if (and (text/startswith word start)
+                   (let [end (+ start (length word))]
+                     (or (not (entry/endswith " ")) (>= end n)
+                         (not (bbc-name-char? (string-ref text end))))))
+              (set! found word))))
+      (set! entries (cdr entries)))
+    found))
+
+(define (bbc-check-variable-name text start name line)
+  ;; BBCSDL would read the start of name as a keyword, so it is not a variable
+  ;; there; REPORT$ and TIME$ are keyword functions, not names
+  (let [word (bbc-sdl-keyword-at text start)]
+    (if (and word (< (length word) (length name))
+             (not (equal? (substring name (length word) (length name)) "$")))
+        (error (str "BBC syntax error at line " line ": " name " starts with the keyword "
+                    (word/rstrip "(") ", so BBC BASIC does not read it as a variable;"
+                    " use a lowercase or mixed-case name such as "
+                    (downcase name) " or " (name/capitalize))))))
+
 (define (bbc-tokenize text)
   (let [toks (list)
         n (length text)
         i 0
         line 1
-        line-start #t]
+        line-start #t
+        in-data #f]
     (define (emit kind value) (bbc-push! toks (list kind value line)))
     (define (emit-name kind value raw)
       (if (eq? bbc-number-print-style :mbasic)
@@ -677,6 +724,7 @@
            (emit :eol #f)
            (set! line (+ line 1))
            (set! line-start #t)
+           (set! in-data #f)
            (set! i (+ i 1)))
           ((or (eq? c #\space) (eq? c #\tab) (eq? c #\return))
            (set! i (+ i 1)))
@@ -737,12 +785,18 @@
                      ;; MBASIC's WEND ends a WHILE loop like ENDWHILE
                      ((and (equal? name "WEND") (eq? bbc-number-print-style :mbasic))
                       (emit-name :kw "ENDWHILE" raw))
-                     ((member name bbc-keywords) (emit-name :kw name raw))
+                     ((member name bbc-keywords)
+                      (if (equal? name "DATA") (set! in-data #t))
+                      (emit-name :kw name raw))
                      ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
                       (emit-name :proc (substring name 4) raw))
                      ((and (> (length name) 2) (equal? (substring name 0 2) "FN"))
                       (emit-name :fn (substring name 2) raw))
-                     (else (emit-name :id name raw))))
+                     (else
+                      ;; MBASIC names and unquoted DATA words are not BBC variables
+                      (if (not (or in-data (eq? bbc-number-print-style :mbasic)))
+                          (bbc-check-variable-name text i name line))
+                      (emit-name :id name raw))))
              (set! line-start #f)
              (set! i j)))
           ((eq? c #\:)
@@ -997,6 +1051,7 @@
           ((bbc-accept! :kw "PI") (bbc-num 'pi))
           ((bbc-accept! :kw "RND") (bbc-p-rnd))
           ((bbc-accept! :kw "TIME") (bbc-num '(bbc-time-read)))
+          ((bbc-accept! :kw "COUNT") (bbc-num 'bbc-col))
           ((and (eq? kind :kw) (bbc-lookup value bbc-functions))
            (bbc-advance!)
            (bbc-p-function (bbc-lookup value bbc-functions)))

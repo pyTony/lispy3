@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: BBC variable names follow BBCSDL's keyword rule. An uppercase
+  name that starts with a keyword (`COUNT%`, `TOTAL`, `ORDER`) is a syntax
+  error naming the keyword and suggesting a lowercase or mixed-case name;
+  `COUNTER` and `TIMER` stay valid as in BBCSDL. `COUNT` gives the characters
+  printed since the last new line (Unicode characters, where BBCSDL in UTF-8
+  mode counts bytes). `random-shapes.bas` uses lowercase variable names.
+
 - mini-basic: `A!` single-precision variables (rounded to 24 bits, as in
   MBASIC). In MBASIC style, PRINT and `STR$` show inexact numbers as MBASIC
   singles (`.333333`, `78.5398`); `(set! bbc-single-precision #f)` turns the

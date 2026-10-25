@@ -140,6 +140,13 @@ loading is not implemented. Keywords must be uppercase; identifiers are
 case-sensitive. A BASIC file is passed to `bbc-load`, rather than directly to
 lispy3's Lisp loader.
 
+As in BBCSDL, an uppercase variable name must not start with a BBC BASIC
+keyword: `COUNT%`, `TOTAL` (`TO`) and `ORDER` (`OR`) are syntax errors. BBCSDL
+only treats some keywords, such as `COUNT`, `TIME`, `PI` and `END`, as keywords
+when no letter, digit or `_` follows, so `COUNTER`, `TIMER` and `ENDING` are
+names. Keywords are uppercase only, so lowercase or mixed-case names
+(`count%`, `Count%`) never clash; they are the safer choice.
+
 MBASIC compatibility is tested against MBASIC 5.21 output: see
 [MBASIC_COMPAT.md](MBASIC_COMPAT.md).
 
@@ -148,7 +155,7 @@ MBASIC compatibility is tested against MBASIC 5.21 output: see
 | Area | Implemented |
 |------|-------------|
 | Values | Numeric and string variables; `%` 32-bit, `%%` 64-bit, `&` byte, `#` float and `$` string suffixes; see [Numbers](#numbers) |
-| Output | PRINT (`?` at the start of a statement is short for PRINT), SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
+| Output | PRINT (`?` at the start of a statement is short for PRINT), COUNT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
 | Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
