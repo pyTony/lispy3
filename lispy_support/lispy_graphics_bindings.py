@@ -2,16 +2,25 @@
 from __future__ import annotations
 
 import math
+import time
 
 from lispy_support.graphics_modes import MODES, GraphicsMode
 from lispy_support.lispy_graphics import Graphics
 
 _dispatcher = None
 
+# *REFRESH shows at most this many frames a second, as Python mini_basic does
+FRAME_RATE = 60
+
 def set_dispatcher(dispatcher):
     """GUI host supplies its owner-thread call function, including library envs."""
     global _dispatcher
     _dispatcher = dispatcher
+
+
+def _present_if_open(g):
+    if g.window_open:
+        g.present()
 
 
 # Only these talk to SDL; drawing just writes the framebuffer, so it runs on the
@@ -339,11 +348,26 @@ def install(env, Procedure, String):
             g.set_auto_refresh(args[0] is not False and args[0] != [])
         else:
             g.refresh()
-            if _dispatcher is None and g.window_open:
-                g.present()
-            else:
-                g.wait_shown()
+            if g.window_open:
+                # Show this frame now, on the window's own thread in the Machine;
+                # waiting for its poll timer showed frames late and in bursts
+                if _dispatcher is None:
+                    g.present()
+                else:
+                    _dispatcher(_present_if_open, g)
+            pace_frame()
         return []
+
+    def pace_frame():
+        """Wait until 1/FRAME_RATE s since the last *REFRESH, so frames come evenly."""
+        now = time.perf_counter()
+        last = current.get("last_refresh")
+        if last is not None:
+            remaining = 1 / FRAME_RATE - (now - last)
+            if 0 < remaining:
+                time.sleep(remaining)
+                now = time.perf_counter()
+        current["last_refresh"] = now
 
     primitives = {
         "graphics-mode": select,

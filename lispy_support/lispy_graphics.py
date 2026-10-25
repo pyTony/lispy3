@@ -5,7 +5,6 @@ an actual window. Coordinates accepted by pixel/line are framebuffer pixels;
 virtual_pixel/virtual_line use BBC graphics units with bottom-left origin.
 """
 import math
-import threading
 import time
 
 _active = None
@@ -78,11 +77,6 @@ class Graphics:
         self.auto_refresh = True
         self._frame = None
         self._frame_version = 0
-        # The last frame the window showed, and the thread that shows frames,
-        # so a drawing thread's *REFRESH can wait until its frame is on screen
-        self._shown_frame = 0
-        self._present_thread = None
-        self._frame_shown = threading.Condition()
 
     def maybe_present(self):
         if not self.auto_refresh:
@@ -251,16 +245,6 @@ class Graphics:
         self._frame = bytes(self.pixels)
         self._frame_version += 1
 
-    def wait_shown(self, timeout=0.1):
-        """Wait until another thread's present() has shown the latest frame, as
-        BBCSDL's *REFRESH waits for the display: a program then makes frames no
-        faster than the window shows them and leaves that thread time to do so."""
-        if not self.window_open or self._present_thread in (None, threading.get_ident()):
-            return
-        with self._frame_shown:
-            self._frame_shown.wait_for(
-                lambda: self._shown_frame >= self._frame_version or not self.window_open, timeout)
-
     def set_auto_refresh(self, on):
         self.auto_refresh = bool(on)
         if not self.auto_refresh and self._frame is None:
@@ -322,7 +306,6 @@ class Graphics:
                 return []
             raise RuntimeError('call open() before present()')
         pygame = self._pygame
-        self._present_thread = threading.get_ident()
         events = list(pygame.event.get())
         if any(event.type == pygame.QUIT or
                (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE)
@@ -347,10 +330,6 @@ class Graphics:
                 surface = pygame.transform.scale(surface, self._size)
             self._screen.blit(surface, (0, 0))
             pygame.display.flip()
-            if shown[0] == 'frame':
-                with self._frame_shown:
-                    self._shown_frame = shown[1]
-                    self._frame_shown.notify_all()
         return events
 
     def close(self):
@@ -362,5 +341,3 @@ class Graphics:
         self._pygame = self._screen = None
         self._size = None
         self._closed = True
-        with self._frame_shown:
-            self._frame_shown.notify_all()
