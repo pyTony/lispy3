@@ -76,6 +76,12 @@ class RunTest(ReaderTestCase):
         self.assertEqual(self.run_bbc('a$ = "Hello" : a$ += "!" : PRINT LEFT$(a$, 2); MID$(a$, 3, 2); RIGHT$(a$, 1); LEN a$'),
                          'Hell!6\n')
 
+    def test_angle_functions(self):
+        # Wheel.bas: y1% = m1%* COS(RAD(a1%-t%)); RAD was read as an array
+        source = ('m1% = 100 : a1% = 70 : t% = 10\ny1% = m1%* COS(RAD(a1%-t%))\n'
+                  'PRINT y1%; " "; DEG PI; " "; DEG(ACS(0)); " "; DEG ASN 1; " "; RAD 180')
+        self.assertEqual(self.run_bbc(source), '        50 180 90 90 3.14159265\n')
+
     def test_exit_and_repeat(self):
         source = 'REPEAT : n += 1 : IF n = 4 THEN EXIT REPEAT\nUNTIL FALSE\nPRINT n'
         self.assertEqual(self.run_bbc(source), '         4\n')
