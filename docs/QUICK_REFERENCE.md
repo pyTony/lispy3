@@ -122,6 +122,20 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `(open-file "data.bin" "rb")` | open a binary file; modes `"rb"`, `"wb"`, `"w+b"`, `"r+b"`, `"ab"` |
 | `(read-byte f [eof-value])` / `(write-byte n f)` | read or write one byte; `read-byte` gives `eof-value` (`#f`) at the end |
 | `(file-position f [n])` / `(file-length f)` / `(close f)` | byte position (or move to `n`), length, close |
+| `(with-open-file (s "notes.txt" :direction :output) body...)` | run `body` with `s` open on a text file, then close it, even after an error |
+| `(open "notes.txt" [:direction :input/:output/:io] [:if-exists :supersede/:append/:error/nil] [:if-does-not-exist :error/:create/nil])` | a text file stream, as in Common Lisp; output replaces an existing file unless `:if-exists` says otherwise; `:element-type '(unsigned-byte 8)` opens it binary |
+| `(read-line [s [eof-error-p [eof-value]]])` | the next line without its newline; `(read-line s nil :eof)` gives `:eof` at the end instead of an error; no stream reads the console |
+| `(read-char [s ...])` / `(peek-char nil [s ...])` | the next character; `peek-char` leaves it to be read |
+| `(write-line "text" [s])` / `(write-string "text" [s])` / `(write-char #\a [s])` | write text with a newline, text alone, one character |
+| `(princ x [s])` / `(prin1 x [s])` / `(terpri [s])` | write `x` as `display` shows it, or as readable Lisp; end the line |
+| `(format s "~a~%" x)` | formatted text to the stream `s`; `t` prints, `nil` gives a string |
+| `(with-output-to-string (s) body...)` | everything `body` writes to `s`, as a string |
+| `(with-input-from-string (s "one\ntwo") body...)` | run `body` reading from the string through `s` |
+| `(make-string-output-stream)` / `(get-output-stream-string s)` | a stream to write to; take the text so far, leaving it empty |
+| `(make-string-input-stream "text" [start [end]])` | a stream reading from the string |
+| `*standard-output*` / `*standard-input*` | where printing goes and where `read-line` reads from |
+| `(streamp x)` `(input-stream-p s)` `(output-stream-p s)` `(open-stream-p s)` | stream tests |
+| `(finish-output [s])` / `(force-output [s])` | send buffered output on now |
 | `(run-program "sbcl" (list "--version") [input])` | run another program, feeding it the input text; prints what it prints, gives its exit code |
 | `lispy-home` | the folder `lispy3.py` is in |
 | `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |

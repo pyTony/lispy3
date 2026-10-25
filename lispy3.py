@@ -6,6 +6,7 @@ import cmath
 import datetime
 import functools
 import inspect
+import io
 import itertools
 import math
 import operator as op
@@ -343,7 +344,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
     "Strings and characters": [
         ("str", "(str a b ...) - the values joined as one string"),
         ("string-append", "(string-append s1 s2 ...) - the strings joined, \"\" for none; only strings"),
-        ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~d number, ~% newline; (format t ...) prints it, (format nil ...) returns it"),
+        ("format", "(format \"~a is ~s~%\" x y) - ~a value, ~s value as written, ~d number, ~% newline; (format t ...) prints it, (format nil ...) returns it, (format stream ...) writes it to a stream"),
         ("substring", "(substring s start end) - part of s; end may be left out"),
         ("string-ref", "(string-ref s i) - character i of s"),
         ("upcase", "(upcase s), (downcase s) - change the case"),
@@ -386,7 +387,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("turtle:dot", "(turtle:dot size [color]) - draw a dot in the turtle graphics window"),
         ("turtle:write", "(turtle:write text) - draw text in the turtle graphics window"),
         ("print", "(print a b ...) - print the values with spaces between them"),
-        ("newline", "(newline) - print an empty line"),
+        ("newline", "(newline [stream]) - end the line; also terpri"),
         ("pretty-print", "(pretty-print x) - print x indented; also pprint"),
         ("help", "(help) - this list; (help 'name) or (help name) - explain one name"),
         ("eval", "(eval code) - run code held as data, e.g. (eval '(+ 1 2)) gives 3; runs in the global environment"),
@@ -404,6 +405,25 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("lispy-home", "lispy-home - the folder lispy3.py is in"),
         ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
         ("memoize-exact", "(memoize-exact f) - cache only calls with all-exact numeric arguments (integers/fractions); floats and other values bypass caching"),
+    ],
+    "Text streams": [
+        ("with-open-file", "(with-open-file (s \"notes.txt\" :direction :output) body...) - run body with s open on the file, then close it, even after an error"),
+        ("open", "(open \"notes.txt\" [:direction :input/:output/:io] [:if-exists :supersede/:append/:error/nil] [:if-does-not-exist :error/:create/nil] [:element-type '(unsigned-byte 8)]) - a text file stream; output replaces an existing file unless :if-exists says otherwise"),
+        ("read-line", "(read-line [stream [eof-error-p [eof-value]]]) - the next line without its newline; (read-line s nil :eof) gives :eof at the end instead of an error; no stream reads the console"),
+        ("read-char", "(read-char [stream [eof-error-p [eof-value]]]) - the next character"),
+        ("peek-char", "(peek-char nil [stream [eof-error-p [eof-value]]]) - the next character, left to be read"),
+        ("write-line", "(write-line \"text\" [stream]) - write the text and a newline"),
+        ("write-string", "(write-string \"text\" [stream]) - write the text, no newline"),
+        ("write-char", "(write-char #\\a [stream]) - write one character"),
+        ("princ", "(princ x [stream]) - write x as display shows it, no newline"),
+        ("prin1", "(prin1 x [stream]) - write x as readable Lisp text, no newline"),
+        ("with-output-to-string", "(with-output-to-string (s) body...) - everything body writes to s, as a string"),
+        ("with-input-from-string", "(with-input-from-string (s \"one\\ntwo\") body...) - run body reading from the string through s"),
+        ("make-string-output-stream", "(make-string-output-stream) - a stream to write to; (get-output-stream-string s) takes the text so far"),
+        ("make-string-input-stream", "(make-string-input-stream \"text\" [start [end]]) - a stream reading from the string"),
+        ("*standard-output*", "*standard-output* - the stream printing goes to; *standard-input* is where read-line reads from"),
+        ("streamp", "(streamp x) - true for a stream; also input-stream-p, output-stream-p, open-stream-p"),
+        ("finish-output", "(finish-output [stream]) - send buffered output on now; also force-output"),
     ],
     "Turtle graphics": [
         ("turtle", "every name in Python's turtle module: fd bk lt rt pu pd goto ... try (help 'fd)"),
@@ -430,7 +450,10 @@ for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset'
                       'string->list': 'list->string', 'vals': 'keys', 'char?': 'string?',
                       'symbol?': 'string?', 'else': 'cond', 't': 'cond', 'catch': 'try',
                       'odd?': 'even?', 'positive?': 'zero?', 'negative?': 'zero?', 'inexact': 'exact',
-                      'exact->inexact': 'exact', 'inexact->exact': 'exact'}.items():
+                      'exact->inexact': 'exact', 'inexact->exact': 'exact',
+                      '*standard-input*': '*standard-output*', 'input-stream-p': 'streamp',
+                      'output-stream-p': 'streamp', 'open-stream-p': 'streamp', 'force-output': 'finish-output',
+                      'get-output-stream-string': 'make-string-output-stream'}.items():
     _HELP_INDEX[_alias] = _HELP_INDEX[_name]
 for _alias, _name in {**CL_ALIASES, 'progn': 'begin', 'setq': 'set!', 'defvar': 'define',
                       'defparameter': 'define', 'defconstant': 'define',
@@ -632,6 +655,254 @@ def close_file(stream: Any) -> bool:
     """(close f) - close a file."""
     stream.close()
     return True
+
+# --- Text streams: Common Lisp style files, string streams and the console ---
+
+class _ConsoleOutput:
+    """*standard-output*: writes go to wherever Lispy's printing goes right now."""
+    def write(self, text: str) -> int:
+        print(text, end='')
+        return len(text)
+    def flush(self) -> None:
+        sys.stdout.flush()
+    def close(self) -> None:
+        pass
+    closed = False
+    def readable(self) -> bool:
+        return False
+    def writable(self) -> bool:
+        return True
+    def __repr__(self) -> str:
+        return '#<stream *standard-output*>'
+
+class _ConsoleInput:
+    """*standard-input*: lines come from read-line's usual source, characters from a line buffer."""
+    def __init__(self) -> None:
+        self.buffer = ''
+    def _fill(self) -> bool:
+        if not self.buffer:
+            try:
+                self.buffer = basic_io.read_line() + '\n'
+            except EOFError:
+                return False
+        return True
+    def readline(self) -> str:
+        if self.buffer:
+            line, self.buffer = self.buffer, ''
+            return line
+        return basic_io.read_line() + '\n'
+    def read(self, size: int = -1) -> str:
+        if not self._fill():
+            return ''
+        text, self.buffer = self.buffer[:size], self.buffer[size:]
+        return text
+    def peek(self) -> str:
+        return self.buffer[:1] if self._fill() else ''
+    def close(self) -> None:
+        pass
+    closed = False
+    def readable(self) -> bool:
+        return True
+    def writable(self) -> bool:
+        return False
+    def __repr__(self) -> str:
+        return '#<stream *standard-input*>'
+
+STANDARD_OUTPUT = _ConsoleOutput()
+STANDARD_INPUT = _ConsoleInput()
+
+def _is_stream(x: Any) -> bool:
+    return callable(getattr(x, 'write', None)) or callable(getattr(x, 'readline', None))
+
+def _output_stream(stream: Any, who: str) -> Any:
+    """The stream to write to: none, nil or t means *standard-output*."""
+    if stream is None or stream is True or stream == [] or stream is False:
+        return STANDARD_OUTPUT
+    if not callable(getattr(stream, 'write', None)):
+        raise TypeError(f"{who}: {lisp_str(stream)} is not an output stream")
+    return stream
+
+def _input_stream(stream: Any, who: str) -> Any:
+    """The stream to read from: none, nil or t means *standard-input*."""
+    if stream is None or stream is True or stream == [] or stream is False:
+        return STANDARD_INPUT
+    if not callable(getattr(stream, 'readline', None)):
+        raise TypeError(f"{who}: {lisp_str(stream)} is not an input stream")
+    return stream
+
+def _keyword_options(who: str, args: tuple, allowed: tuple[str, ...]) -> dict[str, Any]:
+    """Common Lisp :name value pairs, as a dict without the colons."""
+    if len(args) % 2:
+        raise TypeError(f"{who}: options must come in :name value pairs")
+    options = {}
+    for key, value in zip(args[::2], args[1::2]):
+        name = key[1:].lower() if isinstance(key, str) and key.startswith(':') else None
+        if name not in allowed:
+            raise TypeError(f"{who}: unknown option {lisp_str(key)}, expected one of "
+                            + " ".join(':' + a for a in allowed))
+        options[name] = value
+    return options
+
+def _option_name(value: Any) -> str:
+    """:supersede or 'supersede as 'supersede'; nil as 'nil'."""
+    if value == [] or value is False or value is None:
+        return 'nil'
+    return str(value).lstrip(':').lower()
+
+def open_stream(filename: Any, *args: Any) -> Any:
+    """(open "notes.txt" :direction :output :if-exists :supersede) - a text file stream, as in Common Lisp."""
+    options = _keyword_options('open', args, ('direction', 'if-exists', 'if-does-not-exist',
+                                              'element-type', 'external-format'))
+    name = _unwrap_str(filename)
+    direction = _option_name(options.get('direction', ':input'))
+    if_exists = _option_name(options.get('if-exists', ':supersede'))
+    element_type = options.get('element-type')
+    binary = isinstance(element_type, (list, tuple)) and element_type[:1] == ['unsigned-byte']
+    exists = os.path.exists(name)
+    if direction in ('input', 'probe'):
+        missing_default = 'error'
+    elif direction in ('output', 'io'):
+        missing_default = 'create'
+    else:
+        raise LispyError(f"open: :direction must be :input, :output, :io or :probe, not :{direction}")
+    if_missing = _option_name(options.get('if-does-not-exist', ':' + missing_default))
+    if not exists:
+        if if_missing == 'nil':
+            return False
+        if if_missing == 'error':
+            raise LispyError(f'open: there is no file "{name}"')
+        if direction in ('input', 'probe'):
+            open(name, 'a').close()   # :if-does-not-exist :create
+    elif direction in ('output', 'io'):
+        if if_exists == 'nil':
+            return False
+        if if_exists == 'error':
+            raise LispyError(f'open: the file "{name}" already exists; use :if-exists :supersede or :append')
+    if direction == 'input':
+        mode = 'r'
+    elif direction == 'probe':
+        return String(os.path.abspath(name))
+    elif direction == 'output':
+        mode = 'a' if if_exists == 'append' else 'r+' if if_exists == 'overwrite' and exists else 'w'
+    else:
+        mode = 'a+' if if_exists == 'append' else 'r+' if exists and if_exists == 'overwrite' else 'w+'
+    if binary:
+        return open(name, mode + 'b')
+    return open(name, mode, encoding='utf-8', newline='')
+
+def call_with_open_file(proc: Callable, filename: Any, *args: Any) -> Any:
+    """with-open-file runs proc on the opened stream and always closes it."""
+    stream = open_stream(filename, *args)
+    try:
+        return proc(stream)
+    finally:
+        if stream is not False:
+            stream.close()
+
+def _end_of_file(who: str, stream: Any, eof_error: Any, eof_value: Any) -> Any:
+    if eof_error is False or eof_error == []:
+        return eof_value
+    raise LispyError(f"{who}: end of file on {lisp_str(stream)}")
+
+def read_line_stream(stream: Any = None, eof_error: Any = True, eof_value: Any = [], _recursive_p: Any = None) -> Any:
+    """(read-line [stream [eof-error-p [eof-value]]]) - the next line, without its newline."""
+    if stream is None or stream is True or stream == [] or stream is False:
+        if not STANDARD_INPUT.buffer:
+            try:
+                return String(basic_io.read_line())
+            except EOFError:
+                if eof_error is False or eof_error == []:
+                    return eof_value
+                raise   # the console's own end of input, as BASIC INPUT expects
+    stream = _input_stream(stream, 'read-line')
+    line = stream.readline()
+    if not line:
+        return _end_of_file('read-line', stream, eof_error, eof_value)
+    if line.endswith('\n'):
+        line = line[:-1]
+    return String(line[:-1] if line.endswith('\r') else line)
+
+def read_char_stream(stream: Any = None, eof_error: Any = True, eof_value: Any = [], _recursive_p: Any = None) -> Any:
+    """(read-char [stream [eof-error-p [eof-value]]]) - the next character."""
+    stream = _input_stream(stream, 'read-char')
+    char = stream.read(1)
+    return Char(char) if char else _end_of_file('read-char', stream, eof_error, eof_value)
+
+def peek_char_stream(peek_type: Any = [], stream: Any = None, eof_error: Any = True,
+                     eof_value: Any = [], _recursive_p: Any = None) -> Any:
+    """(peek-char [peek-type [stream [eof-error-p [eof-value]]]]) - the next character, left unread."""
+    if peek_type not in ([], False):
+        raise TypeError("peek-char: only peek-type nil is supported")
+    stream = _input_stream(stream, 'peek-char')
+    if stream is STANDARD_INPUT:
+        char = stream.peek()
+    else:
+        here = stream.tell()
+        char = stream.read(1)
+        stream.seek(here)
+    return Char(char) if char else _end_of_file('peek-char', stream, eof_error, eof_value)
+
+def write_string_stream(text: Any, stream: Any = None) -> Any:
+    """(write-string "text" [stream]) - write the text, no newline; gives the text."""
+    _output_stream(stream, 'write-string').write(_unwrap_str(text))
+    return text
+
+def write_line_stream(text: Any, stream: Any = None) -> Any:
+    """(write-line "text" [stream]) - write the text and a newline; gives the text."""
+    _output_stream(stream, 'write-line').write(_unwrap_str(text) + '\n')
+    return text
+
+def write_char_stream(char: Any, stream: Any = None) -> Any:
+    """(write-char #\\a [stream]) - write one character; gives it."""
+    _output_stream(stream, 'write-char').write(_unwrap_str(char))
+    return char
+
+def newline_stream(stream: Any = None) -> Any:
+    """(newline [stream]), also (terpri [stream]) - end the line."""
+    _output_stream(stream, 'newline').write('\n')
+    return []
+
+def _printed(value: Any) -> str:
+    return _unwrap_str(value) if isinstance(value, (String, Char)) else lisp_str(value)
+
+def princ_stream(value: Any, stream: Any = None) -> Any:
+    """(princ x [stream]) - x as display shows it, no newline; gives x."""
+    _output_stream(stream, 'princ').write(_printed(value))
+    return value
+
+def prin1_stream(value: Any, stream: Any = None) -> Any:
+    """(prin1 x [stream]) - x as readable Lisp text, no newline; gives x."""
+    _output_stream(stream, 'prin1').write(lisp_str(value))
+    return value
+
+def finish_output(stream: Any = None) -> Any:
+    """(finish-output [stream]) - send buffered output on now; also force-output."""
+    _output_stream(stream, 'finish-output').flush()
+    return []
+
+def make_string_input_stream(text: Any, start: Any = 0, end: Any = None) -> io.StringIO:
+    """(make-string-input-stream "text" [start [end]]) - a stream reading from the string."""
+    return io.StringIO(_unwrap_str(text)[start:None if end == [] else end])
+
+def get_output_stream_string(stream: Any) -> String:
+    """(get-output-stream-string s) - all written to s so far, and s starts empty again."""
+    text = stream.getvalue()
+    stream.seek(0)
+    stream.truncate()
+    return String(text)
+
+def call_with_output_string(proc: Callable) -> String:
+    """with-output-to-string runs proc on a fresh string stream and gives what it wrote."""
+    stream = io.StringIO()
+    proc(stream)
+    return String(stream.getvalue())
+
+def call_with_input_string(text: Any, proc: Callable) -> Any:
+    """with-input-from-string runs proc on a stream reading from text."""
+    return proc(make_string_input_stream(text))
+
+def _open_stream_p(stream: Any) -> bool:
+    return _is_stream(stream) and not getattr(stream, 'closed', False)
 
 def memoize(proc: Callable, *, exact_arguments_only: bool = False) -> Callable:
     """(memoize f) - f with a cache of its results, as Python's functools.cache.
@@ -1121,14 +1392,18 @@ def _string_to_number(s: Any, base: int = 10) -> Any:
             return False
 
 def _format_lisp(fmt: Any, *args: Any) -> String | None:
-    # Common Lisp style (format nil "~a" x) returns the text and (format t "~a" x) prints it
-    if fmt is True or fmt == [] or fmt is False:
+    # Common Lisp style (format nil "~a" x) returns the text, (format t "~a" x) prints it
+    # and (format stream "~a" x) writes it to the stream
+    if fmt is True or fmt == [] or fmt is False or _is_stream(fmt):
         if not args:
-            raise TypeError("format needs a format string after nil or t")
+            raise TypeError("format needs a format string after nil, t or a stream")
         text = _format_lisp(*args)
         if fmt is True:
             print(text.value, end="")
             return None
+        if _is_stream(fmt):
+            fmt.write(text.value)
+            return []
         return text
     raw_fmt = _unwrap_str(fmt)
     out = []
@@ -1745,6 +2020,26 @@ def standard_env() -> Env:
         'file-position': file_position,
         'file-length': file_length,
         'close': close_file,
+        'open': open_stream,
+        'call-with-open-file': call_with_open_file,
+        'read-char': read_char_stream,
+        'peek-char': peek_char_stream,
+        'write-string': write_string_stream,
+        'write-line': write_line_stream,
+        'write-char': write_char_stream,
+        'princ': princ_stream,
+        'prin1': prin1_stream,
+        'finish-output': finish_output,
+        'force-output': finish_output,
+        'make-string-input-stream': make_string_input_stream,
+        'make-string-output-stream': io.StringIO,
+        'get-output-stream-string': get_output_stream_string,
+        'call-with-output-string': call_with_output_string,
+        'call-with-input-string': call_with_input_string,
+        'streamp': _is_stream,
+        'input-stream-p': lambda s: _is_stream(s) and s.readable(),
+        'output-stream-p': lambda s: _is_stream(s) and s.writable(),
+        'open-stream-p': _open_stream_p,
         'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
@@ -1762,12 +2057,12 @@ def standard_env() -> Env:
         'get-internal-real-time': _get_internal_real_time,
         'get-internal-run-time': _get_internal_run_time,
         'sleep': time.sleep,
-        'newline': lambda: print(),
+        'newline': newline_stream,
         'pretty-print': lambda exp: print(pretty_print(exp, width=40)),
         'pprint': lambda exp: print(pretty_print(exp, width=40)),
         'help': lisp_help,
         'read': lambda text: parse(_unwrap_str(text)),
-        'read-line': lambda: String(basic_io.read_line()),
+        'read-line': read_line_stream,
         'basic-input-values': lambda kinds, reader, line_mode=False, question=True: [
             String(value) if isinstance(value, str) else value
             for value in basic_io.read_values(kinds, lambda: _unwrap_str(reader()), line_mode, question)],
@@ -1787,6 +2082,8 @@ def standard_env() -> Env:
     
     for key, value in primitives.items():
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
+    env['*standard-output*'] = STANDARD_OUTPUT
+    env['*standard-input*'] = STANDARD_INPUT
 
     # Boolean and Lisp constants
     # Complex-aware sqrt / log, installed last so they win over the math ones.
@@ -1964,6 +2261,20 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         library_system.macros()[name] = proc
         return None
 
+    if head in ('with-open-file', 'with-output-to-string', 'with-input-from-string'):
+        if len(x) < 2 or not isinstance(x[1], list) or not x[1] or not isinstance(x[1][0], str):
+            raise SyntaxError(f"{head} needs (stream-name ...) and a body, as in ({head} (s ...) body...)")
+        var, *spec = x[1]
+        proc = ['lambda', [var], *x[2:]]
+        if head == 'with-open-file':
+            if not spec:
+                raise SyntaxError('with-open-file needs a file name: (with-open-file (s "file.txt") body...)')
+            return expand(['call-with-open-file', proc, *spec], toplevel)
+        if head == 'with-output-to-string':
+            return expand(['call-with-output-string', proc], toplevel)
+        if len(spec) != 1:
+            raise SyntaxError('with-input-from-string needs one string: (with-input-from-string (s "text") body...)')
+        return expand(['call-with-input-string', spec[0], proc], toplevel)
     if head == 'with-ansi-terminal':
         if len(x) < 2:
             raise SyntaxError("with-ansi-terminal needs a body")
@@ -2816,6 +3127,10 @@ def lisp_str(exp: Any) -> str:
             im = lisp_str(exp.imag)
             return f"{lisp_str(exp.real)}{im if im.startswith('-') else '+' + im}i"
         return f"#C({lisp_str(exp.real)} {lisp_str(exp.imag)})"   # nan/inf can't be infix
+    elif isinstance(exp, io.StringIO):
+        return "#<string-stream>"
+    elif isinstance(exp, io.IOBase):
+        return f'#<{"closed " if exp.closed else ""}file-stream "{exp.name}">'
     elif isinstance(exp, Vector):
         return '[' + ' '.join(map(lisp_str, exp)) + ']'
     elif isinstance(exp, Pair):
@@ -2839,7 +3154,8 @@ COMPLETION_DELIMS = " \t\n()[]{}'\"`,;@"
 def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
     env = global_env if env is None else env
-    names = (set(SPECIAL_FORMS) - {'_setf-call', '_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal'}   # defun is expanded away, so not in SPECIAL_FORMS
+    names = (set(SPECIAL_FORMS) - {'_setf-call', '_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal',
+                                                                       'with-open-file', 'with-output-to-string', 'with-input-from-string'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):

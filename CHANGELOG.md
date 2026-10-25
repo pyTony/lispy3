@@ -4,6 +4,15 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Lisp: Common Lisp text streams. `with-open-file` and `open` with `:direction`,
+  `:if-exists`, `:if-does-not-exist` and `:element-type`; `read-line`,
+  `read-char` and `peek-char` on a stream with eof-error-p/eof-value;
+  `write-line`, `write-string`, `write-char`, `princ`, `prin1`, `terpri` and
+  `format` to a stream; string streams (`with-output-to-string`,
+  `with-input-from-string`, `make-string-output-stream`,
+  `get-output-stream-string`, `make-string-input-stream`);
+  `*standard-output*`, `*standard-input*` and the stream predicates.
+
 - Graphics: the soccer ball FPS test runs in BASIC (`basic/graphics/soccerball.bas`,
   from BBC BASIC for SDL) and natively in Lispy (`lisp/programs/soccer-ball.lisp`,
   about 210 frames per second). Drawing no longer waits for the window's
