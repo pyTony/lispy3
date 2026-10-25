@@ -248,27 +248,29 @@ class BasicPaletteTest(LispyTestCase):
         self.assertEqual(self.ev('(graphics-mode-info)')[0], 8)
 
 
-class RefreshWaitTest(unittest.TestCase):
-    def test_refresh_waits_for_the_window_thread_to_show_the_frame(self):
-        # *REFRESH from the Lisp thread waits until the Machine's present() has
-        # shown the frame, as BBCSDL's does; a closed window never waits
-        import threading, time
+class RefreshPacingTest(LispyTestCase):
+    def test_refresh_shows_each_frame_through_the_host_at_most_60_a_second(self):
+        # In the Machine *REFRESH hands the frame to the window's thread at
+        # once (the dispatcher) and then paces frames, as Python mini_basic does
+        import time
+        from lispy_support import lispy_graphics_bindings as B
         from lispy_support.lispy_graphics import Graphics
-        g = Graphics()
-        g._screen, g._present_thread = object(), -1     # open, shown by another thread
-        g.refresh()
-        def show():
-            time.sleep(0.03)
-            with g._frame_shown:
-                g._shown_frame = g._frame_version
-                g._frame_shown.notify_all()
-        threading.Thread(target=show).start()
-        start = time.perf_counter()
-        g.wait_shown(timeout=1)
-        self.assertGreaterEqual(time.perf_counter() - start, 0.02)
-        self.assertEqual(g._shown_frame, g._frame_version)
-        g._screen = None
-        g.refresh()
-        start = time.perf_counter()
-        g.wait_shown(timeout=1)
-        self.assertLess(time.perf_counter() - start, 0.01)
+        calls = []
+        def host(fn, *args):
+            calls.append(fn.__name__)
+            return fn(*args)
+        self.ev('(graphics-mode 9)')
+        self.ev('(graphics-refresh #f)')
+        B.set_dispatcher(host)
+        try:
+            with patch.object(Graphics, 'window_open', True), \
+                 patch.object(Graphics, 'present') as present:
+                start = time.perf_counter()
+                for _ in range(4):
+                    self.ev('(graphics-refresh)')
+                elapsed = time.perf_counter() - start
+        finally:
+            B.set_dispatcher(None)
+        self.assertEqual(calls, ['_present_if_open'] * 4)
+        self.assertEqual(present.call_count, 4)
+        self.assertGreaterEqual(elapsed, 3 / B.FRAME_RATE - 0.005)
