@@ -199,17 +199,19 @@ class Graphics:
         """Outline: the edge pixels of fill_circle's disc, row by row."""
         cx, cy, radius = float(cx), float(cy), abs(float(radius))
         rgb = bytes(_rgb(color))
-        def half(y):
-            h = radius * radius - (y + 0.5 - cy) ** 2
-            return math.sqrt(h) if h >= 0 else None
         top, bottom = math.ceil(cy - radius - 0.5), math.floor(cy + radius - 0.5)
+        # Each row's half width once (None outside the circle), with a row either side
+        halves = []
+        for y in range(top - 1, bottom + 2):
+            h = radius * radius - (y + 0.5 - cy) ** 2
+            halves.append(math.sqrt(h) if h >= 0 else None)
         for y in range(top, bottom + 1):
-            h = half(y)
+            above, h, below = halves[y - top], halves[y - top + 1], halves[y - top + 2]
             if h is None:
                 continue
             left, right = math.ceil(cx - h - 0.5), math.floor(cx + h - 0.5)
             # Join to the wider neighbouring row so steep parts have no gaps.
-            inner = min((n for n in (half(y - 1), half(y + 1)) if n is not None), default=0.0)
+            inner = min((n for n in (above, below) if n is not None), default=0.0)
             inner_left = max(left, math.ceil(cx - inner - 0.5) - 1)
             inner_right = min(right, math.floor(cx + inner - 0.5) + 1)
             if y in (top, bottom) or inner_left >= inner_right:
