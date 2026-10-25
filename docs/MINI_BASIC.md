@@ -133,6 +133,9 @@ loading is not implemented. Keywords must be uppercase; identifiers are
 case-sensitive. A BASIC file is passed to `bbc-load`, rather than directly to
 lispy3's Lisp loader.
 
+MBASIC compatibility is tested against MBASIC 5.21 output: see
+[MBASIC_COMPAT.md](MBASIC_COMPAT.md).
+
 ## Current language support
 
 | Area | Implemented |

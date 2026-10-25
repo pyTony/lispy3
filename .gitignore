@@ -1,3 +1,6 @@
 *.pyc
 bak/
 __pycache__/
+
+# Local clone or link of Aaron Wohl's MBASIC, used by tests/test_mbasic_compat.py
+/mbasic
