@@ -627,7 +627,8 @@
     "GOTO" "GOSUB" "RETURN" "ON" "DATA" "READ" "RESTORE" "DIM" "INPUT" "TIME" "CLS" "COLOUR" "COLOR" "VDU" "ANSI" "MODE" "GCOL" "MOVE" "DRAW" "PLOT" "ORIGIN" "CLG"
     "CIRCLE" "RECTANGLE" "FILL" "WAIT" "OSCLI" "SUM"
     "ABS" "INT" "SQR" "SIN" "COS" "TAN" "ATN" "LN" "LOG" "EXP" "SGN" "LEN" "PI" "RND"
-    "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"))
+    "LEFT$" "RIGHT$" "MID$" "STR$" "VAL" "CHR$" "ASC" "INSTR" "UCASE$" "LCASE$"
+    "ACS" "ASN" "RAD" "DEG"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
 (define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
@@ -934,6 +935,7 @@
 (define bbc-functions
   '(("ABS" abs 1 1 :num) ("INT" floor 1 1 :num) ("SQR" sqrt 1 1 :num)
     ("SIN" sin 1 1 :num) ("COS" cos 1 1 :num) ("TAN" tan 1 1 :num) ("ATN" atan 1 1 :num)
+    ("ACS" acos 1 1 :num) ("ASN" asin 1 1 :num) ("RAD" radians 1 1 :num) ("DEG" degrees 1 1 :num)
     ("LN" log 1 1 :num) ("LOG" log10 1 1 :num) ("EXP" exp 1 1 :num) ("SGN" bbc-sgn 1 1 :num)
     ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
     ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
