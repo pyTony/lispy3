@@ -290,6 +290,13 @@ def git_pull(folder: str = APP_DIR):
     return ("updated" if before != after else "current"), output
 
 BUFFER_ECHO_MODES = ("pretty", "line", "off")
+# Eval → Run BASIC buffer as: one-off runs that leave BASIC Settings unchanged.
+BASIC_DIALECT_RUNS = (
+    ("Lispy BASIC, BBC", dict(backend='lispy', print_style='bbc')),
+    ("Lispy BASIC, MBASIC", dict(backend='lispy', print_style='mbasic')),
+    ("Python mini_basic, mini dialect", dict(backend='python', dialect='mini')),
+    ("Python mini_basic, BBC dialect", dict(backend='python', dialect='bbc')),
+)
 LISTENER_PROMPT = re.compile(r"(?:USER>|lispy3>|\.\.\. \(\d+\)>) ?")
 
 def listener_to_code(log: str) -> str:
@@ -1785,6 +1792,10 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
         eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
         eval_m.add_command(label="Real BBC BASIC for SDL buffer", command=self.eval_bbcsdl_buffer)
+        dialect_m = tk.Menu(eval_m, tearoff=0)
+        for label, options in BASIC_DIALECT_RUNS:
+            dialect_m.add_command(label=label, command=lambda options=options: self.eval_basic_buffer_as(**options))
+        eval_m.add_cascade(label="Run BASIC buffer as", menu=dialect_m)
         eval_m.add_command(label='BASIC Settings…', command=self._open_basic_settings)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
@@ -2764,6 +2775,10 @@ class LispMachine(tk.Tk):
     def eval_basic_buffer(self, backend='python'):
         self.eval_buffer(basic=True, basic_backend=backend)
 
+    def eval_basic_buffer_as(self, backend, print_style=None, dialect=None):
+        """Run the whole buffer once in a chosen BASIC dialect; BASIC Settings stay unchanged."""
+        self.eval_buffer(basic=True, basic_backend=backend, print_style=print_style, dialect=dialect)
+
     def eval_basic_at_cursor(self, backend='python'):
         tab = self.current_tab()
         if not tab or self._busy():
@@ -2905,7 +2920,7 @@ class LispMachine(tk.Tk):
         error.lineno, error.offset, error.whole_line = line, 1, True
         LispMachine._highlight_source_error(self, tab, error)
 
-    def _run_python_basic_buffer(self, tab, source, source_line, terminal=False, python_source=False):
+    def _run_python_basic_buffer(self, tab, source, source_line, terminal=False, python_source=False, dialect=None):
         original = tab.get_content()
         settings = dict(getattr(self, 'settings', {}))
         graphics = getattr(self, 'basic_pygame', None)
@@ -2981,7 +2996,8 @@ class LispMachine(tk.Tk):
                     else:
                         status = BR.run_python_basic(source, write, cwd=cwd,
                             executable=settings.get('basic_python'),
-                            package_root=settings.get('basic_directory') or BR.default_package_root(), pygame=pygame)
+                            package_root=settings.get('basic_directory') or BR.default_package_root(),
+                            dialect=dialect, pygame=pygame)
                 if not python_source and not pygame and status == 10:
                     self._ui(self.listener_write, ';; Python mini_basic finished (console hold requested).\n', 'info')
                 else:
@@ -3014,7 +3030,7 @@ class LispMachine(tk.Tk):
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
     def eval_buffer(self, terminal=None, basic=False, source=None, source_line=1,
-                    basic_backend='lispy', python_source=False, fresh=False):
+                    basic_backend='lispy', python_source=False, fresh=False, print_style=None, dialect=None):
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -3032,7 +3048,7 @@ class LispMachine(tk.Tk):
         if python_source or (basic and basic_backend == 'python'):
             if content.strip():
                 LispMachine._run_python_basic_buffer(self, tab, content, source_line,
-                    terminal=terminal, python_source=python_source)
+                    terminal=terminal, python_source=python_source, dialect=dialect)
             return
         if basic and not terminal and basic_backend == 'lispy':
             self.basic_repl.program_edited = False
@@ -3051,7 +3067,7 @@ class LispMachine(tk.Tk):
                 self.console_ready = False
             else:
                 self.listener_write(f'BASIC> {echo_text}\n', 'prompt')
-            self._basic_feed(cmd_lines, source=source, source_line=source_line)
+            self._basic_feed(cmd_lines, source=source, source_line=source_line, print_style=print_style)
             return
         echo = LispMachine._buffer_echo_mode(self)
         if echo != 'off':
@@ -3069,7 +3085,7 @@ class LispMachine(tk.Tk):
             if basic:
                 # Quote source as a Lisp string; never parse BASIC as Lisp or
                 # insert Lisp closing brackets into the user's BASIC buffer.
-                style = getattr(self, 'settings', {}).get('basic_number_printing', 'bbc')
+                style = print_style or getattr(self, 'settings', {}).get('basic_number_printing', 'bbc')
                 style = style if style in ('bbc', 'mbasic') else 'bbc'
                 forms = self._parse_top_level_forms(
                     '(import (prefix (only mini-basic bbc-run bbc-set-print-style!) editor-basic:))\n'
@@ -3447,8 +3463,9 @@ class LispMachine(tk.Tk):
         self._cached_basic_tab = tab
         self._cached_basic_buffer = tab.get_content() if tab is not None else ''
 
-    def _basic_feed(self, lines, source=None, source_line=1):
-        style = getattr(self, 'settings', {}).get('basic_number_printing')
+    def _basic_feed(self, lines, source=None, source_line=1, print_style=None):
+        # print_style is a one-off override; the next feed returns to the saved setting.
+        style = print_style or getattr(self, 'settings', {}).get('basic_number_printing')
         if style in ('bbc', 'mbasic'):
             self.basic_repl.print_style = style
         if self._busy():
