@@ -58,7 +58,7 @@ terminal attributes. It is not a claim of unchanged portability to BBCSDL or to
 the separate Python mini_basic interpreter. The earlier external
 `examples/graphics/mandelbrot/mandelbrot2.bas` remains a separate plain-text demo.
 
-## Graphical version and checks
+## Graphical version
 
 The turtle graphical version, with mouse-wheel zoom, remains
 `lisp/programs/mandelbrot.lisp`:
@@ -70,11 +70,3 @@ python lispy3.py lisp/programs/mandelbrot.lisp
 The terminal versions have no interactive zoom. You can time a render in the
 REPL by wrapping a call in `(time ...)`; timings include interpreter overhead
 and are not directly comparable to BBCSDL native performance.
-
-Regression tests compare BASIC and Lisp against a complex-number reference,
-check known inside/outside/boundary points, verify the coloured/plain pictures
-match, and exercise all four launchers and their terminal reset sequences:
-
-```bash
-python -m pytest tests/test_terminal_mandelbrot.py -q
-```

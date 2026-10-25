@@ -11,7 +11,6 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 - [Quick Reference](docs/QUICK_REFERENCE.md): every built-in on one page.
 - Inside Lispy, `(help)` lists the built-ins and `(help 'name)` explains one. In the editor, `(help)` and **Help → Lispy guide** (F1) open the guide in its own window.
 - [CHANGELOG.md](CHANGELOG.md): what changed in each release.
-- [TODO.md](TODO.md): features not implemented yet, with pointers to reference implementations in [fluentpython/lispy](https://github.com/fluentpython/lispy).
 
 ## Contents
 
@@ -77,13 +76,13 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `lispy3.py` | The interpreter (REPL + `python lispy3.py file.lisp` script runner). |
 | `lispy3-numpy.py` | The same interpreter with a faster evaluator and bulk vector built-ins; uses NumPy arrays when NumPy is installed. See [Faster runs](#faster-runs-with-lispy3-numpypy). |
 | `lispy_support/` | Python implementation helpers for the interpreter, editor, terminal, graphics, workspaces and BASIC integration. |
-| `tools/` | Developer and setup utilities. |
+| `tools/` | Setup utilities: the desktop shortcut maker and the BBCSDL loader helper. |
 | `lisp/` | Lisp libraries and source programs: the examples below live here, `(save "name")` writes here, and `(load "name")` and Open defaults to `lisp/programs/`. |
 | `lisp/lsystems.lisp` | The L-system drawing engine used by every example. |
 | `lisp/programs/tree.lisp`, `lisp/programs/plant.lisp`, `lisp/programs/snowflake.lisp` | The three example L-systems from *The Algorithmic Beauty of Plants*. |
 | `lisp/sieve_lispy3.lisp` | The Byte magazine prime sieve, rewritten for lispy3. |
 | `lisp/sieve-optimized.lisp` | The same sieve with bulk vector operations; run it with `lispy3-numpy.py`. |
-| `lisp/mini-basic.lisp` | BBC BASIC text via `(bbc-run """...""")` or `(bbc-load "prog.bas")`: structured statements, PROC/FN, GOTO, GOSUB/RETURN, ON branches, DATA/READ/RESTORE, DIM arrays and an assignable centisecond TIME clock. See the [mini-basic guide](docs/MINI_BASIC.md) for usage, ANSI output and limits, and `basic/reference/README.md` for native checks. |
+| `lisp/mini-basic.lisp` | BBC BASIC text via `(bbc-run """...""")` or `(bbc-load "prog.bas")`: structured statements, PROC/FN, GOTO, GOSUB/RETURN, ON branches, DATA/READ/RESTORE, DIM arrays and an assignable centisecond TIME clock. See the [mini-basic guide](docs/MINI_BASIC.md) for usage, ANSI output and limits. |
 | `lisp/programs/pi_digits.lisp` | Prints the first n decimals of pi with a spigot algorithm. |
 | `lisp/programs/mandelbrot.lisp` | The Mandelbrot set; turn the mouse wheel over it to zoom in and out around the pointer. |
 | Terminal Mandelbrot in BASIC and Lisp | Plain and ANSI-coloured terminal demos; see [run commands and source](docs/TERMINAL_MANDELBROT.md). |
@@ -92,12 +91,8 @@ The roots of this project date back to a spark of inspiration from a 1981 Finnis
 | `startup.lisp` | Optional startup buffer/script beside the editor; configure showing and execution independently in View → Startup Settings…, which can also reopen the files open at the last close instead. |
 | `lispy_support/syntax_highlight.py`, `syntax/*.json` | Editor syntax colouring: the engine, and one rules-and-colours file per language. |
 | `docs/QUICK_START.md`, `docs/LISPY_BY_EXAMPLE.md`, `docs/QUICK_REFERENCE.md` | The user manual. |
-| `TODO.md` | Features still to be implemented. |
-| `tests/` | Regression tests, starting with Norvig's [lispy.html](https://norvig.com/lispy.html). Run `python -m unittest` in this folder; no window opens. `python -m unittest -v` lists each test with a line saying what it checks. |
 
 Newly created or opened buffers receive keyboard focus automatically.
-
-See [repository layout and commands](docs/REPOSITORY_LAYOUT.md) for the directory boundaries and moved utility commands.
 
 `lispy_machine.pyw` **imports `lispy3.py`** and uses it directly — it does not reimplement parsing, evaluation, printing, or turtle support.
 
@@ -624,17 +619,13 @@ even if Git reports no new commits or pull fails, and offers a restart. It
 refreshes open text-file buffers changed on disk; unsaved edits require confirmation
 before replacement. Refreshing a buffer does not execute or reload its definitions.
 
-BASIC examples, timing programs and BBCSDL reference checks are collected in
+BASIC examples and timing programs are collected in
 [basic/](basic/README.md). Lisp implementation files remain in lisp/; cross-Lisp
 implementations and Lisp-form fixtures remain in compare/.
 
 **BASIC REPL:** choose **View → Listener mode → BASIC REPL** for direct BASIC
 input and numbered program editing. `HELP` lists commands. `LOAD`/`SAVE` filenames
 and Lisp loader paths complete with Tab. See [BASIC REPL](docs/BASIC_REPL.md).
-
-Pytest defaults to this repository's `tests/` directory (`python -m pytest -q`).
-A local `mini_basic` link points to a separate project and is excluded from
-recursive discovery; run that project's tests from its own repository.
 
 Lispy Machine schedules cyclic garbage collection on its Tk main thread. This
 keeps closed turtle-window/image cycles from being finalized by the Lisp worker.

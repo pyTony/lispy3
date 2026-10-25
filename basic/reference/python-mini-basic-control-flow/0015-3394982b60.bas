@@ -1,5 +1,0 @@
-100 FOR z6n4cvv4g1u1k1br=1 TO 2
-110 FOR yu=1 TO 2
-120 PRINT z6n4cvv4g1u1k1br; yu
-130 NEXT yu
-140 NEXT z6n4cvv4g1u1k1br

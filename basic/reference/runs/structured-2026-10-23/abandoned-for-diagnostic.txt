@@ -1,2 +1,0 @@
-1
-BBC_ERROR:46:Not in a WHILE loop:90

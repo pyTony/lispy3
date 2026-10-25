@@ -1,5 +1,0 @@
-100 FOR k9i=1 TO 2
-110 FOR qkr5l=1 TO 2
-120 PRINT k9i; qkr5l
-130 NEXT qkr5l
-140 NEXT k9i
