@@ -581,6 +581,9 @@
 (define (bbc-not a) (let [x (trunc a)] (x/__invert__)))
 
 (define (bbc-sgn x) (cond ((> x 0) 1) ((< x 0) -1) (else 0)))
+;; Not math's radians/degrees: turtle's zero-argument ones replace them once graphics load
+(define (bbc-rad x) (* x (/ pi 180)))
+(define (bbc-deg x) (* x (/ 180 pi)))
 
 (define (bbc-val s)
   (let [n (string->number s)] (if n n 0)))
@@ -989,7 +992,7 @@
 (define bbc-functions
   '(("ABS" abs 1 1 :num) ("INT" floor 1 1 :num) ("SQR" sqrt 1 1 :num)
     ("SIN" sin 1 1 :num) ("COS" cos 1 1 :num) ("TAN" tan 1 1 :num) ("ATN" atan 1 1 :num)
-    ("ACS" acos 1 1 :num) ("ASN" asin 1 1 :num) ("RAD" radians 1 1 :num) ("DEG" degrees 1 1 :num)
+    ("ACS" acos 1 1 :num) ("ASN" asin 1 1 :num) ("RAD" bbc-rad 1 1 :num) ("DEG" bbc-deg 1 1 :num)
     ("LN" log 1 1 :num) ("LOG" log10 1 1 :num) ("EXP" exp 1 1 :num) ("SGN" bbc-sgn 1 1 :num)
     ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
     ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
