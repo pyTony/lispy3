@@ -701,6 +701,15 @@
                     " use a lowercase or mixed-case name such as "
                     (downcase name) " or " (name/capitalize))))))
 
+;; A name made of a supported keyword run straight into another keyword,
+;; as BBCSDL reads it: the first keyword, else #f. TOTAL stays a name for
+;; bbc-check-variable-name to reject, since TAL is no keyword.
+(define (bbc-keyword-run-on text start name)
+  (let [word (bbc-sdl-keyword-at text start)]
+    (and word (member word bbc-keywords) (< (length word) (length name))
+         (bbc-sdl-keyword-at text (+ start (length word)))
+         word)))
+
 (define (bbc-tokenize text)
   (let [toks (list)
         n (length text)
@@ -796,6 +805,12 @@
                       (emit-name :proc (substring name 4) raw))
                      ((and (> (length name) 2) (equal? (substring name 0 2) "FN"))
                       (emit-name :fn (substring name 2) raw))
+                     ((and (not (or in-data (eq? bbc-number-print-style :mbasic)))
+                           (bbc-keyword-run-on text i name))
+                      ;; SINRAD is SIN RAD and CIRCLEFILL is CIRCLE FILL
+                      (let [word (bbc-keyword-run-on text i name)]
+                        (emit-name :kw word word)
+                        (set! j (+ i (length word)))))
                      (else
                       ;; MBASIC names and unquoted DATA words are not BBC variables
                       (if (not (or in-data (eq? bbc-number-print-style :mbasic)))

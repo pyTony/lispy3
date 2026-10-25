@@ -1,6 +1,8 @@
 """Register optional Lisp graphics primitives without importing Pygame until open()."""
 from __future__ import annotations
 
+import math
+
 from lispy_support.graphics_modes import MODES, GraphicsMode
 from lispy_support.lispy_graphics import Graphics
 
@@ -226,7 +228,39 @@ def install(env, Procedure, String):
             visit(x, y)
             shown(g)
             return []
-        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW), 69 (point) or 85 (triangle)")
+        if 160 <= code <= 167 or 176 <= code <= 183:
+            return arc_or_sector(code, x, y)
+        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW), 69 (point), "
+                         "85 (triangle), 160-167 (arc) or 176-183 (sector)")
+
+    def arc_or_sector(code, x, y):
+        """PLOT 160-167 arc, 176-183 sector: the point before last is the centre,
+        the last point starts the arc (and sets the radius), anticlockwise to the
+        direction of x,y. The low 3 bits are BBC's usual relative/colour choice."""
+        g = gfx()
+        action = code & 7
+        if action in (2, 6):
+            raise NotImplementedError(f"PLOT {code}: inverting colours is not supported")
+        if action < 4:
+            x, y = current["pen"][0] + int(x), current["pen"][1] + int(y)
+        if action not in (0, 4):
+            (cx, cy), (sx, sy) = current["previous"], current["pen"]
+            radius = math.hypot(sx - cx, sy - cy)
+            start = math.atan2(sy - cy, sx - cx)
+            sweep = (math.atan2(y - cy, x - cx) - start) % (2 * math.pi) or 2 * math.pi
+            steps = max(4, math.ceil(sweep * radius * g.width / g.mode.virtual_width / 2))
+            arc = [g.virtual_to_pixel_centre(cx + radius * math.cos(start + sweep * i / steps),
+                                             cy + radius * math.sin(start + sweep * i / steps))
+                   for i in range(steps + 1)]
+            colour = palette_color(current["background" if action in (3, 7) else "colour"])
+            if code >= 176:
+                g.fill_polygon([g.virtual_to_pixel_centre(cx, cy)] + arc, colour)
+            else:
+                for (x0, y0), (x1, y1) in zip(arc, arc[1:]):
+                    g.line(math.floor(x0), math.floor(y0), math.floor(x1), math.floor(y1), colour)
+            shown(g)
+        visit(x, y)
+        return []
 
     def fill_rect(x0, y0, x1, y1, r=255, g=255, b=255):
         gfx().fill_rect(x0, y0, x1, y1, rgb(r, g, b))
