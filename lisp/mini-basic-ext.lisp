@@ -423,7 +423,8 @@
        (set! bbc-data-labels ,data-lbls)
        ,@defs
        (set! bbc-col 0)
-       ,(if (bbc-uses? '(END) stmts) (bbc-catch "bbc:end" run #f) run)
+       ;; Closing a MODE window ends the program like END (see graphics bindings)
+       ,(if (bbc-uses? '(END MODE) stmts) (bbc-catch "bbc:end" run #f) run)
        #f)))
        
 ;;; --- Parser extensions for (label), DATA, READ, RESTORE, DIM, arrays ---

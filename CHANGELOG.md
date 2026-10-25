@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: closing the graphics window opened by `MODE` (or pressing
+  Escape in it) ends the BASIC program like `END`; the soccer ball no longer
+  runs on without a window. `?` at the start of a statement is short for
+  `PRINT` (`?BOGOTO`).
+
 - Graphics: the soccer ball FPS test runs in BASIC (`basic/graphics/soccerball.bas`,
   from BBC BASIC for SDL) and natively in Lispy (`lisp/programs/soccer-ball.lisp`,
   about 210 frames per second). Drawing no longer waits for the window's

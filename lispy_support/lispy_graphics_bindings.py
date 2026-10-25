@@ -37,7 +37,7 @@ def install(env, Procedure, String):
     sets one); drawing runs directly and the host's window poller shows it.
     """
     current = {"graphics": None, "colour": 1, "pen": (0, 0), "background": 0,
-               "previous": (0, 0)}
+               "previous": (0, 0), "basic": False}
 
     def shown(g):
         """Without a host poller, present now and then while drawing (CLI)."""
@@ -47,7 +47,11 @@ def install(env, Procedure, String):
     def gfx():
         if current["graphics"] is None:
             raise RuntimeError("Call (graphics-mode 1) or (graphics-rgb-mode w h) first")
-        return current["graphics"]
+        g = current["graphics"]
+        if current["basic"] and g.closed_by_user:
+            # BBC BASIC quits when its window is closed; the program catches this as END.
+            raise RuntimeError("bbc:end")
+        return g
 
     def select(mode):
         try:
@@ -58,6 +62,7 @@ def install(env, Procedure, String):
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["basic"] = False
         current["colour"] = mode.colours - 1
         current["background"] = 0
         current["pen"] = current["previous"] = (0, 0)
@@ -70,6 +75,7 @@ def install(env, Procedure, String):
         if old is not None:
             old.close()
         current["graphics"] = Graphics(mode)
+        current["basic"] = False
         current["colour"] = 1
         current["pen"] = current["previous"] = (0, 0)
         return [w, h]
@@ -180,6 +186,7 @@ def install(env, Procedure, String):
     def bbc_mode(number):
         result = select(number)
         open_window()
+        current["basic"] = True
         return result
 
     def clg():
@@ -283,9 +290,9 @@ def install(env, Procedure, String):
 
     def refresh(*args):
         """(graphics-refresh) shows the frame; #f/#t turn automatic showing off/on."""
-        g = current["graphics"]
-        if g is None:
+        if current["graphics"] is None:
             return []
+        g = gfx()
         if args:
             g.set_auto_refresh(args[0] is not False and args[0] != [])
         else:
