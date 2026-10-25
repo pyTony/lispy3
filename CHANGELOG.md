@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: MBASIC sequential text files. `OPEN "O"/"I"/"A", #n, f$` (or
+  `OPEN f$ FOR OUTPUT/INPUT/APPEND AS #n`), `PRINT #n` with PRINT's own
+  formatting, `WRITE #n`, `INPUT #n`, `LINE INPUT #n`, `EOF(n)` and
+  `CLOSE [n, ...]`, on lispy3's text streams. `LINE INPUT` works at the
+  keyboard too. BBC `OPENOUT`/`OPENIN` channels keep their binary `PRINT#`.
+
 - Lisp: Common Lisp text streams. `with-open-file` and `open` with `:direction`,
   `:if-exists`, `:if-does-not-exist` and `:element-type`; `read-line`,
   `read-char` and `peek-char` on a stream with eof-error-p/eof-value;

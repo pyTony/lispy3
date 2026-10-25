@@ -22,7 +22,7 @@ from support import LispyTestCase, REPO_DIR, fresh_global_env, lispy3
 PASS = 'pass'
 SPACING = 'output differs only in spacing'
 MISSING = 'statement or function not implemented'
-FILES = 'file statements (OPEN, CHAIN, MERGE) not implemented'
+FILES = 'CHAIN, MERGE, KILL or random files not implemented'
 SINGLE = '! single-precision suffix not supported'
 SEMANTICS = 'different MBASIC semantics'
 

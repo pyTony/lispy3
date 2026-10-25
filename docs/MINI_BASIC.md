@@ -217,7 +217,8 @@ gives 1; nonnumeric or empty input gives zero. `%` variables truncate to integer
 
 This initial subset supports one optional literal prompt per statement. Prompt
 positioning with TAB/SPC and interleaved prompt strings are not implemented.
-File-channel statements such as `INPUT#` and `PRINT#` remain separate work.
+Files are read with `INPUT#` and `LINE INPUT #`: see [File I/O](#file-io).
+`LINE INPUT` is the MBASIC spelling of `INPUT LINE`.
 
 ## Terminal output: VDU and ANSI
 
@@ -379,6 +380,37 @@ CLOSE#F%
 the real-number layout has not been checked against it. Strings are bytes 0-255.
 An FN that uses a channel is never memoized. File I/O is lispy3 only: the
 SBCL and Clojure comparison backends do not have it.
+
+### MBASIC text files
+
+MBASIC's sequential files are text files, built on lispy3's text streams:
+
+```basic
+OPEN "O", #1, "notes.txt"
+PRINT #1, "Total:"; 42
+WRITE #1, "Bob, Jr.", 30
+CLOSE #1
+OPEN "notes.txt" FOR INPUT AS #1
+LINE INPUT #1, L$ : PRINT L$
+INPUT #1, N$, A : PRINT N$; A
+WHILE NOT EOF(1) : LINE INPUT #1, L$ : ENDWHILE
+CLOSE
+```
+
+| Form | Meaning |
+|------|---------|
+| `OPEN "O", #n, f$` / `"I"` / `"A"` | open file number n (1-255) for output, input or append; the `#` is optional |
+| `OPEN f$ FOR OUTPUT AS #n` / `INPUT` / `APPEND` | the same, GW-BASIC spelling |
+| `PRINT #n, ...` | write exactly what `PRINT` would show, separators, zones and the MBASIC number spaces included |
+| `WRITE #n, a, b$` | values separated by commas, strings in quotes, then a line end |
+| `INPUT #n, a, b$` | fields separated by commas or line ends; a quoted field may hold commas |
+| `LINE INPUT #n, a$` | a whole line |
+| `EOF(n)` | -1 at the end of an input file, else 0 |
+| `CLOSE`, `CLOSE n`, `CLOSE #n, #m` | close every file, or the ones named |
+
+On a channel opened with `OPENIN`, `OPENOUT` or `OPENUP`, `PRINT#` and `INPUT#`
+keep the binary layout above. Random files (`OPEN "R"`, `FIELD`, `GET`, `PUT`)
+are not supported.
 
 ## Numbers
 
