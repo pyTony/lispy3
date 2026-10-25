@@ -734,6 +734,9 @@
              (let [raw (substring text i j) name (bbc-normalize-name raw)]
                (cond ((and (>= (length name) 3) (equal? (substring name 0 3) "REM"))
                       (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
+                     ;; MBASIC's WEND ends a WHILE loop like ENDWHILE
+                     ((and (equal? name "WEND") (eq? bbc-number-print-style :mbasic))
+                      (emit-name :kw "ENDWHILE" raw))
                      ((member name bbc-keywords) (emit-name :kw name raw))
                      ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
                       (emit-name :proc (substring name 4) raw))

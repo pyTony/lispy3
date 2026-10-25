@@ -51,8 +51,15 @@ comments and unquoted DATA values retain their spelling. Selecting BBC restores
 case-sensitive syntax. Change the option before loading/running definitions;
 previously defined names are not renamed retroactively.
 
+MBASIC style also prints an inexact number the way MBASIC prints a single:
+rounded to single precision, at most 6 significant digits and no `0` before the
+point, so `PRINT 1/3` gives ` .333333 ` and `PRINT 3.14159265*25` gives
+` 78.5398 `. `STR$` does the same. `(set! bbc-single-precision #f)` turns this
+filter off and shows the full value (useful for `#` doubles). `WEND` ends a
+`WHILE` loop like `ENDWHILE`.
+
 This is a limited compatibility option, not a complete MBASIC dialect.
-Strings, `STR$`,
+Strings, `STR$` of whole numbers (no added spaces),
 explicit hexadecimal/USING formatting and existing comma-zone widths retain
 their current behavior. Cursor tracking includes the added spaces, so TAB/SPC
 still use the actual output column. It does not change RND or other dialect
@@ -433,8 +440,9 @@ A% = 3.7 : A%% = 2^40 : b& = 300 : x# = 1/4
 | `A%%` | 64-bit integer |
 | `A&` | unsigned byte: the low 8 bits, so 300 is 44 and -1 is 255 |
 | `A#` | float |
+| `A!` | single-precision float, as in MBASIC: rounded to 24 significant bits, so `A! = 1/3` holds 0.333333343 |
 
-`a`, `a%`, `a%%`, `a&`, `a#` and `a$` are six different variables. A `~` in
+`a`, `a%`, `a%%`, `a&`, `a#`, `a!` and `a$` are seven different variables. A `~` in
 PRINT applies to the one item after it, as in BBCSDL 1.44a. Arrays (`DIM a%(9)`) do not yet use
 these types. The SBCL and Clojure comparison backends have them too
 (see [compare/README.md](../compare/README.md)).

@@ -6,8 +6,14 @@
 ;;;   A% = 3.7 : A%% = 2^40 : b& = 300 : x# = 1/4
 ;;;
 ;;; A% is a 32-bit integer ("Number too big" outside it), A%% a 64-bit one,
-;;; b& an unsigned byte (the low 8 bits) and x# a float. A variable without a
-;;; suffix keeps whatever number it is given. The bit work is done by the
+;;; b& an unsigned byte (the low 8 bits), x# a float and, as in MBASIC, s! a
+;;; single-precision float (rounded to 24 bits). A variable without a suffix
+;;; keeps whatever number it is given.
+;;;
+;;; In the MBASIC print style, PRINT and STR$ show an inexact number as MBASIC
+;;; shows a single: rounded to single precision and at most 6 significant
+;;; digits (PRINT 1/3 gives .333333). (set! bbc-single-precision #f) turns
+;;; that off and shows the full value. The bit work is done by the
 ;;; bitwise library (lisp/bitwise.sld).
 
 (import (prefix (only bitwise arithmetic-shift bit-field signed-field logical-shift-right) bits:))
@@ -35,6 +41,7 @@
           ((bbc-name-suffix? name "%") `(bbc-int32 ,exp))
           ((bbc-name-suffix? name "&") `(bbc-byte ,exp))
           ((bbc-name-suffix? name "#") `(float ,exp))
+          ((bbc-name-suffix? name "!") `(bbc-single ,exp))
           (else exp))))
 
 (define (bbc-name-suffix? name suffix)
@@ -45,11 +52,11 @@
 
 (define (bbc-name-end text start j c next)
   ;; Where a name ends: after $, %, %% or, unless it is a keyword (PRINT#,
-  ;; EOF#), after a byte & or float # suffix
+  ;; EOF#), after a byte &, float # or single ! suffix
   (cond ((eq? c #\$) (+ j 1))
         ((and (eq? c #\%) (eq? next #\%)) (+ j 2))
         ((eq? c #\%) (+ j 1))
-        ((and (member c (list #\& #\#))
+        ((and (member c (list #\& #\# #\!))
               (not (member (bbc-normalize-name (substring text start j)) bbc-keywords)))
          (+ j 1))
         (else j)))
@@ -90,3 +97,35 @@
       (begin (bbc-advance!) (bbc-advance!)
              (bbc-e (list 'bbc-hex (bbc-value (bbc-p-unary))) :str))
       (bbc-primary-before-num)))
+
+;;; --- Single precision ---
+
+(define bbc-single-precision #t)    ; MBASIC style: show inexact numbers as singles
+
+(define (bbc-single x)
+  ;; x rounded to the nearest IEEE single (24 significant bits, ties to even)
+  (let [f (float x)]
+    (if (or (= f 0) (not (= f f)) (= (abs f) (* 2 (abs f))))
+        f
+        (let [parts (frexp f)]
+          (ldexp (round (ldexp (nth parts 0) 24)) (- (nth parts 1) 24))))))
+
+(define bbc-g6 "{:.6G}")
+
+(define (bbc-single-str x)
+  ;; An inexact number as MBASIC prints a single: 6 significant digits, no
+  ;; leading 0 before the point, whole numbers below 10^7 in full
+  (let [f (bbc-single x)]
+    (if (and (= f (round f)) (< (abs f) 10000000))
+        (number->string (trunc f))
+        (let [text (bbc-g6/format f)]
+          (cond ((text/startswith "0.") (substring text 1 (length text)))
+                ((text/startswith "-0.") (str "-" (substring text 2 (length text))))
+                (else text))))))
+
+(define bbc-str-before-single bbc-str)
+(define (bbc-str x)
+  (if (and bbc-single-precision (eq? bbc-number-print-style :mbasic)
+           (number? x) (not (exact? x)))
+      (bbc-single-str x)
+      (bbc-str-before-single x)))
