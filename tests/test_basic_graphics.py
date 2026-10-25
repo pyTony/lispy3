@@ -1,4 +1,5 @@
 """Graphics command regressions; no display or pygame needed for pixel checks."""
+import unittest
 from unittest.mock import patch
 from support import LispyTestCase, lispy3 as L
 
@@ -245,3 +246,29 @@ class BasicPaletteTest(LispyTestCase):
         with patch('lispy_support.lispy_graphics.Graphics.open'):
             self.basic(source)
         self.assertEqual(self.ev('(graphics-mode-info)')[0], 8)
+
+
+class RefreshWaitTest(unittest.TestCase):
+    def test_refresh_waits_for_the_window_thread_to_show_the_frame(self):
+        # *REFRESH from the Lisp thread waits until the Machine's present() has
+        # shown the frame, as BBCSDL's does; a closed window never waits
+        import threading, time
+        from lispy_support.lispy_graphics import Graphics
+        g = Graphics()
+        g._screen, g._present_thread = object(), -1     # open, shown by another thread
+        g.refresh()
+        def show():
+            time.sleep(0.03)
+            with g._frame_shown:
+                g._shown_frame = g._frame_version
+                g._frame_shown.notify_all()
+        threading.Thread(target=show).start()
+        start = time.perf_counter()
+        g.wait_shown(timeout=1)
+        self.assertGreaterEqual(time.perf_counter() - start, 0.02)
+        self.assertEqual(g._shown_frame, g._frame_version)
+        g._screen = None
+        g.refresh()
+        start = time.perf_counter()
+        g.wait_shown(timeout=1)
+        self.assertLess(time.perf_counter() - start, 0.01)

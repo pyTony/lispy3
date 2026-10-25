@@ -341,6 +341,8 @@ def install(env, Procedure, String):
             g.refresh()
             if _dispatcher is None and g.window_open:
                 g.present()
+            else:
+                g.wait_shown()
         return []
 
     primitives = {
