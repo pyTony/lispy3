@@ -113,7 +113,7 @@ class BasicRepl:
                 path = self.directory / path
             if command == 'SAVE':
                 if path.suffix.lower() == '.bbc':
-                    raise ValueError('SAVE writes text; choose a .bas filename, not .bbc')
+                    raise ValueError('.bbc is reserved for tokenized programs. Save editable text as .bas.')
                 path.write_text(self.source(), encoding='utf-8')
             else:
                 text = self.read_source(path)
