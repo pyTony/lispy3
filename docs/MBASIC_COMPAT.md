@@ -62,6 +62,10 @@ Results on 2026-10-25 (39 programs):
 | Python mini_basic `--dialect mits` | 25 | 1 | 13 |
 | Python mini_basic `--dialect mini` | 7 | 3 | 29 |
 
-Python mini_basic's MITS dialect is the closest. Its remaining differences are
+Python mini_basic runs the same programs in its own optional golden ladder,
+[`test/test_mbasic521_golden.py`](https://github.com/pyTony/mini_basic/blob/dev/test/test_mbasic521_golden.py)
+on its `dev` branch (fetch them first with `test/manual/fetch_mbasic_golden.py`;
+see [MITS_IMPLEMENTATION.md](https://github.com/pyTony/mini_basic/blob/dev/docs/MITS_IMPLEMENTATION.md)).
+Its MITS dialect is the closest. Its remaining differences are
 mostly single-precision numbers printed as full doubles and missing number
 spaces in PRINT; those are mini_basic changes, made in that project.
