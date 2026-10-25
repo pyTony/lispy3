@@ -23,8 +23,9 @@ BBC_PALETTE = ((0, 0, 0), (255, 0, 0), (0, 255, 0), (255, 255, 0),
 MODE_0 = GraphicsMode(0, 640, 256, 2, (BBC_PALETTE[0], BBC_PALETTE[7]))
 MODE_1 = GraphicsMode(1, 320, 256, 4, (BBC_PALETTE[0], BBC_PALETTE[1], BBC_PALETTE[3], BBC_PALETTE[7]))
 MODE_2 = GraphicsMode(2, 160, 256, 16, BBC_PALETTE * 2)
+MODE_8 = GraphicsMode(8, 640, 512, 16, BBC_PALETTE * 2)
 MODE_9 = GraphicsMode(9, 320, 256, 16, BBC_PALETTE * 2)
-MODES = {m.number: m for m in (MODE_0, MODE_1, MODE_2, MODE_9)}
+MODES = {m.number: m for m in (MODE_0, MODE_1, MODE_2, MODE_8, MODE_9)}
 
 
 def virtual_to_pixel(x: int, y: int, mode: GraphicsMode, origin=(0, 0)) -> Tuple[int, int]:

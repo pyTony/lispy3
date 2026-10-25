@@ -50,7 +50,10 @@
 (define-macro (CIRCLE fill x y r)
   (if fill `(graphics-virtual-circle-fill ,x ,y ,r) `(graphics-virtual-circle ,x ,y ,r)))
 (define-macro (RECTANGLE fill & values)
-  `(graphics-virtual-rectangle ,@values ,@(if fill '(() #t) '())))
+  `(graphics-virtual-rectangle ,@values
+                               ,@(cond ((not fill) '())
+                                       ((= (length values) 3) '(() #t))
+                                       (else '(#t)))))
 (define-macro (WAIT & time) `(bbc-wait ,@time))
 (define-macro (OSCLI command) `(bbc-oscli ,command))
 
@@ -249,8 +252,11 @@
 (define-macro (VDU & bytes) `(bbc-vdu (list ,@bytes)))
 
 (define-macro (CLS) '(bbc-cls))
-(define-macro (COLOUR value) `(bbc-colour ,value))
-(define-macro (COLOR value) `(bbc-colour ,value))
+;; COLOUR n,r,g,b makes graphics logical colour n that RGB colour
+(define-macro (COLOUR value & rgb)
+  (if (null? rgb) `(bbc-colour ,value) `(graphics-palette ,value ,@rgb)))
+(define-macro (COLOR value & rgb)
+  (if (null? rgb) `(bbc-colour ,value) `(graphics-palette ,value ,@rgb)))
 ;; Lisp-only convenience: restore terminal default attributes.
 (define-macro (ANSI-RESET) '(bbc-ansi "0m"))
 
@@ -1204,7 +1210,11 @@
                  (bbc-advance!)
                  (cons (if (equal? value "VDU") 'VDU 'ANSI) (bbc-p-value-list)))
                 ((or (equal? value "COLOUR") (equal? value "COLOR"))
-                 (bbc-advance!) (list 'COLOUR (bbc-value (bbc-p-expr))))
+                 (bbc-advance!)
+                 (let [values (bbc-p-value-list)]
+                   (if (not (member (length values) '(1 4)))
+                       (bbc-fail "COLOUR takes n or n,r,g,b"))
+                   (cons 'COLOUR values)))
                 ((equal? value "IF") (bbc-advance!) (bbc-p-if))
                 ((equal? value "FOR") (bbc-advance!) (bbc-p-for))
                 ((equal? value "REPEAT")
