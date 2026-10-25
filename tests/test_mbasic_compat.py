@@ -22,12 +22,12 @@ from support import LispyTestCase, REPO_DIR, fresh_global_env, lispy3
 PASS = 'pass'
 SPACING = 'output differs only in spacing'
 MISSING = 'statement or function not implemented'
-FILES = 'file statements (OPEN, CHAIN, MERGE) not implemented'
-SINGLE = '! single-precision suffix not supported'
+FILES = 'CHAIN, MERGE, KILL or random files not implemented'
 SEMANTICS = 'different MBASIC semantics'
 
 EXPECTED = {
-    'log10k': SINGLE, 'test_binary_conversion': SINGLE, 'test_type_conversion': SINGLE,
+    'log10k': MISSING + ': \\', 'test_binary_conversion': MISSING + ': MKI$, CVI',
+    'test_type_conversion': MISSING + ': CINT',
     'test_chain': FILES, 'test_merge': FILES, 'test_file_io': FILES, 'test_random_files': FILES,
     'test_data_read': PASS, 'test_dim_arrays': PASS, 'test_goto': PASS,
     'test_input': PASS, 'test_simple': PASS,
@@ -42,7 +42,7 @@ EXPECTED = {
     'test_print_using': MISSING + ': PRINT USING', 'test_randomize': MISSING + ': RANDOMIZE',
     'test_rounding': MISSING + ': FIX', 'test_string_functions': MISSING + ': SPACE$',
     'test_swap': MISSING + ': SWAP', 'test_tron_troff': MISSING + ': TRON, TROFF',
-    'test_while_wend': MISSING + ': WHILE, WEND',
+    'test_while_wend': PASS,
     'test_if_then_else': SEMANTICS + ': string < comparison',
     'test_on_goto_gosub': SEMANTICS + ': ON out of range falls through',
     'test_for_next': SEMANTICS + ': output differs', 'test_rnd': SEMANTICS + ': RND sequence',

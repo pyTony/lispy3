@@ -51,8 +51,15 @@ comments and unquoted DATA values retain their spelling. Selecting BBC restores
 case-sensitive syntax. Change the option before loading/running definitions;
 previously defined names are not renamed retroactively.
 
+MBASIC style also prints an inexact number the way MBASIC prints a single:
+rounded to single precision, at most 6 significant digits and no `0` before the
+point, so `PRINT 1/3` gives ` .333333 ` and `PRINT 3.14159265*25` gives
+` 78.5398 `. `STR$` does the same. `(set! bbc-single-precision #f)` turns this
+filter off and shows the full value (useful for `#` doubles). `WEND` ends a
+`WHILE` loop like `ENDWHILE`.
+
 This is a limited compatibility option, not a complete MBASIC dialect.
-Strings, `STR$`,
+Strings, `STR$` of whole numbers (no added spaces),
 explicit hexadecimal/USING formatting and existing comma-zone widths retain
 their current behavior. Cursor tracking includes the added spaces, so TAB/SPC
 still use the actual output column. It does not change RND or other dialect
@@ -217,7 +224,8 @@ gives 1; nonnumeric or empty input gives zero. `%` variables truncate to integer
 
 This initial subset supports one optional literal prompt per statement. Prompt
 positioning with TAB/SPC and interleaved prompt strings are not implemented.
-File-channel statements such as `INPUT#` and `PRINT#` remain separate work.
+Files are read with `INPUT#` and `LINE INPUT #`: see [File I/O](#file-io).
+`LINE INPUT` is the MBASIC spelling of `INPUT LINE`.
 
 ## Terminal output: VDU and ANSI
 
@@ -380,6 +388,37 @@ the real-number layout has not been checked against it. Strings are bytes 0-255.
 An FN that uses a channel is never memoized. File I/O is lispy3 only: the
 SBCL and Clojure comparison backends do not have it.
 
+### MBASIC text files
+
+MBASIC's sequential files are text files, built on lispy3's text streams:
+
+```basic
+OPEN "O", #1, "notes.txt"
+PRINT #1, "Total:"; 42
+WRITE #1, "Bob, Jr.", 30
+CLOSE #1
+OPEN "notes.txt" FOR INPUT AS #1
+LINE INPUT #1, L$ : PRINT L$
+INPUT #1, N$, A : PRINT N$; A
+WHILE NOT EOF(1) : LINE INPUT #1, L$ : ENDWHILE
+CLOSE
+```
+
+| Form | Meaning |
+|------|---------|
+| `OPEN "O", #n, f$` / `"I"` / `"A"` | open file number n (1-255) for output, input or append; the `#` is optional |
+| `OPEN f$ FOR OUTPUT AS #n` / `INPUT` / `APPEND` | the same, GW-BASIC spelling |
+| `PRINT #n, ...` | write exactly what `PRINT` would show, separators, zones and the MBASIC number spaces included |
+| `WRITE #n, a, b$` | values separated by commas, strings in quotes, then a line end |
+| `INPUT #n, a, b$` | fields separated by commas or line ends; a quoted field may hold commas |
+| `LINE INPUT #n, a$` | a whole line |
+| `EOF(n)` | -1 at the end of an input file, else 0 |
+| `CLOSE`, `CLOSE n`, `CLOSE #n, #m` | close every file, or the ones named |
+
+On a channel opened with `OPENIN`, `OPENOUT` or `OPENUP`, `PRINT#` and `INPUT#`
+keep the binary layout above. Random files (`OPEN "R"`, `FIELD`, `GET`, `PUT`)
+are not supported.
+
 ## Numbers
 
 `lisp/mini-basic-num.lisp` adds BBC BASIC for SDL's number types and integer
@@ -401,8 +440,9 @@ A% = 3.7 : A%% = 2^40 : b& = 300 : x# = 1/4
 | `A%%` | 64-bit integer |
 | `A&` | unsigned byte: the low 8 bits, so 300 is 44 and -1 is 255 |
 | `A#` | float |
+| `A!` | single-precision float, as in MBASIC: rounded to 24 significant bits, so `A! = 1/3` holds 0.333333343 |
 
-`a`, `a%`, `a%%`, `a&`, `a#` and `a$` are six different variables. A `~` in
+`a`, `a%`, `a%%`, `a&`, `a#`, `a!` and `a$` are seven different variables. A `~` in
 PRINT applies to the one item after it, as in BBCSDL 1.44a. Arrays (`DIM a%(9)`) do not yet use
 these types. The SBCL and Clojure comparison backends have them too
 (see [compare/README.md](../compare/README.md)).

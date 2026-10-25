@@ -4,6 +4,17 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: `A!` single-precision variables (rounded to 24 bits, as in
+  MBASIC). In MBASIC style, PRINT and `STR$` show inexact numbers as MBASIC
+  singles (`.333333`, `78.5398`); `(set! bbc-single-precision #f)` turns the
+  filter off. `WEND` ends `WHILE` in MBASIC style.
+
+- mini-basic: MBASIC sequential text files. `OPEN "O"/"I"/"A", #n, f$` (or
+  `OPEN f$ FOR OUTPUT/INPUT/APPEND AS #n`), `PRINT #n` with PRINT's own
+  formatting, `WRITE #n`, `INPUT #n`, `LINE INPUT #n`, `EOF(n)` and
+  `CLOSE [n, ...]`, on lispy3's text streams. `LINE INPUT` works at the
+  keyboard too. BBC `OPENOUT`/`OPENIN` channels keep their binary `PRINT#`.
+
 - Lisp: Common Lisp text streams. `with-open-file` and `open` with `:direction`,
   `:if-exists`, `:if-does-not-exist` and `:element-type`; `read-line`,
   `read-char` and `peek-char` on a stream with eof-error-p/eof-value;

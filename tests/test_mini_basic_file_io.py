@@ -115,7 +115,9 @@ class FileIOHookTest(ReaderTestCase):
     still reaches mini-basic-ext.lisp and mini-basic.lisp."""
 
     def test_hash_statements_and_functions_become_file_calls(self):
-        self.assertEqual(self.expand('PRINT#F%, 1, "a"'), '(bbc-program (bbc-print-file F% 1 "a"))')
+        # A BBC channel keeps the binary layout; an MBASIC OPEN channel gets PRINT's text
+        self.assertRegex(self.expand('PRINT#F%, 1, "a"'),
+                         r'\(bbc-text-channel\? (\S+)\) .*\(bbc-print-file \1 1 "a"\)')
         self.assertEqual(self.expand('BPUT#F%, 7;'), '(bbc-program (bbc-bput F% 7 #f))')
         self.assertEqual(self.expand('x = EOF#F%'), '(bbc-program (LET x (bbc-eof F%)))')
         self.assertEqual(self.expand('F% = OPENIN "a"'), '(bbc-program (LET F% (bbc-open "a" "rb")))')

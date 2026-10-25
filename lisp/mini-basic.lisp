@@ -112,9 +112,11 @@
 (define bbc-col 0)
 (define bbc-zone-width 10)
 (define bbc-blank "")
+;; Where PRINT writes: #t for the screen, or a file's text stream (PRINT #n)
+(define bbc-out #t)
 
 (define (bbc-write-visible text)
-  (format #t "~a" text)
+  (format bbc-out "~a" text)
   (let [s (str text)
         nl (s/rfind "\n")]
     (if (< nl 0)
@@ -129,19 +131,21 @@
        (* 65536 (bytes/__getitem__ 2)) (* 16777216 (bytes/__getitem__ 3)))))
 
 (define (bbc-write text)
+  (if (not (eq? bbc-out #t))
+      (bbc-write-visible (str text))
   (for-each
     (lambda (character)
       (let [code (bbc-character-code character)]
         (if (or (not (null? bbc-vdu-pending)) (< code 32) (= code 127))
             (bbc-vdu (list code))
             (bbc-write-visible (str character)))))
-    (seq (str text))))
+    (seq (str text)))))
 
 (define (bbc-newline)
   ;; A normal logical CR/LF is represented by stdout's native newline. If a
   ;; parameter is pending, both bytes must pass through the decoder instead.
-  (if (null? bbc-vdu-pending)
-      (begin (format #t "~%") (set! bbc-col 0))
+  (if (or (null? bbc-vdu-pending) (not (eq? bbc-out #t)))
+      (begin (format bbc-out "~%") (set! bbc-col 0))
       (bbc-vdu (list 13 10))))
 
 (define (bbc-spaces n)
@@ -730,6 +734,9 @@
              (let [raw (substring text i j) name (bbc-normalize-name raw)]
                (cond ((and (>= (length name) 3) (equal? (substring name 0 3) "REM"))
                       (set! j (scan-while j (lambda (d) (not (eq? d #\newline))))))
+                     ;; MBASIC's WEND ends a WHILE loop like ENDWHILE
+                     ((and (equal? name "WEND") (eq? bbc-number-print-style :mbasic))
+                      (emit-name :kw "ENDWHILE" raw))
                      ((member name bbc-keywords) (emit-name :kw name raw))
                      ((and (> (length name) 4) (equal? (substring name 0 4) "PROC"))
                       (emit-name :proc (substring name 4) raw))
