@@ -104,6 +104,24 @@ class BasicGraphicsTest(LispyTestCase):
         self.assertEqual(self.pixel(98,254), [0,0,0])
         self.assertEqual(self.pixel(90,170), [0,0,0])
 
+    def test_plot_sector_and_arc(self):
+        # Wheel.bas: centre, then start point, then a point giving the end direction
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic('MODE 9:ORIGIN 640,512:GCOL 2:MOVE 0,0:MOVE 400,0:PLOT 181,0,400\n'
+                       'GCOL 1:MOVE 0,0:MOVE 400,0:PLOT 165,0,400\n'
+                       'GCOL 4:MOVE 0,0:MOVE -400,0:PLOT 177,400,-400')
+        self.assertEqual(self.pixel(200, 100), [0, 255, 0])   # inside the first quarter
+        self.assertEqual(self.pixel(120, 100), [0, 0, 0])     # the second quarter is empty
+        self.assertEqual(self.pixel(120, 160), [0, 0, 255])   # relative: from (-400,0) round to (0,-400)
+        self.assertEqual(self.pixel(200, 160), [0, 0, 0])
+        self.assertEqual(self.pixel(260, 128), [255, 0, 0])   # the arc starts at radius 400 on the x axis
+        self.assertEqual(self.pixel(160, 28), [255, 0, 0])    # and ends straight up
+
+    def test_circlefill_keywords_run_together(self):
+        with patch('lispy_support.lispy_graphics.Graphics.open'):
+            self.basic('MODE 9:ORIGIN 640,512:GCOL 3:CIRCLEFILL 0,0,40')
+        self.assertEqual(self.pixel(160, 128), [255, 255, 0])
+
     def test_closing_the_window_ends_an_endless_basic_program(self):
         from lispy_support.lispy_graphics import Graphics
         original, frames = Graphics.clear, []

@@ -223,6 +223,11 @@ class KeywordPrefixNameTest(ReaderTestCase):
         # As in BBCSDL, DEG5 is DEG 5, like COS0
         self.assertEqual(self.run_bbc('X=DEG5:PRINT ;INT X;" ";COS0'), '286 1\n')
 
+    def test_keywords_run_together(self):
+        # Wheel.bas writes SINRAD(a) and CIRCLEFILL; TOTAL is still rejected
+        self.assertEqual(self.expand('x=SINRAD(30)+COSRAD 60'),
+                         '(bbc-program (LET x (+ (sin (bbc-rad 30)) (cos (bbc-rad 60)))))')
+
     def test_unquoted_data_words_are_not_names(self):
         self.assertEqual(self.run_bbc('READ a$\nPRINT a$\nDATA TOTAL'), 'TOTAL\n')
 
