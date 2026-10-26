@@ -1435,3 +1435,4 @@
 (load "mini-basic-ext")
 (load "mini-basic-io")
 (load "mini-basic-num")
+(load "mini-basic-error")

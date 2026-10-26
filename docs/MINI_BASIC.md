@@ -161,6 +161,7 @@ MBASIC compatibility is tested against MBASIC 5.21 output: see
 | Calls | PROC/FN, parameters, LOCAL, early returns |
 | Jumps | Line numbers and `(label)` labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE, calculated `GOTO (expression)`; implicit `IF condition THEN 100 ELSE 200`; see [Labels and jumps](#labels-and-jumps) |
 | Data | DATA/READ/RESTORE; DIM arrays with inclusive upper bounds |
+| Errors | ON ERROR, ON ERROR LOCAL, ON ERROR OFF, ERR, ERL, REPORT, REPORT$, ERROR n,message; see [Error handling](#error-handling) |
 | Timing | Assignable TIME in whole centiseconds |
 
 PROC/FN parameters and LOCAL variables restore their previous values on normal
@@ -200,6 +201,45 @@ Use structured exits where possible. Jumps into inactive structured bodies are
 outside the supported control-flow model. BBCSDL's shared-stack edge cases do
 not imply equivalent behavior here; see the
 [reference checks](../basic/reference/README.md) for recorded results and limits.
+
+### Error handling
+
+```basic
+10 ON ERROR PRINT "ERROR ";ERR;" AT LINE ";ERL:REPORT:PRINT:END
+20 PRINT 1/0
+```
+
+prints `ERROR 18 AT LINE 20` and then `Division by zero`. As in BBC BASIC for
+SDL, an error goes to the statements after `ON ERROR` on that line, and the
+program then carries on into the following lines unless they jump or `END`.
+So `ON ERROR GOTO 1000` works, and a handler that neither jumps nor ends runs
+the failing line again. Running a program clears the previous handler.
+
+| Form | Meaning |
+|------|---------|
+| `ON ERROR statements` | Trap later errors with the rest of the line |
+| `ON ERROR LOCAL statements` | The same; inside a PROC or FN the previous handler returns when it returns |
+| `ON ERROR OFF` | Errors stop the program again |
+| `ERR` | BBC error number of the last trapped error |
+| `ERL` | Numbered line where it happened; 0 in a program without line numbers |
+| `REPORT$`, `REPORT` | Its message; REPORT prints it |
+| `ERROR n, message$` | Raise error n with your own message |
+
+Lispy errors get BBC numbers and messages: Division by zero (18), Subscript
+out of range (15), Too big (20), Log range (22), No such variable (26),
+No such FN/PROC (29), No GOSUB (38), ON range (40), No such line (41),
+Out of DATA (42) and Type mismatch (6). Any other error has ERR 0 and Lispy's
+own message. Stop in Lispy Machine is never trapped.
+
+An error goes to the handler in the body that set it while that body is
+running: the program, or the PROC, FN or loop body holding the `ON ERROR`.
+When that body has already finished (an `ON ERROR` in a set-up PROC that has
+returned), the handler's statements run on their own and the program ends
+after them, instead of continuing at BBCSDL's text position. PROC/FN
+parameters and LOCAL variables are restored on the way out, as for any
+error (the Lispy guarantee above). `LOCAL ERROR`/`RESTORE ERROR`,
+`ERROR EXT` and trapping Escape are not supported. ERL tracking is compiled
+only into programs that use ERL.
 
 Graphics, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
