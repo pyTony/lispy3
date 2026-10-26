@@ -24,6 +24,22 @@ class BasicBrowserTest(TestCase):
             previous.rmdir()
             self.assertEqual(machine.LispMachine._basic_dialog_dir(app), str(examples))
 
+    def test_resolved_root_without_examples_subfolder_is_preferred_over_app_basic(self):
+        """A mini_basic project root found via ``basic_directory`` (or
+        auto-detection) must never fall through to lispy3's own bundled
+        ``basic/`` samples just because it lacks an ``examples/`` subfolder
+        -- some mini_basic layouts use ``basics/`` instead, and even a bare
+        root with neither is still mini_basic's own directory, not
+        lispy3's."""
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            basics = root / 'basics'
+            basics.mkdir()
+            app = Mock(settings={'basic_directory': str(root)})
+            self.assertEqual(machine.LispMachine._basic_dialog_dir(app), str(basics))
+            basics.rmdir()
+            self.assertEqual(machine.LispMachine._basic_dialog_dir(app), str(root))
+
     def test_cancel_does_not_switch_mode_or_load(self):
         app = Mock()
         app._busy.return_value = False
