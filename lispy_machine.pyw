@@ -2233,10 +2233,24 @@ class LispMachine(tk.Tk):
         self._open_source_path(path)
 
     def _basic_dialog_dir(self):
+        """Where the Load BASIC program dialog should start.
+
+        ``APP_DIR/basic`` (lispy3's own bundled sample programs) is meant
+        as a last resort for when the Python mini_basic project can't be
+        found at all. Previously it was also reached whenever the mini_basic
+        root *was* found but happened not to have an ``examples`` subfolder
+        (mini_basic ships ``basics/`` on some layouts) -- the dialog would
+        then silently default into lispy3's own directory instead of
+        mini_basic's, looking like "BASIC opens in the lispy3 folder". Try
+        the resolved mini_basic root itself, and its ``basics/`` folder,
+        before ever falling back to lispy3's bundled samples.
+        """
         root = self.settings.get('basic_directory') or BR.default_package_root()
         candidates = [self.settings.get('basic_examples_directory'),
                       self.settings.get('basic_last_directory'),
                       os.path.join(root, 'examples') if root else None,
+                      os.path.join(root, 'basics') if root else None,
+                      root or None,
                       os.path.join(APP_DIR, 'basic')]
         return next((path for path in candidates if path and os.path.isdir(path)), APP_DIR)
 
