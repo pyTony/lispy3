@@ -4,6 +4,14 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- mini-basic: BBC BASIC error handling. `ON ERROR statements`,
+  `ON ERROR LOCAL`, `ON ERROR OFF`, `ERR`, `ERL`, `REPORT`, `REPORT$` and
+  `ERROR n, message$`. An error goes to the rest of the ON ERROR line and
+  carries on from there, as in BBCSDL; Lispy errors get BBC numbers and
+  messages (Division by zero 18, No such line 41 ...). The reference
+  `bbcsdl-jumps.bas` handler now runs and case 10 prints BBCSDL's
+  `ERROR 41 AT LINE 10020` / `No such line`.
+
 - mini-basic: BBC variable names follow BBCSDL's keyword rule. An uppercase
   name that starts with a keyword (`COUNT%`, `TOTAL`, `ORDER`) is a syntax
   error naming the keyword and suggesting a lowercase or mixed-case name;
