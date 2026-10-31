@@ -173,3 +173,37 @@ class ReopenLastSessionTest(TestCase):
         self.assertEqual(app.settings['last_session_files'], expected)
         self.assertEqual(app.settings['last_session_current'], expected[1])
         save.assert_called_once_with(app.settings)
+
+
+class SaveSettingsTest(TestCase):
+    def test_saves_and_reports_success(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'settings.json')
+            self.assertIsNone(machine.save_settings({'a': 1}, path))
+            self.assertEqual(machine.load_settings(path), {'a': 1})
+
+    def test_unwritable_path_is_reported(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'missing-folder', 'settings.json')
+            error = machine.save_settings({'a': 1}, path)
+        self.assertIn(path, error)
+
+    def test_unsaveable_value_keeps_the_old_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'settings.json')
+            machine.save_settings({'last_session_files': ['/x/wheel.bas']}, path)
+            error = machine.save_settings({'last_session_files': [], 'bad': object()}, path)
+            self.assertIsNotNone(error)
+            self.assertEqual(machine.load_settings(path), {'last_session_files': ['/x/wheel.bas']})
+
+    def test_quit_warns_when_open_files_cannot_be_saved(self):
+        app = Mock()
+        app._job = None
+        app.tabs = {}
+        app._remember_open_files.return_value = 'Could not save settings to X: denied'
+        with patch.object(machine.messagebox, 'showwarning') as warn, \
+             patch('lispy_support.lispy_graphics.close_windows'), \
+             patch('lispy_support.lispy_graphics_bindings.set_dispatcher'):
+            machine.LispMachine._on_close(app)
+        self.assertIn('denied', warn.call_args.args[1])
+        app.destroy.assert_called_once()
