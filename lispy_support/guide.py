@@ -21,6 +21,7 @@ PAGES = [
     ("Quick start",      "QUICK_START.md"),
     ("Lispy by example", "LISPY_BY_EXAMPLE.md"),
     ("Quick reference",  "QUICK_REFERENCE.md"),
+    ("Unit tests",       "UNIT_TESTS.md"),
     ("PIL x86 engine",   "PIL.md"),
     ("Built-ins",        None),
 ]

@@ -4,6 +4,14 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Unit tests. Lisp gets `deftest`, `check`, `check-equal`, `check-error`,
+  `run-tests`, `test-names` and `clear-tests`; each workspace keeps its own
+  tests. Lispy Machine: **Eval → Run tests in buffer (Ctrl+F6)** runs a Lisp
+  buffer silently in a fresh workspace and then `(run-tests)`, or runs a
+  Python buffer with `python -m unittest -v` in a separate process (Stop ends
+  it). **Eval → Run Python tests in buffer's folder** runs `unittest discover`.
+  See docs/UNIT_TESTS.md.
+
 - Lisp: promises and SICP lazy streams. `delay`, `force`, `delay-force`
   (R7RS, forced in a loop so long chains don't run out of stack),
   `make-promise` and `promise?`; `cons-stream`, `stream-car`, `stream-cdr`,
