@@ -9,6 +9,7 @@ Features
   * F5 / Ctrl+Enter : run Lisp form or BASIC/Python selection/current line
   * F6 / Shift+F6 : fresh program run in Listener / ANSI terminal
   * Ctrl+Shift+Enter : evaluate buffer in current workspace
+  * Ctrl+F6 : run unit tests (Lisp deftest in a fresh workspace, Python unittest)
   * F7 / F8 : Python mini_basic selection/current line / whole BASIC buffer
   * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
@@ -261,6 +262,7 @@ def about_text(folder: str = APP_DIR) -> str:
         "F5  run form / selection / line\n"
         "F6  fresh program in Listener; Shift+F6 in ANSI terminal\n"
         "Ctrl+Shift+Enter  Eval buffer in current workspace\n"
+        "Ctrl+F6  run unit tests in buffer (Lisp deftest / Python unittest)\n"
         "F7  Python BASIC selection or line\n"
         "F8  Python BASIC whole buffer\n"
         "Shift+F7  inspect symbol at cursor\n"
@@ -707,6 +709,7 @@ class EditorTab(tk.Frame):
         t.bind("<Control-Return>",          lambda e: (self.app.eval_form_at_cursor(), "break")[1])
         t.bind("<Shift-F6>", lambda e: (self.app.eval_buffer_in_terminal(), "break")[1])
         t.bind("<F6>",                      lambda e: (self.app.eval_buffer_listener(), "break")[1])
+        t.bind("<Control-F6>",              lambda e: (self.app.run_buffer_tests(), "break")[1])
         t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer(), "break")[1])
 
     def _open_file_at_cursor(self, event=None):
@@ -1177,6 +1180,39 @@ def buffer_source_path(tab):
         return path
     origin = getattr(tab, 'source_path', None)
     return origin if isinstance(origin, str) else None
+
+
+def python_test_target(path):
+    """(folder to run in, dotted module name) for unittest, so package-relative imports work.
+
+    tests/test_x.py inside a package gives (repo root, 'tests.test_x').
+    """
+    folder = os.path.dirname(os.path.abspath(path))
+    parts = [os.path.splitext(os.path.basename(path))[0]]
+    while os.path.isfile(os.path.join(folder, '__init__.py')):
+        parts.insert(0, os.path.basename(folder))
+        parent = os.path.dirname(folder)
+        if parent == folder:
+            break
+        folder = parent
+    return folder, '.'.join(parts)
+
+
+def python_test_command(path=None, folder=None):
+    """The command, working folder and environment that run Python unit tests.
+
+    path: one test file (python -m unittest -v module).
+    folder: every test*.py below it (python -m unittest discover).
+    """
+    env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONIOENCODING='utf-8')
+    if path is not None:
+        cwd, module = python_test_target(path)
+        return [sys.executable, '-m', 'unittest', '-v', module], cwd, env
+    folder = os.path.abspath(folder)
+    top, start = folder, folder
+    while os.path.isfile(os.path.join(top, '__init__.py')):
+        top = os.path.dirname(top)
+    return [sys.executable, '-m', 'unittest', 'discover', '-v', '-s', start, '-t', top], top, env
 
 
 def source_arg_path(arg):
@@ -1807,6 +1843,8 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Run program → ANSI terminal (fresh workspace)", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Run program → Listener (fresh workspace)", accelerator="F6", command=self.eval_buffer_listener)
         eval_m.add_command(label="Eval buffer in current workspace", accelerator="Ctrl+Shift+Enter", command=self.eval_buffer)
+        eval_m.add_command(label="Run tests in buffer (Lisp deftest / Python unittest)", accelerator="Ctrl+F6", command=self.run_buffer_tests)
+        eval_m.add_command(label="Run Python tests in buffer's folder", command=self.run_folder_tests)
         eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
         eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
         eval_m.add_command(label="Real BBC BASIC for SDL buffer", command=self.eval_bbcsdl_buffer)
@@ -2129,6 +2167,7 @@ class LispMachine(tk.Tk):
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
         self.bind_all("<F7>", lambda e: (self.eval_basic_at_cursor(), "break")[1])
         self.bind_all("<F8>", lambda e: (self.eval_basic_buffer(), "break")[1])
+        self.bind_all("<Control-F6>", lambda e: (self.run_buffer_tests(), "break")[1])
         self.bind_all("<Shift-F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
         self.bind_all("<Control-Cancel>", self.stop)
@@ -2811,6 +2850,87 @@ class LispMachine(tk.Tk):
         self._save_basic_settings()
         self.eval_buffer(terminal=True, fresh=True)
 
+    def run_buffer_tests(self, folder=False):
+        """Eval → Run tests: Lisp buffers run their deftests in a fresh workspace,
+        Python buffers run unittest on the file (or every test*.py in its folder)."""
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        language = execution_language(tab)
+        if language == 'Lisp' and not folder:
+            content = tab.get_content()
+            if not content.strip():
+                self.listener_write(';; (empty buffer)\n', 'info')
+                return
+            self.listener_write(f';; --- running tests in {tab.name} ---\n', 'info')
+            # The buffer's own forms run silently; then every deftest it made is run.
+            self.eval_buffer(terminal=False, fresh=True, echo='off', after='(run-tests)')
+            return
+        if language != 'Python' and not folder:
+            self.listener_write(';; Run tests works on Lisp buffers (deftest/check) and Python buffers (unittest).\n', 'info')
+            return
+        LispMachine._run_python_tests(self, tab, folder=folder)
+
+    def run_folder_tests(self):
+        """Eval → Run Python tests in folder: unittest discover in the buffer's folder."""
+        LispMachine.run_buffer_tests(self, folder=True)
+
+    def _run_python_tests(self, tab, folder=False):
+        path = buffer_source_path(tab)
+        temp_dir = None
+        if folder:
+            if not path:
+                self.listener_write(';; Save the buffer first, so its folder is known.\n', 'error')
+                return
+            command, cwd, env = python_test_command(folder=os.path.dirname(os.path.abspath(path)))
+            label = os.path.dirname(os.path.abspath(path))
+        else:
+            if getattr(tab, 'path', None) and getattr(tab, 'dirty', False):
+                if not self._save_tab_to_path(tab, tab.path):
+                    return
+                self.listener_write(f';; saved {tab.path}\n', 'info')
+            if getattr(tab, 'path', None):
+                command, cwd, env = python_test_command(path=tab.path)
+            else:
+                import tempfile
+                temp_dir = tempfile.mkdtemp(prefix='lispy_tests_')
+                name = os.path.splitext(os.path.basename(tab.name))[0] or 'buffer'
+                temp_path = os.path.join(temp_dir, name.replace(' ', '_').replace('*', '') + '.py')
+                with open(temp_path, 'w', encoding='utf-8') as f:
+                    f.write(tab.get_content())
+                command, cwd, env = python_test_command(path=temp_path)
+            label = tab.name
+        self.listener_write(f';; --- running Python unit tests: {label} ---\n', 'info')
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+        def work():
+            try:
+                process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                           text=True, encoding='utf-8', errors='replace',
+                                           creationflags=flags)
+            except OSError as error:
+                self._ui(self.listener_write, f';; Could not start Python: {error}\n', 'error')
+                return
+            try:
+                for line in process.stdout:
+                    tag = 'error' if line.startswith(('FAIL', 'ERROR', 'Traceback')) else None
+                    self._ui(self.listener_write, line, tag)
+                status = process.wait()
+            except BaseException:
+                process.kill()          # Stop ends the test run too
+                process.wait()
+                raise
+            finally:
+                if temp_dir:
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+            verdict = 'all passed' if status == 0 else f'FAILED (exit status {status})'
+            self._ui(self.listener_write, f';; --- Python unit tests {verdict} ---\n',
+                     'info' if status == 0 else 'error')
+
+        self._start(work)
+
     def eval_bbcsdl_buffer(self):
         tab = self.current_tab()
         if not tab or self._busy():
@@ -3185,7 +3305,9 @@ class LispMachine(tk.Tk):
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
     def eval_buffer(self, terminal=None, basic=False, source=None, source_line=1,
-                    basic_backend='lispy', python_source=False, fresh=False, print_style=None, dialect=None):
+                    basic_backend='lispy', python_source=False, fresh=False, print_style=None, dialect=None,
+                    echo=None, after=None):
+        """after: Lisp source run once the buffer's forms are done (Run tests uses (run-tests))."""
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -3230,7 +3352,7 @@ class LispMachine(tk.Tk):
                 self.listener_write(f'BASIC> {echo_text}\n', 'prompt')
             self._basic_feed(cmd_lines, source=source, source_line=source_line, print_style=print_style)
             return
-        echo = LispMachine._buffer_echo_mode(self)
+        echo = echo or LispMachine._buffer_echo_mode(self)
         if echo != 'off':
             self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)
@@ -3254,6 +3376,8 @@ class LispMachine(tk.Tk):
                     '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
             else:
                 forms = self._parse_top_level_forms(content, source_name=getattr(tab, 'path', None) or tab.name)
+                if after:
+                    forms += self._parse_top_level_forms(after)
         except Exception as e:                       # noqa: BLE001
             if isinstance(e, SyntaxError) and getattr(e, 'lineno', None) and hasattr(tab, 'text'):
                 LispMachine._editor_syntax_error(self, tab, e)

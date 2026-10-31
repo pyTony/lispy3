@@ -181,6 +181,19 @@ Needs a built [PIL](PIL.md) engine; see Eval > PIL x86 engine > PIL Settings.
 | `(pil-state)` | map of `eax` ... `edi`, `eip`, `flags`, `status`, `demo` |
 | `(pil-start)` / `(pil-start "raw.bin")` / `(pil-stop)` | fresh engine, optionally with a raw image; end it |
 
+## Unit tests
+
+| Form | Meaning |
+|---|---|
+| `(deftest name body...)` | Define a test |
+| `(check exp)` | Fail when exp is false or raises an error |
+| `(check-equal expected exp)` | Fail unless `(equal? expected exp)` |
+| `(check-error exp)` | Fail unless exp raises an error |
+| `(run-tests [name...])` | Run tests, print a summary, give `#t` when all passed |
+
+Ctrl+F6 (Eval → Run tests in buffer) runs a Lisp buffer's tests in a fresh
+workspace, or a Python buffer with unittest. See [UNIT_TESTS.md](UNIT_TESTS.md).
+
 ## Limits to remember
 
 - About 200 nested calls of recursion; use `map`, `filter` or `while` for more.

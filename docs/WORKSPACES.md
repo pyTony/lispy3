@@ -14,6 +14,7 @@ BASIC variables keep their existing program-wide visibility within an execution.
 | Shift+F6: Run program → ANSI terminal | Same fresh-run rule, real terminal output |
 | F5 / Ctrl+Enter | Evaluate form/selection in the current workspace |
 | Ctrl+Shift+Enter | Evaluate whole buffer in current workspace |
+| Ctrl+F6: Run tests in buffer | Fresh workspace, buffer run silently, then `(run-tests)` |
 | F9 / Listener input | Evaluate in current workspace |
 | F7/F8 Python mini_basic, or Python buffers | Existing fresh subprocess behavior |
 

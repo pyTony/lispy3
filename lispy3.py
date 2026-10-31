@@ -269,6 +269,11 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("when", "(when test body...) - run body when test is true, else (); (unless test body...) the other way"),
         ("loop", "(loop for x in lst when (odd? x) collect x) - Common Lisp loop: for x in/on/across, for i from 1 to 10 [by 2] (also below downto above), for x = a then b, with, repeat n, while, until, do forms, collect/append/sum/count/maximize/minimize [into v], when/unless ... else ... end, always/never/thereis, initially, finally, return"),
         ("return", "(return x) - leave the running loop at once with the value x"),
+        ("deftest", "(deftest name body...) - define a unit test; (run-tests) runs every test of the workspace, (run-tests 'name) only some"),
+        ("check", "(check exp) - inside a test, record a failure when exp is false or raises an error; outside a test, raise one"),
+        ("check-equal", "(check-equal expected exp) - like check, passing when (equal? expected exp)"),
+        ("check-error", "(check-error exp) - like check, passing when exp raises an error"),
+        ("run-tests", "(run-tests [name...]) - run the deftests, print FAIL lines and a summary, give #t when all passed; (clear-tests) forgets them, (test-names) lists them"),
         ("try", "(try exp (catch e handler...)) - run exp; on an error, run handler with e = the message"),
         ("quote", "(quote x) or 'x - x itself, not evaluated"),
         ("quasiquote", "`(a ,b ,@c) - a template: ,b puts in the value of b, ,@c splices the list c"),
@@ -2324,6 +2329,9 @@ def standard_env() -> Env:
     # Tony's PIL x86 engine, run as a separate process only when first used.
     from lispy_support.pil_engine import install as install_pil
     install_pil(env, Procedure, String)
+    # (deftest ...), (check ...) and (run-tests); each workspace keeps its own tests.
+    from lispy_support.lisp_unittest import install as install_tests
+    install_tests(env, lambda x: lisp_str(x), _lisp_eq, LispyError, is_true)   # lisp_str is defined further down
     return env
 
 global_env = standard_env()
@@ -2347,6 +2355,24 @@ def expand_quasiquote(x: Exp) -> Exp:
             raise SyntaxError("unquote-splicing requires 1 argument")
         return ['append', x[0][1], expand_quasiquote(x[1:])]
     return ['cons', expand_quasiquote(x[0]), expand_quasiquote(x[1:])]
+
+TEST_FORMS = ('deftest', 'check', 'check-equal', 'check-error')
+
+def _expand_test_form(x: list) -> list:
+    """(deftest name body...) and the checks become calls that keep the checked code as data."""
+    head, args = x[0], x[1:]
+    thunk = lambda body: ['lambda', [], ['begin'] + list(body) if len(body) != 1 else body[0]]
+    if head == 'deftest':
+        if not args or not isinstance(args[0], (str, String)):
+            raise SyntaxError('deftest needs a name: (deftest name body...)')
+        return ['_deftest', ['quote', args[0]], thunk(args[1:] or [[]])]
+    if head == 'check-equal':
+        if len(args) != 2:
+            raise SyntaxError('check-equal needs 2 arguments: (check-equal expected expr)')
+        return ['_check-equal', ['quote', args[1]], args[0], thunk([args[1]])]
+    if len(args) != 1:
+        raise SyntaxError(f'{head} needs 1 argument: ({head} expr)')
+    return ['_' + head, ['quote', args[0]], thunk(args)]
 
 def expand(x: Exp, toplevel: bool = False) -> Exp:
     """Walk the AST to expand macros, quasiquotes, and syntactic sugar."""
@@ -2397,6 +2423,8 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         return expand(x[1], toplevel)
     if head == 'progn':
         return expand(['begin'] + list(x[1:]), toplevel)
+    if isinstance(head, str) and head in TEST_FORMS and head not in macro_table and head not in library_system.macros(head):
+        return expand(_expand_test_form(x), toplevel)
     if head == 'setq':
         return expand(['set!'] + list(x[1:]), toplevel)
     if head in ('defvar', 'defparameter', 'defconstant'):
@@ -3328,7 +3356,7 @@ def completion_candidates(env: 'Env' = None) -> set[str]:
     env = global_env if env is None else env
     names = (set(SPECIAL_FORMS) - {'_setf-call', '_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal',
                                                                        'with-open-file', 'with-output-to-string', 'with-input-from-string',
-                                                                       'delay', 'delay-force', 'cons-stream'}   # defun is expanded away, so not in SPECIAL_FORMS
+                                                                       'delay', 'delay-force', 'cons-stream', *TEST_FORMS}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
