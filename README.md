@@ -399,6 +399,9 @@ or BBC dialect (`--dialect`). BASIC Settings are not changed, so the next
 F6/F8 run uses the saved choice again.
 
 **Eval → Real BBC BASIC for SDL buffer** uses the actual BBCSDL executable in its own window. Configure it and the native text loader in BASIC Settings; see [one-time setup](docs/BBCSDL.md).
+
+**Eval → PIL x86 engine** connects Lispy to the [PIL](docs/PIL.md) x86/DOS engine: open its debugger, run a DOS program, or assemble an `.asm` buffer with NASM and run it (F5/F6 in an assembly buffer). From Lisp, `(pil "demo hello")` and `(pil-run 1000)` drive the engine.
+
 For terminal-only programs turn SDL graphics off: enabling it mirrors PRINT
 through the SDL window and terminal, which can have very different performance.
 New ANSI output windows wait for Enter before closing. Select the directory

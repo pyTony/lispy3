@@ -170,6 +170,17 @@ Only in `python lispy3-numpy.py` (NumPy optional):
 | `(onscroll f)` / `(onscroll #f)` | call `(f x y step)` on each mouse wheel turn, step 1 away from you, -1 towards; stop |
 | `(reinit-turtle)` / `(reset)` | reopen a closed turtle window |
 
+## PIL x86 engine
+
+Needs a built [PIL](PIL.md) engine; see Eval > PIL x86 engine > PIL Settings.
+
+| Function | Result |
+|----------|--------|
+| `(pil "demo hello")` | send one PIL debugger command; guest output is printed, the reply text returned |
+| `(pil-run 1000)` | run up to 1000 instructions; the stop status, such as `halt` |
+| `(pil-state)` | map of `eax` ... `edi`, `eip`, `flags`, `status`, `demo` |
+| `(pil-start)` / `(pil-start "raw.bin")` / `(pil-stop)` | fresh engine, optionally with a raw image; end it |
+
 ## Limits to remember
 
 - About 200 nested calls of recursion; use `map`, `filter` or `while` for more.

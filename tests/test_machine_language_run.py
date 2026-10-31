@@ -95,3 +95,46 @@ class LanguageRunTest(TestCase):
             app.basic_output.set.assert_called_once_with(destination)
             app._save_basic_settings.assert_called_once()
             app.eval_buffer.assert_called_once_with(terminal=terminal, fresh=True)
+
+
+class PilLanguageRunTest(TestCase):
+    def test_pil_description_buffer_explains_where_it_runs(self):
+        app = _FakeMachine('read a dst $W\nretire\n')
+        app.tab.name = 'add.pil'
+        machine.LispMachine.eval_buffer(app)
+        self.assertIn(machine.PIL_BUFFER_NOTE, app.lines)
+
+    def test_f5_and_f6_assemble_x86_buffers(self):
+        for run in (machine.LispMachine.eval_buffer, machine.LispMachine.eval_form_at_cursor):
+            app = _FakeMachine('        org 100h\n')
+            app.tab.name = 'hello.asm'
+            app.run_asm_buffer = Mock()
+            run(app)
+            app.run_asm_buffer.assert_called_once_with(app.tab)
+
+    def test_run_asm_buffer_launches_pil_frontend(self):
+        import tempfile
+        from pathlib import Path
+        app = _FakeMachine('; pil-args: 30\n        org 100h\n')
+        app.tab.name = 'factor.asm'
+        with tempfile.TemporaryDirectory() as folder:
+            program = Path(folder)/'FACTOR.COM'
+            program.write_bytes(b'\xc3')
+            with patch.object(machine.PE, 'assemble', return_value=program) as assemble, \
+                 patch.object(machine.PE, 'launch_command', return_value=['py', '/pil/tools/dos_terminal.py']) as launch, \
+                 patch.object(machine.subprocess, 'Popen') as popen:
+                self.assertTrue(machine.LispMachine.run_asm_buffer(app, app.tab))
+        assemble.assert_called_once()
+        launch.assert_called_once_with(program, {'mode': 'dos', 'args': '30'})
+        popen.assert_called_once()
+        self.assertTrue(any('FACTOR.COM (1 bytes)' in line for line in app.lines))
+
+    def test_run_asm_buffer_reports_nasm_error_line(self):
+        app = _FakeMachine('        org 100h\n        mov ax,\n')
+        app.tab.name = 'bad.asm'
+        error = machine.PE.PilError('/tmp/x/bad.asm:2: error: invalid combination of opcode and operands')
+        with patch.object(machine.PE, 'assemble', side_effect=error), \
+             patch.object(machine.LispMachine, '_highlight_source_error') as highlight:
+            self.assertFalse(machine.LispMachine.run_asm_buffer(app, app.tab))
+        self.assertEqual(highlight.call_args[0][2].lineno, 2)
+        self.assertTrue(any('invalid combination' in line for line in app.lines))
