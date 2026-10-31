@@ -21,3 +21,18 @@ This applies to Codex, Claude and other assistants equally.
 
 These are cooperative locks, not enforcement by GitHub. See the protocol for
 overlapping files, shared documentation and crash recovery.
+
+## Keep the feature matrix current
+
+Development goes in small steps, and the docs move with each step.
+Every PR that adds, removes or changes a user-visible feature also, in the
+same PR:
+
+- updates its row in [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) and the
+  page's "Last checked" line;
+- adds a CHANGELOG "Unreleased" entry, and for a Lisp built-in its
+  `HELP_TOPICS` entry and docs/QUICK_REFERENCE.md line.
+
+`tests/test_feature_matrix.py` checks that every built-in topic, every docs
+page and the MBASIC golden counts appear in the matrix, so a missed update
+fails the tests.
