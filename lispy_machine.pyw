@@ -4372,7 +4372,17 @@ class LispMachine(tk.Tk):
             "\n\nThey are lost on restart. Restart anyway?"
         ):
             return
-        files = [t.path for t in self.tabs.values() if t.path]
+        # Record the open files (possibly none) first, so Reopen files at
+        # the next launch matches what is open now, not an older session.
+        try:
+            self._remember_open_files()
+        except Exception:   # never let a settings problem stop restarting
+            pass
+        files = []
+        for name in self.tab_order:
+            path = buffer_source_path(self.tabs[name]) if name in self.tabs else None
+            if path and path not in files:
+                files.append(path)
         if not self.startup_show_buffer.get():
             startup = os.path.normcase(os.path.abspath(STARTUP_FILE))
             files = [path for path in files if os.path.normcase(os.path.abspath(path)) != startup]
