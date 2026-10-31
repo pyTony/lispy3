@@ -613,6 +613,30 @@ Every name in Python's `turtle` module is a Lispy function:
 
 `(help 'fd)` explains any turtle name. For drawing plants and snowflakes see the L-system section of the [README](../README.md#l-systems-with-turtle-graphics). If you close the window, type `(reinit-turtle)`.
 
+## Lazy streams
+
+A stream is a list whose rest is worked out only when it is needed, so it can go on for ever. `cons-stream` makes one, as in Structure and Interpretation of Computer Programs:
+
+    lispy3> (define (integers-from n) (cons-stream n (integers-from (+ n 1))))
+    lispy3> (define naturals (integers-from 0))
+    lispy3> (stream-head naturals 5)
+    (0 1 2 3 4)
+    lispy3> (stream-head (stream-filter odd? (stream-map * naturals naturals)) 4)
+    (1 9 25 49)
+
+A stream can even be defined in terms of itself. Each item is worked out once and kept, so this is fast:
+
+    lispy3> (define fibs (cons-stream 0 (cons-stream 1 (stream-map + fibs (stream-cdr fibs)))))
+    lispy3> (stream-ref fibs 60)
+    1548008755920
+
+Underneath are Scheme's promises: `(delay exp)` waits, `(force p)` works `exp` out the first time and gives the kept value after that.
+
+    lispy3> (define p (delay (begin (display "working") 42)))
+    lispy3> (list (force p) (force p))
+    working
+    (42 42)
+
 ## Macros
 
 **TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `gensym`. `(help)` lists no macro forms for that reason. It does have `eval`, below.

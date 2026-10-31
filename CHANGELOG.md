@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Lisp: promises and SICP lazy streams. `delay`, `force`, `delay-force`
+  (R7RS, forced in a loop so long chains don't run out of stack),
+  `make-promise` and `promise?`; `cons-stream`, `stream-car`, `stream-cdr`,
+  `the-empty-stream`, `stream-null?`, `stream-pair?`, `stream-ref`,
+  `stream-head`, `stream-tail`, `stream-map`, `stream-filter`,
+  `stream-for-each`, `stream->list`, `list->stream` and `stream`.
+
 - mini-basic: BBC BASIC error handling. `ON ERROR statements`,
   `ON ERROR LOCAL`, `ON ERROR OFF`, `ERR`, `ERL`, `REPORT`, `REPORT$` and
   `ERROR n, message$`. An error goes to the rest of the ON ERROR line and
