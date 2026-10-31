@@ -156,14 +156,20 @@ def load_settings(path: str = SETTINGS_PATH) -> dict:
 def save_settings(settings: dict, path: str = SETTINGS_PATH):
     """Write the settings; return None, or the reason they could not be saved.
 
-    The JSON is made in full before the file is touched and then swapped in,
-    so a failure never leaves a half-written settings file behind."""
+    The JSON is made in full before the file is touched, so a value JSON
+    cannot store never leaves a half-written file. An existing file is
+    rewritten in place ("r+" and truncate): on Windows, opening a file
+    with the Hidden attribute in "w" mode fails with PermissionError,
+    which once kept the Machine from saving anything at all."""
     try:
         text = json.dumps(settings, indent=2)
-        temporary = path + ".tmp"
-        with open(temporary, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(temporary, path)
+        if os.path.exists(path):
+            with open(path, "r+", encoding="utf-8") as f:
+                f.write(text)
+                f.truncate()
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
     except (OSError, TypeError, ValueError) as error:
         message = f"Could not save settings to {path}: {error}"
         try:

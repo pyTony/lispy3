@@ -182,6 +182,13 @@ class SaveSettingsTest(TestCase):
             self.assertIsNone(machine.save_settings({'a': 1}, path))
             self.assertEqual(machine.load_settings(path), {'a': 1})
 
+    def test_rewrite_in_place_drops_old_longer_content(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'settings.json')
+            machine.save_settings({'last_session_files': ['/a/very/long/path/wheel.bas'] * 5}, path)
+            self.assertIsNone(machine.save_settings({'last_session_files': []}, path))
+            self.assertEqual(machine.load_settings(path), {'last_session_files': []})
+
     def test_unwritable_path_is_reported(self):
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, 'missing-folder', 'settings.json')
