@@ -4,6 +4,10 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Docs: [feature matrix](docs/FEATURE_MATRIX.md) of the Lisp, BASIC (BBC and
+  MBASIC) and Lispy Machine features, also in the Help window. Feature PRs now
+  update it in the same PR; `tests/test_feature_matrix.py` checks it.
+
 - Unit tests. Lisp gets `deftest`, `check`, `check-equal`, `check-error`,
   `run-tests`, `test-names` and `clear-tests`; each workspace keeps its own
   tests. Lispy Machine: **Eval → Run tests in buffer (Ctrl+F6)** runs a Lisp
