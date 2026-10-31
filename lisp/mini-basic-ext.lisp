@@ -432,11 +432,17 @@
                 body)]
     `(begin
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
+       ;; CLEAR sets every variable back to 0 or "" (mini-basic-more.lisp)
+       ,@(if (bbc-uses? '(CLEAR) stmts)
+             `((set! bbc-clear-variables
+                     (lambda () ,@(map (lambda (v) `(set! ,v ,(bbc-default v))) vars) #f)))
+             '())
        (set! bbc-data (list->vector (list ,@(map (lambda (item) (bbc-data-code item vars)) data-items))))
        (set! bbc-data-ptr 0)
        (set! bbc-data-labels ,data-lbls)
        ,@defs
        (set! bbc-col 0)
+       (set! bbc-row 0)
        (bbc-error-reset!)
        ;; Closing a MODE window ends the program like END (see graphics bindings)
        ,(if (or on-error (bbc-uses? '(END MODE) stmts)) (bbc-catch "bbc:end" run #f) run)
@@ -571,22 +577,25 @@
              (if is-arr
                  (append (list 'ASET! var rhs) (cdr (cdr lhs)))
                  (list 'LET var rhs))))
-          ((bbc-accept! :op "+=")
-           (let [op-sym (if (bbc-string-name? name) 'string-append '+)
+          ((and (eq? (car (bbc-peek)) :op) (bbc-lookup (nth (bbc-peek) 1) bbc-compound-ops))
+           ;; a += 1, a$ += "x", a(i) *= 2, a /= 3
+           (let [op-sym (bbc-compound-op (nth (bbc-advance!) 1) name)
                  rhs (bbc-value (bbc-p-expr))]
              (if is-arr
                  (let [idxs (map (lambda (_) (gensym "idx")) (cdr (cdr lhs)))]
                    `(let ,(map list idxs (cdr (cdr lhs)))
                       (ASET! ,var (,op-sym (AREF ,var ,@idxs) ,rhs) ,@idxs)))
                  (list 'LET var (list op-sym var rhs)))))
-          ((bbc-accept! :op "-=")
-           (let [rhs (bbc-value (bbc-p-expr))]
-             (if is-arr
-                 (let [idxs (map (lambda (_) (gensym "idx")) (cdr (cdr lhs)))]
-                   `(let ,(map list idxs (cdr (cdr lhs)))
-                      (ASET! ,var (- (AREF ,var ,@idxs) ,rhs) ,@idxs)))
-                 (list 'LET var (list '- var rhs)))))
           (else (bbc-fail-assign name)))))
+
+(define bbc-compound-ops '(("+=" +) ("-=" -) ("*=" *) ("/=" bbc-divide)))
+
+(define (bbc-divide a b) (/ (float a) b))
+
+(define (bbc-compound-op op name)
+  (if (and (equal? op "+=") (bbc-string-name? name))
+      'string-append
+      (bbc-second (bbc-lookup op bbc-compound-ops))))
 
 (define (bbc-p-primary)
   (let [tok (bbc-peek)

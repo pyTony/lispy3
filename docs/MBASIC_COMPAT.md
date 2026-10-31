@@ -54,10 +54,12 @@ allows more. For example a variable name such as `GOTO10`, which runs a keyword
 into a name, is rejected. Such a program stays an expected failure with that
 reason; it is not "fixed" to match MBASIC.
 
-Results on 2026-10-25 (39 programs):
+Results on 2026-10-25 (39 programs), and Lispy again on 2026-10-31 after
+SWAP, `MID$` assignment, string comparison and INKEY$ were added:
 
 | Runner | Pass | Spacing only | Fail |
 | --- | --- | --- | --- |
+| Lispy MBASIC print style (2026-10-31) | 10 | 2 | 27 |
 | Lispy MBASIC print style | 5 | 2 | 32 |
 | Python mini_basic `--dialect mits` | 25 | 1 | 13 |
 | Python mini_basic `--dialect mini` | 7 | 3 | 29 |

@@ -112,6 +112,7 @@
 ;; zones, TAB and PRINT's right-justified numbers, and the value of COUNT.
 ;; Unicode text counts characters, where BBCSDL in UTF-8 mode counts bytes.
 (define bbc-col 0)
+(define bbc-row 0)                 ; the text row, for VPOS
 (define bbc-zone-width 10)
 (define bbc-blank "")
 ;; Where PRINT writes: #t for the screen, or a file's text stream (PRINT #n)
@@ -124,6 +125,7 @@
   (format bbc-out "~a" text)
   (let [s (str text)
         nl (s/rfind "\n")]
+    (if (eq? bbc-out #t) (set! bbc-row (+ bbc-row (s/count "\n"))))
     (if (< nl 0)
         (set! bbc-col (+ bbc-col (length s)))
         (set! bbc-col (- (length s) nl 1)))))
@@ -152,7 +154,9 @@
   ;; A normal logical CR/LF is represented by stdout's native newline. If a
   ;; parameter is pending, both bytes must pass through the decoder instead.
   (if (or (null? bbc-vdu-pending) (not (eq? bbc-out #t)))
-      (begin (format bbc-out "~%") (set! bbc-col 0))
+      (begin (format bbc-out "~%")
+             (if (eq? bbc-out #t) (set! bbc-row (+ bbc-row 1)))
+             (set! bbc-col 0))
       (bbc-vdu (list 13 10))))
 
 (define (bbc-spaces n)
@@ -179,7 +183,8 @@
   (bbc-ansi "2J")
   (bbc-ansi "H")
   (graphics-cls bbc-text-background)
-  (set! bbc-col 0))
+  (set! bbc-col 0)
+  (set! bbc-row 0))
 
 (define (bbc-wait & time)
   ;; WAIT n pauses n centiseconds
@@ -214,7 +219,8 @@
     (if (or (< column 0) (< row 0))
         (error "TAB: coordinates must be non-negative"))
     (bbc-ansi (str (+ row 1) ";" (+ column 1) "H"))
-    (set! bbc-col column)))
+    (set! bbc-col column)
+    (set! bbc-row row)))
 
 (define bbc-vdu-pending '())
 
@@ -614,10 +620,14 @@
   (if (not (string? s)) (error "LCASE$: expected a string"))
   (downcase s))
 
-(define (bbc-left s n) (substring s 0 (max 0 (min (trunc n) (length s)))))
+;; BBC's LEFT$(s$) is all but the last character and RIGHT$(s$) the last one
+(define (bbc-left s & n)
+  (let [k (if (null? n) (- (length s) 1) (trunc (car n)))]
+    (substring s 0 (max 0 (min k (length s))))))
 
-(define (bbc-right s n)
-  (let [l (length s)] (substring s (max 0 (- l (trunc n))) l)))
+(define (bbc-right s & n)
+  (let [l (length s) k (if (null? n) 1 (trunc (car n)))]
+    (substring s (max 0 (- l (max 0 (min k l)))) l)))
 
 (define (bbc-mid s p & n)
   (let [l (length s)
@@ -646,7 +656,7 @@
     "ACS" "ASN" "RAD" "DEG"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
-(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
+(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "*=" "/=" "<<" ">>"))
 (define bbc-one-char-ops "+-*/^(),;'=<>~#.")
 
 (define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
@@ -957,8 +967,18 @@
   (let [x (bbc-value a) y (bbc-value b)]
     (bbc-e (cond ((equal? op "=") (list '= x y))
                  ((equal? op "<>") (list 'not (list '= x y)))
+                 ((or (eq? (bbc-type a) :str) (eq? (bbc-type b) :str))
+                  (list 'bbc-string-compare op x y))
                  (else (list (string->symbol op) x y)))
            :bool)))
+
+;; "APPLE" < "BANANA": strings compare character by character, as in BBC BASIC
+(define (bbc-string-compare op a b)
+  (let [s (format nil "~a" a) t (format nil "~a" b)]
+    (cond ((equal? op "<") (s/__lt__ t))
+          ((equal? op ">") (s/__gt__ t))
+          ((equal? op "<=") (s/__le__ t))
+          (else (s/__ge__ t)))))
 
 (define (bbc-p-compare)
   ;; The shifts << >> >>> bind like comparisons, as in BBC BASIC for SDL
@@ -1022,7 +1042,7 @@
     ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
     ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
     ("UCASE$" bbc-ucase 1 1 :str) ("LCASE$" bbc-lcase 1 1 :str)
-    ("LEFT$" bbc-left 2 2 :str) ("RIGHT$" bbc-right 2 2 :str) ("MID$" bbc-mid 2 3 :str)
+    ("LEFT$" bbc-left 1 2 :str) ("RIGHT$" bbc-right 1 2 :str) ("MID$" bbc-mid 2 3 :str)
     ("INSTR" bbc-instr 2 3 :num)))
 
 (define (bbc-lookup name table)
@@ -1446,3 +1466,4 @@
 (load "mini-basic-io")
 (load "mini-basic-num")
 (load "mini-basic-error")
+(load "mini-basic-more")
