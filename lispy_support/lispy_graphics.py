@@ -4,6 +4,7 @@ No dependency on lispy3.py or mini_basic. Pygame is imported only when opening
 an actual window. Coordinates accepted by pixel/line are framebuffer pixels;
 virtual_pixel/virtual_line use BBC graphics units with bottom-left origin.
 """
+import collections
 import math
 import time
 
@@ -26,6 +27,20 @@ def hold_windows():
 
 
 from lispy_support.graphics_modes import GraphicsMode, MODE_1, virtual_to_pixel
+
+# BBC BASIC for SDL's codes for the editing keys; other keys give their character
+_BBC_KEYS = {'K_HOME': 130, 'K_END': 131, 'K_PAGEUP': 132, 'K_PAGEDOWN': 133,
+             'K_INSERT': 134, 'K_DELETE': 135, 'K_LEFT': 136, 'K_RIGHT': 137,
+             'K_DOWN': 138, 'K_UP': 139}
+
+
+def _key_code(pygame, event):
+    """The BBC key code of a KEYDOWN event, or None for a key such as Shift."""
+    for name, code in _BBC_KEYS.items():
+        if event.key == getattr(pygame, name, None):
+            return code
+    text = getattr(event, 'unicode', '')
+    return ord(text) if len(text) == 1 else None
 
 
 def _rgb(value):
@@ -77,6 +92,8 @@ class Graphics:
         self.auto_refresh = True
         self._frame = None
         self._frame_version = 0
+        # Key codes typed into the window, oldest first, for BASIC GET and INKEY
+        self.keys = collections.deque(maxlen=256)
 
     def maybe_present(self):
         if not self.auto_refresh:
@@ -313,6 +330,11 @@ class Graphics:
             self.close()
             self.closed_by_user = True
             return events
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                code = _key_code(pygame, event)
+                if code is not None:
+                    self.keys.append(code)
         if any(event.type in (pygame.VIDEOEXPOSE, getattr(pygame, 'WINDOWEXPOSED', -1))
                for event in events):
             self._shown = None               # uncovered window: draw it again

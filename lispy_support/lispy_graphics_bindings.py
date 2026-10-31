@@ -191,6 +191,21 @@ def install(env, Procedure, String):
         gfx().present()
         return []
 
+    def key():
+        """The next key typed into the window: its code, -1 for none yet, -2 with no window."""
+        g = current["graphics"]
+        if g is not None and current["basic"] and g.closed_by_user:
+            raise RuntimeError("bbc:end")
+        if g is None or not g.window_open:
+            return -2
+        if _dispatcher is None and not g.keys:
+            # No host poller in the CLI: read the window's events here
+            now = time.monotonic()
+            if now - g._last_present >= 1/60:
+                g._last_present = now
+                g.present()
+        return g.keys.popleft() if g.keys else -1
+
     def close():
         if current["graphics"] is not None:
             current["graphics"].close()
@@ -400,6 +415,7 @@ def install(env, Procedure, String):
         "graphics-virtual-rectangle": v_rect,
         "graphics-cls": cls,
         "graphics-refresh": refresh,
+        "graphics-key": key,
         "graphics-palette": set_palette,
     }
     for name, func in primitives.items():
