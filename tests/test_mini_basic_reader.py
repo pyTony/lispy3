@@ -53,6 +53,20 @@ class RunTest(ReaderTestCase):
     def test_print(self):
         self.assertEqual(self.run_bbc('PRINT "A";1;"B" : PRINT 1,2 : PRINT ;7'), 'A1B\n         1         2\n7\n')
 
+    def test_final_comma_still_ends_the_line(self):
+        # BBCSDL: only a final ; keeps the line open; MBASIC keeps it open after , too
+        self.assertEqual(self.run_bbc('FOR i%=1 TO 2: PRINT i%,: NEXT\nFOR i%=1 TO 2: PRINT i%,;: NEXT'),
+                         '         1\n         2\n         1         2')
+        self.ev('(bbc-set-print-style! :mbasic)')
+        try:
+            self.assertEqual(self.run_bbc('PRINT 1,\nPRINT 2'), ' 1         2 \n')
+        finally:
+            self.ev('(bbc-set-print-style! :bbc)')
+
+    def test_screen_wraps_at_80_columns_between_whole_fields(self):
+        self.assertEqual(self.run_bbc('FOR i%=1 TO 9: PRINT i%,;: NEXT\nPRINT\nPRINT ;i%'),
+                         ''.join(f'{i:10}' for i in range(1, 9)) + '\n         9\n10\n')
+
     def test_question_mark_is_print_at_statement_start(self):
         self.assertEqual(self.run_bbc('BOGOTO=23\n?BOGOTO\nA=1:?A;"x"\nIF A THEN ?"yes" ELSE ?"no"'),
                          '        23\n         1x\nyes\n')

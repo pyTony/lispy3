@@ -116,6 +116,9 @@
 (define bbc-blank "")
 ;; Where PRINT writes: #t for the screen, or a file's text stream (PRINT #n)
 (define bbc-out #t)
+;; Screen text wraps here, like BBCSDL's 80-column window, so PRINT's
+;; 10-character fields stay whole whatever width the Listener or terminal has.
+(define bbc-screen-width 80)
 
 (define (bbc-write-visible text)
   (format bbc-out "~a" text)
@@ -140,7 +143,9 @@
       (let [code (bbc-character-code character)]
         (if (or (not (null? bbc-vdu-pending)) (< code 32) (= code 127))
             (bbc-vdu (list code))
-            (bbc-write-visible (str character)))))
+            (begin
+              (if (>= bbc-col bbc-screen-width) (bbc-newline))
+              (bbc-write-visible (str character))))))
     (seq (str text)))))
 
 (define (bbc-newline)
@@ -155,6 +160,9 @@
 
 (define (bbc-zone)
   (bbc-spaces (mod (- bbc-zone-width (mod bbc-col bbc-zone-width)) bbc-zone-width)))
+
+(define (bbc-end-comma)
+  (if (not (eq? bbc-number-print-style :mbasic)) (bbc-newline)))
 
 (define (bbc-tab n)
   (if (> bbc-col n) (bbc-newline))
@@ -378,7 +386,9 @@
   `(set! ,var ,(bbc-typed-value var exp)))
 
 (define (bbc-print-code items justify)
-  ;; :semi stops right-justifying numbers, :comma starts it again
+  ;; :semi stops right-justifying numbers, :comma starts it again.
+  ;; A final :semi keeps the line open. A final :comma does too in MBASIC,
+  ;; but BBC BASIC still ends PRINT I%, with a newline.
   (if (null? items)
       (list '(bbc-newline))
       (let [item (car items)
@@ -386,7 +396,7 @@
         (cond ((eq? item :semi)
                (if (null? more) '() (bbc-print-code more #f)))
               ((eq? item :comma)
-               (cons '(bbc-zone) (if (null? more) '() (bbc-print-code more #t))))
+               (cons '(bbc-zone) (if (null? more) '((bbc-end-comma)) (bbc-print-code more #t))))
               ((eq? item :nl)
                (cons '(bbc-newline) (bbc-print-code more justify)))
               ((and (pair? item) (list? item) (eq? (car item) 'TAB))
