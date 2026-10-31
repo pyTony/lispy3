@@ -75,11 +75,42 @@ class StartupOptionsTest(TestCase):
         tab = Mock(path=machine.STARTUP_FILE)
         tab.dirty = False
         app.tabs = {'startup.lisp': tab}
+        app.tab_order = ['startup.lisp']
         app.startup_show_buffer.get.return_value = False
         app.plain_repl.get.return_value = False
         with patch.object(machine.subprocess, 'Popen') as launch:
             machine.LispMachine.restart(app)
         self.assertNotIn(machine.STARTUP_FILE, launch.call_args.args[0])
+
+    def test_restart_with_all_buffers_closed_forgets_last_session(self):
+        # Closing every buffer and restarting must not bring back the files
+        # remembered at an earlier quit (wheel.bas kept coming back).
+        app = Mock()
+        app.tabs, app.tab_order = {}, []
+        app.current_tab.return_value = None
+        app.settings = {'last_session_files': ['/x/wheel.bas'], 'last_session_current': '/x/wheel.bas'}
+        app._remember_open_files = lambda: machine.LispMachine._remember_open_files(app)
+        app.startup_show_buffer.get.return_value = True
+        app.plain_repl.get.return_value = False
+        with patch.object(machine.subprocess, 'Popen') as launch, \
+             patch.object(machine, 'save_settings') as save:
+            machine.LispMachine.restart(app)
+        self.assertEqual(app.settings['last_session_files'], [])
+        self.assertIsNone(app.settings['last_session_current'])
+        save.assert_called_once_with(app.settings)
+        self.assertEqual(launch.call_args.args[0], machine.restart_command([], False))
+
+    def test_restart_keeps_basic_source_buffers_in_tab_order(self):
+        app = Mock()
+        lisp, basic = Mock(path='/x/b.lisp'), Mock(path=None, source_path='/x/wheel.bas')
+        lisp.dirty = basic.dirty = False
+        app.tabs = {'b.lisp': lisp, 'wheel.bas': basic}
+        app.tab_order = ['wheel.bas', 'b.lisp']
+        app.startup_show_buffer.get.return_value = True
+        app.plain_repl.get.return_value = False
+        with patch.object(machine.subprocess, 'Popen') as launch:
+            machine.LispMachine.restart(app)
+        self.assertEqual(launch.call_args.args[0][-2:], ['/x/wheel.bas', '/x/b.lisp'])
 
 
 class ReopenLastSessionTest(TestCase):
