@@ -34,6 +34,12 @@ A fork works the same, for example `https://github.com/pyTony/mbasic.git`.
 
 Without any of them the test is skipped.
 
+Keep the clone up to date (`git pull`; a fork needs syncing with upstream
+first). Upstream commit 3a65d6a6 (2026-08-06) replaced several expected
+outputs with what the real binary prints. With an older clone, programs
+marked PASS can fail on spacing alone. For example, `test_input` expects
+`Integer from 123.456:123` where MBASIC 5.21 prints `Integer from 123.456: 123 `.
+
 ## Running
 
 ```console
