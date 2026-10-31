@@ -153,12 +153,25 @@ def load_settings(path: str = SETTINGS_PATH) -> dict:
         return {}
     return settings if isinstance(settings, dict) else {}
 
-def save_settings(settings: dict, path: str = SETTINGS_PATH) -> None:
+def save_settings(settings: dict, path: str = SETTINGS_PATH):
+    """Write the settings; return None, or the reason they could not be saved.
+
+    The JSON is made in full before the file is touched and then swapped in,
+    so a failure never leaves a half-written settings file behind."""
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except OSError:
-        pass
+        text = json.dumps(settings, indent=2)
+        temporary = path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(temporary, path)
+    except (OSError, TypeError, ValueError) as error:
+        message = f"Could not save settings to {path}: {error}"
+        try:
+            print(message, file=sys.stderr)
+        except Exception:   # pythonw has no console
+            pass
+        return message
+    return None
 
 def parse_args(argv):
     """Split the command line into (plain_repl, files). --repl may come anywhere."""
@@ -1679,7 +1692,7 @@ class LispMachine(tk.Tk):
         current = buffer_source_path(current) if current is not None else None
         self.settings['last_session_files'] = files
         self.settings['last_session_current'] = os.path.abspath(current) if current else None
-        save_settings(self.settings)
+        return save_settings(self.settings)
 
     def _run_startup(self):
         if self._startup_ran or not self.startup_run.get():
@@ -1718,8 +1731,8 @@ class LispMachine(tk.Tk):
             self.settings['startup_show_buffer'] = self.startup_show_buffer.get()
             self.settings['startup_reopen_files'] = self.startup_reopen_files.get()
             self.settings['startup_run'] = self.startup_run.get()
-            save_settings(self.settings)
-            status.set('Saved for the next launch.')
+            error = save_settings(self.settings)
+            status.set(error or 'Saved for the next launch.')
 
         ttk.Checkbutton(frame, text='Reopen the files that were open when the Machine was last closed',
                         variable=self.startup_reopen_files, command=save).pack(anchor='w')
@@ -1728,6 +1741,7 @@ class LispMachine(tk.Tk):
         ttk.Checkbutton(frame, text='Run startup.lisp once at startup (also when hidden)',
                         variable=self.startup_run, command=save).pack(anchor='w', pady=8)
         ttk.Label(frame, text=self.startup_file).pack(anchor='w', pady=8)
+        ttk.Label(frame, text=f'Settings file: {SETTINGS_PATH}').pack(anchor='w')
         ttk.Label(frame, text='Running executes every form, including printing and graphics.').pack(anchor='w')
         ttk.Label(frame, textvariable=status).pack(anchor='w', pady=8)
         ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
@@ -4456,9 +4470,12 @@ class LispMachine(tk.Tk):
             ):
                 return
         try:
-            self._remember_open_files()
-        except Exception:   # never let a settings problem stop quitting
-            pass
+            error = self._remember_open_files()
+        except Exception as problem:   # never let a settings problem stop quitting
+            error = f"Could not remember the open files: {problem}"
+        if error:
+            messagebox.showwarning("Open files not remembered",
+                                   f"{error}\n\nReopen files will not see this session.")
         from lispy_support.lispy_graphics import close_windows
         from lispy_support.lispy_graphics_bindings import set_dispatcher
         close_windows()
