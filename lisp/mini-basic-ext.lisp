@@ -347,9 +347,11 @@
                        (if ,nxt
                            (set! ,pc ,nxt)
                            ,(if (null? nested)
-                                '(error (str "GOTO: unknown label " bbc-goto-target))
+                                `(set! ,pc (bbc-goto-missing ,tbl))
                                 '(error "bbc:goto"))))
-                     (error ,err)))))
+                     ;; ON ERROR (mini-basic-error.lisp) may continue here
+                     (let ((,nxt (bbc-trap ,err ,tbl)))
+                       (if ,nxt (set! ,pc ,nxt) (error ,err)))))))
            ,value))
        (set! bbc-gosub-handlers (cons (list ,tbl ,runner) ,saved))
        (try
@@ -381,12 +383,17 @@
         parms (cdr head)
         args (map (lambda (p) (gensym "arg")) parms)
         locals (bbc-collect '(LOCAL) cdr body '())
-        saved (bbc-adjoin locals parms)
+        ;; ON ERROR LOCAL ends with the call; ERL tracking returns to the
+        ;; caller's line, except after an error (mini-basic-error.lisp)
+        saved (if (bbc-uses? '(ON-ERROR-LOCAL) body)
+                  (bbc-adjoin (list 'bbc-error-handler) (bbc-adjoin locals parms))
+                  (bbc-adjoin locals parms))
         saves (map (lambda (v) (gensym "saved")) saved)
         result (gensym "result")
         err (gensym "error")
         tail-body (bbc-tail body)
         tag (if (eq? kind 'FN) "bbc:return" "bbc:endproc")
+        line (if (bbc-uses? '(LINE) body) (gensym "line") #f)
         core (if (bbc-uses? '(GOSUB ON-GOSUB RETURN) body)
                  `(bbc-subroutine-scope (lambda () ,(bbc-body-code tail-body)))
                  (bbc-body-code tail-body))
@@ -394,11 +401,12 @@
                 (bbc-catch tag core 'bbc-fn-value)
                 core)
         fn `(lambda ,args
-              (let ,(map list saves saved)
+              (let ,(append (map list saves saved) (if line `((,line bbc-line)) '()))
                 ,@(map (lambda (p a) `(set! ,p ,a)) parms args)
                 (try
                   (let ((,result ,run))
                     ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
+                    ,@(if line `((set! bbc-line ,line)) '())
                     ,result)
                   (catch ,err
                     ,@(map (lambda (v s) `(set! ,v ,s)) saved saves)
@@ -413,18 +421,31 @@
         defs (map (lambda (d) (if (bbc-pure-fn? d vars) (cons 'DEF-MEMO-FN (cdr d)) d))
                   (filter bbc-def? stmts))
         main (filter (lambda (s) (not (bbc-def? s))) stmts)
+        ;; An ON ERROR whose body has finished runs from the program body
+        on-error (bbc-uses? '(ON-ERROR ON-ERROR-LOCAL) stmts)
+        body (if on-error
+                 (bbc-tagbody-code (append main (list '(END) '(LABEL bbc-error-fallback)
+                                                      '(bbc-error-fallback!))))
+                 (bbc-body-code main))
         run (if (bbc-uses? '(GOSUB ON-GOSUB RETURN) stmts)
-                `(bbc-subroutine-scope (lambda () ,(bbc-body-code main)))
-                (bbc-body-code main))]
+                `(bbc-subroutine-scope (lambda () ,body))
+                body)]
     `(begin
        ,@(map (lambda (v) `(define ,v ,(bbc-default v))) vars)
+       ;; CLEAR sets every variable back to 0 or "" (mini-basic-more.lisp)
+       ,@(if (bbc-uses? '(CLEAR) stmts)
+             `((set! bbc-clear-variables
+                     (lambda () ,@(map (lambda (v) `(set! ,v ,(bbc-default v))) vars) #f)))
+             '())
        (set! bbc-data (list->vector (list ,@(map (lambda (item) (bbc-data-code item vars)) data-items))))
        (set! bbc-data-ptr 0)
        (set! bbc-data-labels ,data-lbls)
        ,@defs
        (set! bbc-col 0)
+       (set! bbc-row 0)
+       (bbc-error-reset!)
        ;; Closing a MODE window ends the program like END (see graphics bindings)
-       ,(if (bbc-uses? '(END MODE) stmts) (bbc-catch "bbc:end" run #f) run)
+       ,(if (or on-error (bbc-uses? '(END MODE) stmts)) (bbc-catch "bbc:end" run #f) run)
        #f)))
        
 ;;; --- Parser extensions for (label), DATA, READ, RESTORE, DIM, arrays ---
@@ -556,22 +577,25 @@
              (if is-arr
                  (append (list 'ASET! var rhs) (cdr (cdr lhs)))
                  (list 'LET var rhs))))
-          ((bbc-accept! :op "+=")
-           (let [op-sym (if (bbc-string-name? name) 'string-append '+)
+          ((and (eq? (car (bbc-peek)) :op) (bbc-lookup (nth (bbc-peek) 1) bbc-compound-ops))
+           ;; a += 1, a$ += "x", a(i) *= 2, a /= 3
+           (let [op-sym (bbc-compound-op (nth (bbc-advance!) 1) name)
                  rhs (bbc-value (bbc-p-expr))]
              (if is-arr
                  (let [idxs (map (lambda (_) (gensym "idx")) (cdr (cdr lhs)))]
                    `(let ,(map list idxs (cdr (cdr lhs)))
                       (ASET! ,var (,op-sym (AREF ,var ,@idxs) ,rhs) ,@idxs)))
                  (list 'LET var (list op-sym var rhs)))))
-          ((bbc-accept! :op "-=")
-           (let [rhs (bbc-value (bbc-p-expr))]
-             (if is-arr
-                 (let [idxs (map (lambda (_) (gensym "idx")) (cdr (cdr lhs)))]
-                   `(let ,(map list idxs (cdr (cdr lhs)))
-                      (ASET! ,var (- (AREF ,var ,@idxs) ,rhs) ,@idxs)))
-                 (list 'LET var (list '- var rhs)))))
           (else (bbc-fail-assign name)))))
+
+(define bbc-compound-ops '(("+=" +) ("-=" -) ("*=" *) ("/=" bbc-divide)))
+
+(define (bbc-divide a b) (/ (float a) b))
+
+(define (bbc-compound-op op name)
+  (if (and (equal? op "+=") (bbc-string-name? name))
+      'string-append
+      (bbc-second (bbc-lookup op bbc-compound-ops))))
 
 (define (bbc-p-primary)
   (let [tok (bbc-peek)

@@ -4,6 +4,7 @@ No dependency on lispy3.py or mini_basic. Pygame is imported only when opening
 an actual window. Coordinates accepted by pixel/line are framebuffer pixels;
 virtual_pixel/virtual_line use BBC graphics units with bottom-left origin.
 """
+import collections
 import math
 import time
 
@@ -27,11 +28,44 @@ def hold_windows():
 
 from lispy_support.graphics_modes import GraphicsMode, MODE_1, virtual_to_pixel
 
+# BBC BASIC for SDL's codes for the editing keys; other keys give their character
+_BBC_KEYS = {'K_HOME': 130, 'K_END': 131, 'K_PAGEUP': 132, 'K_PAGEDOWN': 133,
+             'K_INSERT': 134, 'K_DELETE': 135, 'K_LEFT': 136, 'K_RIGHT': 137,
+             'K_DOWN': 138, 'K_UP': 139}
+
+
+def _key_code(pygame, event):
+    """The BBC key code of a KEYDOWN event, or None for a key such as Shift."""
+    for name, code in _BBC_KEYS.items():
+        if event.key == getattr(pygame, name, None):
+            return code
+    text = getattr(event, 'unicode', '')
+    return ord(text) if len(text) == 1 else None
+
 
 def _rgb(value):
     if len(value) != 3 or any(not isinstance(c, int) or not 0 <= c <= 255 for c in value):
         raise ValueError('RGB must contain three integer channels in [0,255]')
     return tuple(value)
+
+
+def _open_vsync_window(pygame, size):
+    """A window whose flip waits for the screen refresh, so moving pictures do
+    not tear (BBCSDL does the same). pygame offers vsync only with SCALED; the
+    window is then set back to the requested size. Without vsync, a plain window."""
+    import warnings
+    with warnings.catch_warnings():
+        # "no fast renderer" (no GPU) and from_display_module's deprecation
+        warnings.simplefilter('ignore')
+        try:
+            screen = pygame.display.set_mode(size, pygame.SCALED, vsync=1)
+        except pygame.error:
+            return pygame.display.set_mode(size)
+        try:
+            pygame.Window.from_display_module().size = size
+        except (AttributeError, pygame.error):
+            pass                             # older pygame: SDL's own scale
+    return screen
 
 
 class Graphics:
@@ -58,6 +92,8 @@ class Graphics:
         self.auto_refresh = True
         self._frame = None
         self._frame_version = 0
+        # Key codes typed into the window, oldest first, for BASIC GET and INKEY
+        self.keys = collections.deque(maxlen=256)
 
     def maybe_present(self):
         if not self.auto_refresh:
@@ -199,17 +235,19 @@ class Graphics:
         """Outline: the edge pixels of fill_circle's disc, row by row."""
         cx, cy, radius = float(cx), float(cy), abs(float(radius))
         rgb = bytes(_rgb(color))
-        def half(y):
-            h = radius * radius - (y + 0.5 - cy) ** 2
-            return math.sqrt(h) if h >= 0 else None
         top, bottom = math.ceil(cy - radius - 0.5), math.floor(cy + radius - 0.5)
+        # Each row's half width once (None outside the circle), with a row either side
+        halves = []
+        for y in range(top - 1, bottom + 2):
+            h = radius * radius - (y + 0.5 - cy) ** 2
+            halves.append(math.sqrt(h) if h >= 0 else None)
         for y in range(top, bottom + 1):
-            h = half(y)
+            above, h, below = halves[y - top], halves[y - top + 1], halves[y - top + 2]
             if h is None:
                 continue
             left, right = math.ceil(cx - h - 0.5), math.floor(cx + h - 0.5)
             # Join to the wider neighbouring row so steep parts have no gaps.
-            inner = min((n for n in (half(y - 1), half(y + 1)) if n is not None), default=0.0)
+            inner = min((n for n in (above, below) if n is not None), default=0.0)
             inner_left = max(left, math.ceil(cx - inner - 0.5) - 1)
             inner_right = min(right, math.floor(cx + inner - 0.5) + 1)
             if y in (top, bottom) or inner_left >= inner_right:
@@ -270,7 +308,7 @@ class Graphics:
         self._pygame = pygame
         pygame.display.init()
         self._size = size
-        self._screen = pygame.display.set_mode(self._size)
+        self._screen = _open_vsync_window(pygame, self._size)
         self._closed = False
         self.closed_by_user = False
         self._shown = None
@@ -292,6 +330,11 @@ class Graphics:
             self.close()
             self.closed_by_user = True
             return events
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                code = _key_code(pygame, event)
+                if code is not None:
+                    self.keys.append(code)
         if any(event.type in (pygame.VIDEOEXPOSE, getattr(pygame, 'WINDOWEXPOSED', -1))
                for event in events):
             self._shown = None               # uncovered window: draw it again

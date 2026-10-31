@@ -9,6 +9,7 @@ Features
   * F5 / Ctrl+Enter : run Lisp form or BASIC/Python selection/current line
   * F6 / Shift+F6 : fresh program run in Listener / ANSI terminal
   * Ctrl+Shift+Enter : evaluate buffer in current workspace
+  * Ctrl+F6 : run unit tests (Lisp deftest in a fresh workspace, Python unittest)
   * F7 / F8 : Python mini_basic selection/current line / whole BASIC buffer
   * Shift+F7 : inspect the symbol at the cursor (or typed in the Listener)
   * F9 : evaluate the Listener input line
@@ -75,6 +76,7 @@ from lispy_support import guide
 from lispy_support import syntax_highlight as SH
 from lispy_support import editor_tools as ET
 from lispy_support import basic_runner as BR
+from lispy_support import pil_engine as PE
 
 
 # =============================================================================
@@ -135,6 +137,10 @@ BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 # The name being typed at the end of a line, for completion (":name" keywords included)
 SYMBOL_TAIL = re.compile(r"[\w\-+*/<>=!?:.]+$")
 
+# .pil files describe single x86 instructions; the Rust engine embeds its own copies.
+PIL_BUFFER_NOTE = (';; PIL descriptions run inside the PIL engine, which has them built in. '
+                   'Use Eval > PIL x86 engine, or (pil "demo hello") and (pil-run 1000) in Lisp.\n')
+
 # Remembers the View > Listener mode > Lisp REPL choice between runs
 SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".lispy3_machine.json")
 
@@ -147,12 +153,31 @@ def load_settings(path: str = SETTINGS_PATH) -> dict:
         return {}
     return settings if isinstance(settings, dict) else {}
 
-def save_settings(settings: dict, path: str = SETTINGS_PATH) -> None:
+def save_settings(settings: dict, path: str = SETTINGS_PATH):
+    """Write the settings; return None, or the reason they could not be saved.
+
+    The JSON is made in full before the file is touched, so a value JSON
+    cannot store never leaves a half-written file. An existing file is
+    rewritten in place ("r+" and truncate): on Windows, opening a file
+    with the Hidden attribute in "w" mode fails with PermissionError,
+    which once kept the Machine from saving anything at all."""
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-    except OSError:
-        pass
+        text = json.dumps(settings, indent=2)
+        if os.path.exists(path):
+            with open(path, "r+", encoding="utf-8") as f:
+                f.write(text)
+                f.truncate()
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+    except (OSError, TypeError, ValueError) as error:
+        message = f"Could not save settings to {path}: {error}"
+        try:
+            print(message, file=sys.stderr)
+        except Exception:   # pythonw has no console
+            pass
+        return message
+    return None
 
 def parse_args(argv):
     """Split the command line into (plain_repl, files). --repl may come anywhere."""
@@ -256,6 +281,7 @@ def about_text(folder: str = APP_DIR) -> str:
         "F5  run form / selection / line\n"
         "F6  fresh program in Listener; Shift+F6 in ANSI terminal\n"
         "Ctrl+Shift+Enter  Eval buffer in current workspace\n"
+        "Ctrl+F6  run unit tests in buffer (Lisp deftest / Python unittest)\n"
         "F7  Python BASIC selection or line\n"
         "F8  Python BASIC whole buffer\n"
         "Shift+F7  inspect symbol at cursor\n"
@@ -702,6 +728,7 @@ class EditorTab(tk.Frame):
         t.bind("<Control-Return>",          lambda e: (self.app.eval_form_at_cursor(), "break")[1])
         t.bind("<Shift-F6>", lambda e: (self.app.eval_buffer_in_terminal(), "break")[1])
         t.bind("<F6>",                      lambda e: (self.app.eval_buffer_listener(), "break")[1])
+        t.bind("<Control-F6>",              lambda e: (self.app.run_buffer_tests(), "break")[1])
         t.bind("<Control-Shift-Return>",    lambda e: (self.app.eval_buffer(), "break")[1])
 
     def _open_file_at_cursor(self, event=None):
@@ -1174,6 +1201,39 @@ def buffer_source_path(tab):
     return origin if isinstance(origin, str) else None
 
 
+def python_test_target(path):
+    """(folder to run in, dotted module name) for unittest, so package-relative imports work.
+
+    tests/test_x.py inside a package gives (repo root, 'tests.test_x').
+    """
+    folder = os.path.dirname(os.path.abspath(path))
+    parts = [os.path.splitext(os.path.basename(path))[0]]
+    while os.path.isfile(os.path.join(folder, '__init__.py')):
+        parts.insert(0, os.path.basename(folder))
+        parent = os.path.dirname(folder)
+        if parent == folder:
+            break
+        folder = parent
+    return folder, '.'.join(parts)
+
+
+def python_test_command(path=None, folder=None):
+    """The command, working folder and environment that run Python unit tests.
+
+    path: one test file (python -m unittest -v module).
+    folder: every test*.py below it (python -m unittest discover).
+    """
+    env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONIOENCODING='utf-8')
+    if path is not None:
+        cwd, module = python_test_target(path)
+        return [sys.executable, '-m', 'unittest', '-v', module], cwd, env
+    folder = os.path.abspath(folder)
+    top, start = folder, folder
+    while os.path.isfile(os.path.join(top, '__init__.py')):
+        top = os.path.dirname(top)
+    return [sys.executable, '-m', 'unittest', 'discover', '-v', '-s', start, '-t', top], top, env
+
+
 def source_arg_path(arg):
     path = os.path.abspath(arg)
     if not os.path.dirname(arg) and not os.path.exists(path):
@@ -1526,6 +1586,10 @@ class LispMachine(tk.Tk):
         self._output_mode = self.basic_output.get()
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         self.basic_settings_window = None
+        self.pil_settings_window = None
+        PE.DIRECTORY = self.settings.get('pil_directory', '')
+        PE.ENGINE = self.settings.get('pil_engine', '')
+        PE.NASM = self.settings.get('pil_nasm', '')
         if plain_repl is None:
             plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('lispy_support.basic_repl', False)
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
@@ -1634,7 +1698,7 @@ class LispMachine(tk.Tk):
         current = buffer_source_path(current) if current is not None else None
         self.settings['last_session_files'] = files
         self.settings['last_session_current'] = os.path.abspath(current) if current else None
-        save_settings(self.settings)
+        return save_settings(self.settings)
 
     def _run_startup(self):
         if self._startup_ran or not self.startup_run.get():
@@ -1673,8 +1737,8 @@ class LispMachine(tk.Tk):
             self.settings['startup_show_buffer'] = self.startup_show_buffer.get()
             self.settings['startup_reopen_files'] = self.startup_reopen_files.get()
             self.settings['startup_run'] = self.startup_run.get()
-            save_settings(self.settings)
-            status.set('Saved for the next launch.')
+            error = save_settings(self.settings)
+            status.set(error or 'Saved for the next launch.')
 
         ttk.Checkbutton(frame, text='Reopen the files that were open when the Machine was last closed',
                         variable=self.startup_reopen_files, command=save).pack(anchor='w')
@@ -1683,6 +1747,7 @@ class LispMachine(tk.Tk):
         ttk.Checkbutton(frame, text='Run startup.lisp once at startup (also when hidden)',
                         variable=self.startup_run, command=save).pack(anchor='w', pady=8)
         ttk.Label(frame, text=self.startup_file).pack(anchor='w', pady=8)
+        ttk.Label(frame, text=f'Settings file: {SETTINGS_PATH}').pack(anchor='w')
         ttk.Label(frame, text='Running executes every form, including printing and graphics.').pack(anchor='w')
         ttk.Label(frame, textvariable=status).pack(anchor='w', pady=8)
         ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
@@ -1798,6 +1863,8 @@ class LispMachine(tk.Tk):
         eval_m.add_command(label="Run program → ANSI terminal (fresh workspace)", accelerator="Shift+F6", command=self.eval_buffer_in_terminal)
         eval_m.add_command(label="Run program → Listener (fresh workspace)", accelerator="F6", command=self.eval_buffer_listener)
         eval_m.add_command(label="Eval buffer in current workspace", accelerator="Ctrl+Shift+Enter", command=self.eval_buffer)
+        eval_m.add_command(label="Run tests in buffer (Lisp deftest / Python unittest)", accelerator="Ctrl+F6", command=self.run_buffer_tests)
+        eval_m.add_command(label="Run Python tests in buffer's folder", command=self.run_folder_tests)
         eval_m.add_command(label="Python BASIC selection or line", accelerator="F7", command=self.eval_basic_at_cursor)
         eval_m.add_command(label="Python BASIC whole buffer", accelerator="F8", command=self.eval_basic_buffer)
         eval_m.add_command(label="Real BBC BASIC for SDL buffer", command=self.eval_bbcsdl_buffer)
@@ -1806,6 +1873,12 @@ class LispMachine(tk.Tk):
             dialect_m.add_command(label=label, command=lambda options=options: self.eval_basic_buffer_as(**options))
         eval_m.add_cascade(label="Run BASIC buffer as", menu=dialect_m)
         eval_m.add_command(label='BASIC Settings…', command=self._open_basic_settings)
+        pil_m = tk.Menu(eval_m, tearoff=0)
+        pil_m.add_command(label='Open PIL debugger', command=self.open_pil_debugger)
+        pil_m.add_command(label='Run DOS program in PIL…', command=self.run_pil_dos_program)
+        pil_m.add_command(label='Assemble and run x86 buffer', command=self.run_asm_buffer)
+        pil_m.add_command(label='PIL Settings…', command=self._open_pil_settings)
+        eval_m.add_cascade(label='PIL x86 engine', menu=pil_m)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
@@ -2114,6 +2187,7 @@ class LispMachine(tk.Tk):
         self.bind_all("<F1>", lambda e: (self.open_guide(), "break")[1])
         self.bind_all("<F7>", lambda e: (self.eval_basic_at_cursor(), "break")[1])
         self.bind_all("<F8>", lambda e: (self.eval_basic_buffer(), "break")[1])
+        self.bind_all("<Control-F6>", lambda e: (self.run_buffer_tests(), "break")[1])
         self.bind_all("<Shift-F7>", lambda e: (self.inspect_at_cursor(), "break")[1])
         # Ctrl+Break: Tk calls that key Cancel on Windows and Break on Linux
         self.bind_all("<Control-Cancel>", self.stop)
@@ -2233,10 +2307,24 @@ class LispMachine(tk.Tk):
         self._open_source_path(path)
 
     def _basic_dialog_dir(self):
+        """Where the Load BASIC program dialog should start.
+
+        ``APP_DIR/basic`` (lispy3's own bundled sample programs) is meant
+        as a last resort for when the Python mini_basic project can't be
+        found at all. Previously it was also reached whenever the mini_basic
+        root *was* found but happened not to have an ``examples`` subfolder
+        (mini_basic ships ``basics/`` on some layouts) -- the dialog would
+        then silently default into lispy3's own directory instead of
+        mini_basic's, looking like "BASIC opens in the lispy3 folder". Try
+        the resolved mini_basic root itself, and its ``basics/`` folder,
+        before ever falling back to lispy3's bundled samples.
+        """
         root = self.settings.get('basic_directory') or BR.default_package_root()
         candidates = [self.settings.get('basic_examples_directory'),
                       self.settings.get('basic_last_directory'),
                       os.path.join(root, 'examples') if root else None,
+                      os.path.join(root, 'basics') if root else None,
+                      root or None,
                       os.path.join(APP_DIR, 'basic')]
         return next((path for path in candidates if path and os.path.isdir(path)), APP_DIR)
 
@@ -2375,11 +2463,14 @@ class LispMachine(tk.Tk):
     def _poll_graphics(self):
         """Pump SDL on its owning Tk thread, also while evaluation is idle."""
         from lispy_support.lispy_graphics import pump_windows
+        window_open = False
         try:
-            pump_windows()
+            window_open = pump_windows()
         except Exception as error:
             self.listener_write(f'Graphics: {error}\n', 'error')
-        self.after(20, self._poll_graphics)
+        # With a window open, show each *REFRESH frame within a few ms; 20 ms
+        # beat against a program's own frame rate and dropped frames unevenly.
+        self.after(5 if window_open else 20, self._poll_graphics)
 
     def _gui_builtins_on_main(self, env=None):
         """Make the turtle and window built-ins run on the Tk thread, whichever thread calls them."""
@@ -2640,6 +2731,12 @@ class LispMachine(tk.Tk):
             line = int(str(selection[0]).split('.')[0]) if selection else int(text.index('insert').split('.')[0])
             self.eval_buffer(python_source=True, source=source, source_line=line)
             return
+        if language == 'PIL':
+            self.listener_write(PIL_BUFFER_NOTE, 'info')
+            return
+        if language == 'x86 assembly':
+            self.run_asm_buffer(tab)
+            return
         if language != 'Lisp':
             self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
             return
@@ -2772,6 +2869,87 @@ class LispMachine(tk.Tk):
         self.basic_output.set('ansi')
         self._save_basic_settings()
         self.eval_buffer(terminal=True, fresh=True)
+
+    def run_buffer_tests(self, folder=False):
+        """Eval → Run tests: Lisp buffers run their deftests in a fresh workspace,
+        Python buffers run unittest on the file (or every test*.py in its folder)."""
+        tab = self.current_tab()
+        if not tab or self._busy():
+            return
+        language = execution_language(tab)
+        if language == 'Lisp' and not folder:
+            content = tab.get_content()
+            if not content.strip():
+                self.listener_write(';; (empty buffer)\n', 'info')
+                return
+            self.listener_write(f';; --- running tests in {tab.name} ---\n', 'info')
+            # The buffer's own forms run silently; then every deftest it made is run.
+            self.eval_buffer(terminal=False, fresh=True, echo='off', after='(run-tests)')
+            return
+        if language != 'Python' and not folder:
+            self.listener_write(';; Run tests works on Lisp buffers (deftest/check) and Python buffers (unittest).\n', 'info')
+            return
+        LispMachine._run_python_tests(self, tab, folder=folder)
+
+    def run_folder_tests(self):
+        """Eval → Run Python tests in folder: unittest discover in the buffer's folder."""
+        LispMachine.run_buffer_tests(self, folder=True)
+
+    def _run_python_tests(self, tab, folder=False):
+        path = buffer_source_path(tab)
+        temp_dir = None
+        if folder:
+            if not path:
+                self.listener_write(';; Save the buffer first, so its folder is known.\n', 'error')
+                return
+            command, cwd, env = python_test_command(folder=os.path.dirname(os.path.abspath(path)))
+            label = os.path.dirname(os.path.abspath(path))
+        else:
+            if getattr(tab, 'path', None) and getattr(tab, 'dirty', False):
+                if not self._save_tab_to_path(tab, tab.path):
+                    return
+                self.listener_write(f';; saved {tab.path}\n', 'info')
+            if getattr(tab, 'path', None):
+                command, cwd, env = python_test_command(path=tab.path)
+            else:
+                import tempfile
+                temp_dir = tempfile.mkdtemp(prefix='lispy_tests_')
+                name = os.path.splitext(os.path.basename(tab.name))[0] or 'buffer'
+                temp_path = os.path.join(temp_dir, name.replace(' ', '_').replace('*', '') + '.py')
+                with open(temp_path, 'w', encoding='utf-8') as f:
+                    f.write(tab.get_content())
+                command, cwd, env = python_test_command(path=temp_path)
+            label = tab.name
+        self.listener_write(f';; --- running Python unit tests: {label} ---\n', 'info')
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+        def work():
+            try:
+                process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                                           stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                           text=True, encoding='utf-8', errors='replace',
+                                           creationflags=flags)
+            except OSError as error:
+                self._ui(self.listener_write, f';; Could not start Python: {error}\n', 'error')
+                return
+            try:
+                for line in process.stdout:
+                    tag = 'error' if line.startswith(('FAIL', 'ERROR', 'Traceback')) else None
+                    self._ui(self.listener_write, line, tag)
+                status = process.wait()
+            except BaseException:
+                process.kill()          # Stop ends the test run too
+                process.wait()
+                raise
+            finally:
+                if temp_dir:
+                    import shutil
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+            verdict = 'all passed' if status == 0 else f'FAILED (exit status {status})'
+            self._ui(self.listener_write, f';; --- Python unit tests {verdict} ---\n',
+                     'info' if status == 0 else 'error')
+
+        self._start(work)
 
     def eval_bbcsdl_buffer(self):
         tab = self.current_tab()
@@ -2915,6 +3093,104 @@ class LispMachine(tk.Tk):
         ttk.Label(frame, textvariable=status).pack(anchor='w', pady=(0,8))
         ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
 
+    def _launch_pil_tool(self, tool, *args):
+        """Start one of PIL's own Tk frontends (tools/*.py) with the configured engine."""
+        try:
+            engine, script = PE.find_engine(), PE.find_tool(tool)
+            subprocess.Popen([sys.executable, str(script), '--engine', str(engine), *map(str, args)],
+                             cwd=str(script.parent.parent))
+        except (PE.PilError, OSError) as error:
+            messagebox.showerror('PIL', str(error))
+            return False
+        self.listener_write(f';; Started PIL {tool} with {engine}.\n', 'info')
+        return True
+
+    def open_pil_debugger(self):
+        return LispMachine._launch_pil_tool(self, 'pil_debugger.py')
+
+    def run_pil_dos_program(self):
+        path = filedialog.askopenfilename(title='DOS program to run in PIL',
+            filetypes=[('DOS programs', '*.com *.COM *.exe *.EXE'), ('All files', '*')])
+        if path:
+            return LispMachine._launch_pil_tool(self, 'dos_terminal.py', path)
+        return False
+
+    def run_asm_buffer(self, tab=None):
+        """Assemble an x86 buffer with NASM and run it in PIL (DOS .COM, or ; pil: monitor)."""
+        tab = tab or self.current_tab()
+        if tab is None:
+            return False
+        source = tab.get_content()
+        origin = buffer_source_path(tab)
+        cwd = os.path.dirname(os.path.abspath(origin)) if origin else os.getcwd()
+        try:
+            options = PE.run_options(source)
+            program = PE.assemble(source, cwd=cwd, name=getattr(tab, 'path', None) or tab.name)
+            command = PE.launch_command(program, options)
+            subprocess.Popen(command, cwd=str(Path(command[1]).parent.parent))
+        except (PE.PilError, OSError) as error:
+            self.listener_write(f';; {error}\n', 'error')
+            line = PE.nasm_error_line(str(error))
+            if line is not None:
+                highlight = SyntaxError('NASM error')
+                highlight.lineno, highlight.offset, highlight.whole_line = line, 1, True
+                LispMachine._highlight_source_error(self, tab, highlight)
+            return False
+        where = 'the PIL debugger' if options['mode'] == 'monitor' else 'a PIL DOS window'
+        self.listener_write(f';; Assembled {program.name} ({program.stat().st_size} bytes); running it in {where}.\n', 'info')
+        return True
+
+    def _save_pil_settings(self):
+        PE.DIRECTORY = self.settings.get('pil_directory', '')
+        PE.ENGINE = self.settings.get('pil_engine', '')
+        PE.NASM = self.settings.get('pil_nasm', '')
+        save_settings(self.settings)
+
+    def _pil_engine_status(self):
+        try:
+            return 'Engine: '+str(PE.find_engine())
+        except PE.PilError as error:
+            return str(error)
+
+    def _open_pil_settings(self):
+        if self.pil_settings_window is not None and self.pil_settings_window.winfo_exists():
+            self.pil_settings_window.lift()
+            return
+        window = self.pil_settings_window = tk.Toplevel(self)
+        window.title('PIL Settings')
+        window.transient(self)
+        frame = ttk.Frame(window, padding=16)
+        frame.pack(fill='both', expand=True)
+        ttk.Label(frame, text='PIL x86 engine: a checkout of pyTony/PIL-Processor-Instruction-Language (dev branch) '
+                  'built with cargo build --release.', wraplength=560).pack(anchor='w', pady=(0,12))
+        status = tk.StringVar(window, value=LispMachine._pil_engine_status(self))
+        for label, key, ask in (('PIL folder', 'pil_directory', 'folder'),
+                                ('Engine (optional)', 'pil_engine', 'file'),
+                                ('NASM (optional)', 'pil_nasm', 'file')):
+            row = ttk.Frame(frame)
+            row.pack(fill='x', pady=4)
+            ttk.Label(row, text=label, width=18).pack(side='left')
+            value = tk.StringVar(window, value=self.settings.get(key, '') or
+                                 (PE.default_directory() if key == 'pil_directory' else ''))
+            ttk.Entry(row, textvariable=value, state='readonly', width=55).pack(side='left', fill='x', expand=True)
+            def browse(key=key, value=value, ask=ask):
+                path = (filedialog.askdirectory(parent=window, title='PIL folder') if ask == 'folder' else
+                        filedialog.askopenfilename(parent=window, title='Select '+label))
+                if path:
+                    self.settings[key] = path
+                    value.set(path)
+                    LispMachine._save_pil_settings(self)
+                    status.set(LispMachine._pil_engine_status(self))
+            def clear(key=key, value=value):
+                self.settings.pop(key, None)
+                value.set('')
+                LispMachine._save_pil_settings(self)
+                status.set(LispMachine._pil_engine_status(self))
+            ttk.Button(row, text='Browse…', command=browse).pack(side='left', padx=(8,0))
+            ttk.Button(row, text='Clear', command=clear).pack(side='left', padx=(4,0))
+        ttk.Label(frame, textvariable=status, wraplength=560).pack(anchor='w', pady=(8,8))
+        ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
+
     def _choose_basic_directory(self):
         path = filedialog.askdirectory(title='Python mini_basic project directory',
             initialdir=self.settings.get('basic_directory') or BR.default_package_root() or APP_DIR)
@@ -3049,7 +3325,9 @@ class LispMachine(tk.Tk):
             self._run_silent('(load '+L.lisp_str(L.String(path))+' :silent)')
 
     def eval_buffer(self, terminal=None, basic=False, source=None, source_line=1,
-                    basic_backend='lispy', python_source=False, fresh=False, print_style=None, dialect=None):
+                    basic_backend='lispy', python_source=False, fresh=False, print_style=None, dialect=None,
+                    echo=None, after=None):
+        """after: Lisp source run once the buffer's forms are done (Run tests uses (run-tests))."""
         tab = self.current_tab()
         if not tab or self._busy():
             return
@@ -3058,6 +3336,12 @@ class LispMachine(tk.Tk):
             language = execution_language(tab)
             basic = language == 'BBC BASIC'
             python_source = language == 'Python'
+            if language == 'PIL':
+                self.listener_write(PIL_BUFFER_NOTE, 'info')
+                return
+            if language == 'x86 assembly':
+                self.run_asm_buffer(tab)
+                return
             if not basic and not python_source and language != 'Lisp':
                 self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
                 return
@@ -3088,7 +3372,7 @@ class LispMachine(tk.Tk):
                 self.listener_write(f'BASIC> {echo_text}\n', 'prompt')
             self._basic_feed(cmd_lines, source=source, source_line=source_line, print_style=print_style)
             return
-        echo = LispMachine._buffer_echo_mode(self)
+        echo = echo or LispMachine._buffer_echo_mode(self)
         if echo != 'off':
             self.listener_write(f";; --- evaluating {tab.name} ---\n", "info")
         closers = '' if basic else L.missing_closers(content)
@@ -3112,6 +3396,8 @@ class LispMachine(tk.Tk):
                     '(editor-basic:bbc-run '+L.lisp_str(L.String(content))+')')
             else:
                 forms = self._parse_top_level_forms(content, source_name=getattr(tab, 'path', None) or tab.name)
+                if after:
+                    forms += self._parse_top_level_forms(after)
         except Exception as e:                       # noqa: BLE001
             if isinstance(e, SyntaxError) and getattr(e, 'lineno', None) and hasattr(tab, 'text'):
                 LispMachine._editor_syntax_error(self, tab, e)
@@ -4106,7 +4392,17 @@ class LispMachine(tk.Tk):
             "\n\nThey are lost on restart. Restart anyway?"
         ):
             return
-        files = [t.path for t in self.tabs.values() if t.path]
+        # Record the open files (possibly none) first, so Reopen files at
+        # the next launch matches what is open now, not an older session.
+        try:
+            self._remember_open_files()
+        except Exception:   # never let a settings problem stop restarting
+            pass
+        files = []
+        for name in self.tab_order:
+            path = buffer_source_path(self.tabs[name]) if name in self.tabs else None
+            if path and path not in files:
+                files.append(path)
         if not self.startup_show_buffer.get():
             startup = os.path.normcase(os.path.abspath(STARTUP_FILE))
             files = [path for path in files if os.path.normcase(os.path.abspath(path)) != startup]
@@ -4180,9 +4476,12 @@ class LispMachine(tk.Tk):
             ):
                 return
         try:
-            self._remember_open_files()
-        except Exception:   # never let a settings problem stop quitting
-            pass
+            error = self._remember_open_files()
+        except Exception as problem:   # never let a settings problem stop quitting
+            error = f"Could not remember the open files: {problem}"
+        if error:
+            messagebox.showwarning("Open files not remembered",
+                                   f"{error}\n\nReopen files will not see this session.")
         from lispy_support.lispy_graphics import close_windows
         from lispy_support.lispy_graphics_bindings import set_dispatcher
         close_windows()
