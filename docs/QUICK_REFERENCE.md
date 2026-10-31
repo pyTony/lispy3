@@ -136,6 +136,15 @@ True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is 
 | `*standard-output*` / `*standard-input*` | where printing goes and where `read-line` reads from |
 | `(streamp x)` `(input-stream-p s)` `(output-stream-p s)` `(open-stream-p s)` | stream tests |
 | `(finish-output [s])` / `(force-output [s])` | send buffered output on now |
+| `(delay exp)` / `(force p)` | a promise worked out by the first `force` and kept; `force` gives anything else back as it is |
+| `(delay-force exp)` / `(make-promise x)` / `(promise? x)` | `(delay (force exp))` that can chain without running out of stack; a promise already holding `x`; test for a promise |
+| `(cons-stream a b)` | a lazy stream as in SICP: `b` is worked out only when `stream-cdr` asks for it |
+| `(stream-car s)` / `(stream-cdr s)` | first item / the rest of a stream |
+| `the-empty-stream` `(stream-null? s)` `(stream-pair? s)` | the empty stream, `()`, and tests |
+| `(stream-ref s n)` / `(stream-head s n)` / `(stream-tail s n)` | item `n`; the first `n` items as a list; the stream after them |
+| `(stream-map f s ...)` / `(stream-filter pred s)` | lazy streams of results / of the items `pred` is true for |
+| `(stream-for-each f s)` / `(stream->list s [n])` | for a finite stream, or its first `n` items |
+| `(stream 1 2 3)` / `(list->stream lst)` | a finite stream of the items |
 | `(run-program "sbcl" (list "--version") [input])` | run another program, feeding it the input text; prints what it prints, gives its exit code |
 | `lispy-home` | the folder `lispy3.py` is in |
 | `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |
