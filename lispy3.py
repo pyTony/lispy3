@@ -406,6 +406,23 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("memoize", "(memoize f) - f that remembers its results: a call with the same arguments again gives the saved value"),
         ("memoize-exact", "(memoize-exact f) - cache only calls with all-exact numeric arguments (integers/fractions); floats and other values bypass caching"),
     ],
+    "Lazy streams": [
+        ("delay", "(delay exp) - a promise: exp is worked out by the first force, and the value kept"),
+        ("force", "(force p) - the value of a promise; anything else is given back as it is"),
+        ("delay-force", "(delay-force exp) - like (delay (force exp)), but a long chain of them forces without running out of stack"),
+        ("make-promise", "(make-promise x) - a promise already holding x; (promise? x) tests for one"),
+        ("cons-stream", "(cons-stream a b) - a stream: a now, b only when stream-cdr asks for it, as in SICP"),
+        ("stream-car", "(stream-car s) - the first item of a stream"),
+        ("stream-cdr", "(stream-cdr s) - the rest of a stream, worked out once and kept"),
+        ("the-empty-stream", "the-empty-stream - the stream with no items, (); (stream-null? s) tests for it, (stream-pair? s) for a non-empty stream"),
+        ("stream-ref", "(stream-ref s n) - item n of a stream, counting from 0"),
+        ("stream-head", "(stream-head s n) - the first n items as a list; (stream-tail s n) is the stream after them"),
+        ("stream-map", "(stream-map f s ...) - a lazy stream of f applied to the items of the streams"),
+        ("stream-filter", "(stream-filter pred s) - a lazy stream of the items pred is true for"),
+        ("stream-for-each", "(stream-for-each f s) - call f on each item of a finite stream"),
+        ("stream->list", "(stream->list s [n]) - a finite stream, or its first n items, as a list"),
+        ("list->stream", "(list->stream lst) - a stream of the list's items; (stream 1 2 3) makes one directly"),
+    ],
     "Text streams": [
         ("with-open-file", "(with-open-file (s \"notes.txt\" :direction :output) body...) - run body with s open on the file, then close it, even after an error"),
         ("open", "(open \"notes.txt\" [:direction :input/:output/:io] [:if-exists :supersede/:append/:error/nil] [:if-does-not-exist :error/:create/nil] [:element-type '(unsigned-byte 8)]) - a text file stream; output replaces an existing file unless :if-exists says otherwise"),
@@ -453,7 +470,11 @@ for _alias, _name in {'#f': '#t', 'plus': '+', 'pprint': 'pretty-print', 'reset'
                       'exact->inexact': 'exact', 'inexact->exact': 'exact',
                       '*standard-input*': '*standard-output*', 'input-stream-p': 'streamp',
                       'output-stream-p': 'streamp', 'open-stream-p': 'streamp', 'force-output': 'finish-output',
-                      'get-output-stream-string': 'make-string-output-stream'}.items():
+                      'get-output-stream-string': 'make-string-output-stream',
+                      'promise?': 'make-promise', 'stream-null?': 'the-empty-stream',
+                      'stream-pair?': 'the-empty-stream', 'empty-stream?': 'the-empty-stream',
+                      'stream-nil': 'the-empty-stream', 'stream-tail': 'stream-head',
+                      'stream': 'list->stream'}.items():
     _HELP_INDEX[_alias] = _HELP_INDEX[_name]
 for _alias, _name in {**CL_ALIASES, 'progn': 'begin', 'setq': 'set!', 'defvar': 'define',
                       'defparameter': 'define', 'defconstant': 'define',
@@ -903,6 +924,119 @@ def call_with_input_string(text: Any, proc: Callable) -> Any:
 
 def _open_stream_p(stream: Any) -> bool:
     return _is_stream(stream) and not getattr(stream, 'closed', False)
+
+# --- Promises and lazy streams: Scheme's delay/force and SICP's cons-stream ---
+
+class Promise:
+    """(delay exp): exp is worked out by the first force, and the value kept.
+
+    The state lives in a shared box, as in R7RS, so a chain of delay-force
+    promises is forced in a loop without growing the Python stack."""
+    def __init__(self, thunk: Callable | None, value: Any = None, iterative: bool = False) -> None:
+        # box: [done, value or thunk, made by delay-force]
+        self.box = [thunk is None, value if thunk is None else thunk, iterative]
+
+    def __repr__(self) -> str:
+        return '#<promise>'
+
+def force(promise: Any) -> Any:
+    """(force p) - the value of a promise, worked out once; anything else is its own value."""
+    if not isinstance(promise, Promise):
+        return promise
+    while not promise.box[0]:
+        _done, thunk, iterative = promise.box
+        result = thunk()
+        if promise.box[0]:          # forced again from inside thunk: the value finished first stays
+            break
+        if iterative and isinstance(result, Promise):
+            promise.box[:] = result.box      # keep forcing the next promise in the chain
+            result.box = promise.box
+        else:
+            promise.box[:] = [True, result, False]
+    return promise.box[1]
+
+def make_promise(value: Any) -> Promise:
+    """(make-promise x) - a promise already holding x; a promise is given back as it is."""
+    return value if isinstance(value, Promise) else Promise(None, value)
+
+def _stream_check(stream: Any, who: str) -> Any:
+    if _stream_pair_p(stream):
+        return stream
+    raise TypeError(f"{who}: {lisp_str(stream)} is not a stream made by cons-stream")
+
+def stream_car(stream: Any) -> Any:
+    """(stream-car s) - the first item of a stream."""
+    return _stream_check(stream, 'stream-car').items[0]
+
+def stream_cdr(stream: Any) -> Any:
+    """(stream-cdr s) - the rest of a stream, worked out now."""
+    return force(_stream_check(stream, 'stream-cdr').tail)
+
+def _stream_pair_p(x: Any) -> bool:
+    return isinstance(x, Pair) and len(x.items) == 1 and isinstance(x.tail, Promise)
+
+def _cons_stream(head: Any, rest: Callable) -> Pair:
+    """A stream of head and the stream rest() gives, when it is needed."""
+    return Pair([head], Promise(rest))
+
+def stream_ref(stream: Any, n: int) -> Any:
+    """(stream-ref s n) - item n of a stream, counting from 0."""
+    for _ in range(int(n)):
+        stream = stream_cdr(stream)
+    return stream_car(stream)
+
+def stream_tail(stream: Any, n: int) -> Any:
+    """(stream-tail s n) - the stream without its first n items."""
+    for _ in range(int(n)):
+        stream = stream_cdr(stream)
+    return stream
+
+def stream_head(stream: Any, n: int) -> list:
+    """(stream-head s n) - the first n items of a stream as a list."""
+    items = []
+    for _ in range(int(n)):
+        items.append(stream_car(stream))
+        stream = stream_cdr(stream)
+    return items
+
+def stream_to_list(stream: Any, n: Any = None) -> list:
+    """(stream->list s [n]) - the items of a finite stream, or the first n, as a list."""
+    items = []
+    while stream != [] and (n is None or len(items) < n):
+        items.append(stream_car(stream))
+        stream = stream_cdr(stream)
+    return items
+
+def list_to_stream(items: Any) -> Any:
+    """(list->stream lst) - a stream of the items of a list."""
+    stream: Any = []
+    for item in reversed(list(items)):
+        stream = Pair([item], make_promise(stream))
+    return stream
+
+def stream_map(proc: Callable, *streams: Any) -> Any:
+    """(stream-map f s ...) - a lazy stream of f applied to the items; ends with the shortest stream."""
+    if not streams or any(s == [] for s in streams):
+        return []
+    return _cons_stream(proc(*(stream_car(s) for s in streams)),
+                        lambda: stream_map(proc, *(stream_cdr(s) for s in streams)))
+
+def stream_filter(pred: Callable, stream: Any) -> Any:
+    """(stream-filter pred s) - a lazy stream of the items pred says true to."""
+    while stream != []:
+        item = stream_car(stream)
+        if is_true(pred(item)):
+            rest = stream
+            return _cons_stream(item, lambda: stream_filter(pred, stream_cdr(rest)))
+        stream = stream_cdr(stream)
+    return []
+
+def stream_for_each(proc: Callable, stream: Any) -> list:
+    """(stream-for-each f s) - call f on each item of a finite stream."""
+    while stream != []:
+        proc(stream_car(stream))
+        stream = stream_cdr(stream)
+    return []
 
 def memoize(proc: Callable, *, exact_arguments_only: bool = False) -> Callable:
     """(memoize f) - f with a cache of its results, as Python's functools.cache.
@@ -2040,6 +2174,24 @@ def standard_env() -> Env:
         'input-stream-p': lambda s: _is_stream(s) and s.readable(),
         'output-stream-p': lambda s: _is_stream(s) and s.writable(),
         'open-stream-p': _open_stream_p,
+        'force': force,
+        'make-promise': make_promise,
+        '%make-lazy-promise': lambda thunk, iterative: Promise(thunk, iterative=iterative),
+        'promise?': lambda x: isinstance(x, Promise),
+        'stream-car': stream_car,
+        'stream-cdr': stream_cdr,
+        'stream-pair?': _stream_pair_p,
+        'stream-null?': lambda x: type(x) is list and not x,
+        'empty-stream?': lambda x: type(x) is list and not x,
+        'stream-ref': stream_ref,
+        'stream-tail': stream_tail,
+        'stream-head': stream_head,
+        'stream->list': stream_to_list,
+        'list->stream': list_to_stream,
+        'stream': lambda *items: list_to_stream(items),
+        'stream-map': stream_map,
+        'stream-filter': stream_filter,
+        'stream-for-each': stream_for_each,
         'call-with-ansi-terminal': call_with_ansi_terminal,
         # Mutable vectors (Python lists) and a timer
         'make-vector': lambda n, fill=0: Vector([fill] * int(n)),
@@ -2084,6 +2236,8 @@ def standard_env() -> Env:
         env[key] = Procedure(parms=['*args'], body=None, env=env, native_fn=value, name=key)
     env['*standard-output*'] = STANDARD_OUTPUT
     env['*standard-input*'] = STANDARD_INPUT
+    env['the-empty-stream'] = []
+    env['stream-nil'] = []
 
     # Boolean and Lisp constants
     # Complex-aware sqrt / log, installed last so they win over the math ones.
@@ -2275,6 +2429,14 @@ def expand(x: Exp, toplevel: bool = False) -> Exp:
         if len(spec) != 1:
             raise SyntaxError('with-input-from-string needs one string: (with-input-from-string (s "text") body...)')
         return expand(['call-with-input-string', spec[0], proc], toplevel)
+    if head in ('delay', 'delay-force'):
+        if len(x) != 2:
+            raise SyntaxError(f"{head} needs one expression: ({head} exp)")
+        return expand(['%make-lazy-promise', ['lambda', [], x[1]], head == 'delay-force'], toplevel)
+    if head == 'cons-stream':
+        if len(x) != 3:
+            raise SyntaxError("cons-stream needs a first item and the rest: (cons-stream a b)")
+        return expand(['cons', x[1], ['delay', x[2]]], toplevel)
     if head == 'with-ansi-terminal':
         if len(x) < 2:
             raise SyntaxError("with-ansi-terminal needs a body")
@@ -3155,7 +3317,8 @@ def completion_candidates(env: 'Env' = None) -> set[str]:
     """Every name worth completing: special forms, global names and the :keywords used in global maps."""
     env = global_env if env is None else env
     names = (set(SPECIAL_FORMS) - {'_setf-call', '_loop', '_defun'}) | {'defun', 'incf', 'decf', 'setf', 'loop', 'exit', 'with-ansi-terminal',
-                                                                       'with-open-file', 'with-output-to-string', 'with-input-from-string'}   # defun is expanded away, so not in SPECIAL_FORMS
+                                                                       'with-open-file', 'with-output-to-string', 'with-input-from-string',
+                                                                       'delay', 'delay-force', 'cons-stream'}   # defun is expanded away, so not in SPECIAL_FORMS
     names.update(k for k in env if not k.startswith('_'))
     for value in list(env.values()):
         if isinstance(value, dict):
