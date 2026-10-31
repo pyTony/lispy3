@@ -4,6 +4,29 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- Unit tests. Lisp gets `deftest`, `check`, `check-equal`, `check-error`,
+  `run-tests`, `test-names` and `clear-tests`; each workspace keeps its own
+  tests. Lispy Machine: **Eval → Run tests in buffer (Ctrl+F6)** runs a Lisp
+  buffer silently in a fresh workspace and then `(run-tests)`, or runs a
+  Python buffer with `python -m unittest -v` in a separate process (Stop ends
+  it). **Eval → Run Python tests in buffer's folder** runs `unittest discover`.
+  See docs/UNIT_TESTS.md.
+
+- Lisp: promises and SICP lazy streams. `delay`, `force`, `delay-force`
+  (R7RS, forced in a loop so long chains don't run out of stack),
+  `make-promise` and `promise?`; `cons-stream`, `stream-car`, `stream-cdr`,
+  `the-empty-stream`, `stream-null?`, `stream-pair?`, `stream-ref`,
+  `stream-head`, `stream-tail`, `stream-map`, `stream-filter`,
+  `stream-for-each`, `stream->list`, `list->stream` and `stream`.
+
+- mini-basic: BBC BASIC error handling. `ON ERROR statements`,
+  `ON ERROR LOCAL`, `ON ERROR OFF`, `ERR`, `ERL`, `REPORT`, `REPORT$` and
+  `ERROR n, message$`. An error goes to the rest of the ON ERROR line and
+  carries on from there, as in BBCSDL; Lispy errors get BBC numbers and
+  messages (Division by zero 18, No such line 41 ...). The reference
+  `bbcsdl-jumps.bas` handler now runs and case 10 prints BBCSDL's
+  `ERROR 41 AT LINE 10020` / `No such line`.
+
 - mini-basic: BBC variable names follow BBCSDL's keyword rule. An uppercase
   name that starts with a keyword (`COUNT%`, `TOTAL`, `ORDER`) is a syntax
   error naming the keyword and suggesting a lowercase or mixed-case name;

@@ -154,13 +154,17 @@ MBASIC compatibility is tested against MBASIC 5.21 output.
 | Area | Implemented |
 |------|-------------|
 | Values | Numeric and string variables; `%` 32-bit, `%%` 64-bit, `&` byte, `#` float and `$` string suffixes; see [Numbers](#numbers) |
-| Output | PRINT (`?` at the start of a statement is short for PRINT), COUNT, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
-| Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings |
+| Output | PRINT (`?` at the start of a statement is short for PRINT), COUNT, POS, VPOS, SPC/TAB, CLS, COLOUR/COLOR, VDU text subset, raw ANSI, CHR$ |
+| Input | INPUT numbers, strings and array elements; INPUT LINE for complete strings; GET, GET$, INKEY, INKEY$ keys; see [Keys and other shared statements](#keys-and-other-shared-statements) |
+| Assignment | `=`, `+=`, `-=`, `*=`, `/=`; SWAP; `MID$(a$,p,n)=` overwrites part of a string; CLEAR |
+| Strings | LEFT$, RIGHT$ (one or two arguments), MID$, INSTR, LEN, STRING$, STR$, VAL, EVAL, UCASE$, LCASE$; `<` `>` `<=` `>=` compare strings |
 | Structure | IF/ELSE, FOR/NEXT, WHILE/ENDWHILE, REPEAT/UNTIL, CASE |
 | Calls | PROC/FN, parameters, LOCAL, early returns |
 | Jumps | Line numbers and `(label)` labels, GOTO, GOSUB/RETURN, ON GOTO/GOSUB and ELSE, calculated `GOTO (expression)`; implicit `IF condition THEN 100 ELSE 200`; see [Labels and jumps](#labels-and-jumps) |
 | Data | DATA/READ/RESTORE; DIM arrays with inclusive upper bounds |
+| Errors | ON ERROR, ON ERROR LOCAL, ON ERROR OFF, ERR, ERL, REPORT, REPORT$, ERROR n,message; see [Error handling](#error-handling) |
 | Timing | Assignable TIME in whole centiseconds |
+| Stop | END, STOP, QUIT |
 
 PROC/FN parameters and LOCAL variables restore their previous values on normal
 return, BASIC runtime errors and END, including nested calls. This cleanup is
@@ -199,9 +203,85 @@ Use structured exits where possible. Jumps into inactive structured bodies are
 outside the supported control-flow model. BBCSDL's shared-stack edge cases do
 not imply equivalent behavior here.
 
+### Error handling
+
+```basic
+10 ON ERROR PRINT "ERROR ";ERR;" AT LINE ";ERL:REPORT:PRINT:END
+20 PRINT 1/0
+```
+
+prints `ERROR 18 AT LINE 20` and then `Division by zero`. As in BBC BASIC for
+SDL, an error goes to the statements after `ON ERROR` on that line, and the
+program then carries on into the following lines unless they jump or `END`.
+So `ON ERROR GOTO 1000` works, and a handler that neither jumps nor ends runs
+the failing line again. Running a program clears the previous handler.
+
+| Form | Meaning |
+|------|---------|
+| `ON ERROR statements` | Trap later errors with the rest of the line |
+| `ON ERROR LOCAL statements` | The same; inside a PROC or FN the previous handler returns when it returns |
+| `ON ERROR OFF` | Errors stop the program again |
+| `ERR` | BBC error number of the last trapped error |
+| `ERL` | Numbered line where it happened; 0 in a program without line numbers |
+| `REPORT$`, `REPORT` | Its message; REPORT prints it |
+| `ERROR n, message$` | Raise error n with your own message |
+
+Lispy errors get BBC numbers and messages: Division by zero (18), Subscript
+out of range (15), Too big (20), Log range (22), No such variable (26),
+No such FN/PROC (29), No GOSUB (38), ON range (40), No such line (41),
+Out of DATA (42) and Type mismatch (6). Any other error has ERR 0 and Lispy's
+own message. Stop in Lispy Machine is never trapped.
+
+An error goes to the handler in the body that set it while that body is
+running: the program, or the PROC, FN or loop body holding the `ON ERROR`.
+When that body has already finished (an `ON ERROR` in a set-up PROC that has
+returned), the handler's statements run on their own and the program ends
+after them, instead of continuing at BBCSDL's text position. PROC/FN
+parameters and LOCAL variables are restored on the way out, as for any
+error (the Lispy guarantee above). `LOCAL ERROR`/`RESTORE ERROR`,
+`ERROR EXT` and trapping Escape are not supported. ERL tracking is compiled
+only into programs that use ERL.
+
 Graphics, file I/O and general BBCSDL compatibility remain outside the
 current implemented subset. SBCL/Clojure comparison backends have a smaller
 feature set; lispy3 support does not establish backend parity.
+
+## Keys and other shared statements
+
+These work in both the BBC and the MBASIC style (`lisp/mini-basic-more.lisp`):
+
+```basic
+SWAP a, b : SWAP name$(i), name$(j)
+a$ = "hello" : MID$(a$, 2, 3) = "ELP"     : REM a$ is now hELPo
+total *= 2 : share /= people
+PRINT STRING$(3, "ab"), EVAL("2*PI"), LEFT$("abc"), RIGHT$("abc")
+IF name$ < "M" THEN PRINT "first half"
+k = GET : k$ = GET$ : k = INKEY(50) : k$ = INKEY$(0)
+PRINT POS, VPOS
+CLEAR : QUIT
+```
+
+`MID$(a$, p, n) = b$` never changes the length of `a$`. `EVAL` reads its text
+as an expression when it runs; the result counts as a number for `+` and
+comparisons, so assign a string result straight to a `$` variable. `CLEAR` sets
+every variable of the program back to 0 or `""` and forgets its arrays until
+they are given a DIM again. `QUIT` stops the
+program like `END`.
+
+`GET` and `INKEY` read keys typed into an open MODE window; the arrows give
+136-139 and Home, End, Page Up, Page Down, Insert and Delete 130-135, as in
+BBC BASIC for SDL. Escape still closes the window. Without a window the
+console has no single keys, so `GET` waits for a typed line and then gives its
+characters one at a time, ending with 13 for Return. `INKEY(n)` waits up to n
+centiseconds for a key and gives -1 when none came; without a window it only
+sees characters left over from a line `GET` read. `INKEY$` is the same as a
+string, `""` for none. `INKEY` with a negative number, which scans one key in
+BBC BASIC, gives 0 (FALSE): keys are not scanned.
+
+In the MBASIC style, a BBC keyword that the program assigns to, such as
+`COUNT = 0` or `PI = 3.14159`, is an ordinary variable everywhere in that
+program, as in MBASIC, which has no `COUNT` or `PI`. A program that only reads
+`PI` still gets the constant. The BBC style keeps rejecting these names.
 
 ## Console input
 

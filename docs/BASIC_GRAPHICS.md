@@ -47,6 +47,7 @@ Only opening a window requires pygame, for example `python -m pip install pygame
 | ORIGIN x,y | Set coordinate offset, preserving the existing physical cursor |
 | CLG | Clear graphics to the selected background |
 | PLOT 85,x,y | Fill the triangle made by the last two points visited and x,y |
+| PLOT 165,x,y / PLOT 181,x,y | Arc / filled sector: the point before last is the centre, the last point starts it, anticlockwise to the direction of x,y. 160–167 and 176–183 take the usual relative (+0–3) and background colour (+3, +7) forms; inverting (+2, +6) is not supported |
 | CIRCLE [FILL] x,y,r | Circle outline or disc around x,y, radius r units |
 | RECTANGLE [FILL] x,y,w[,h] | Rectangle from corner x,y, w wide and h (default w) high |
 | CLS | In a graphics mode also clears the window to the COLOUR 128+n background |

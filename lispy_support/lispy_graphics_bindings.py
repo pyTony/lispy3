@@ -1,15 +1,26 @@
 """Register optional Lisp graphics primitives without importing Pygame until open()."""
 from __future__ import annotations
 
+import math
+import time
+
 from lispy_support.graphics_modes import MODES, GraphicsMode
 from lispy_support.lispy_graphics import Graphics
 
 _dispatcher = None
 
+# *REFRESH shows at most this many frames a second, as Python mini_basic does
+FRAME_RATE = 60
+
 def set_dispatcher(dispatcher):
     """GUI host supplies its owner-thread call function, including library envs."""
     global _dispatcher
     _dispatcher = dispatcher
+
+
+def _present_if_open(g):
+    if g.window_open:
+        g.present()
 
 
 # Only these talk to SDL; drawing just writes the framebuffer, so it runs on the
@@ -180,6 +191,21 @@ def install(env, Procedure, String):
         gfx().present()
         return []
 
+    def key():
+        """The next key typed into the window: its code, -1 for none yet, -2 with no window."""
+        g = current["graphics"]
+        if g is not None and current["basic"] and g.closed_by_user:
+            raise RuntimeError("bbc:end")
+        if g is None or not g.window_open:
+            return -2
+        if _dispatcher is None and not g.keys:
+            # No host poller in the CLI: read the window's events here
+            now = time.monotonic()
+            if now - g._last_present >= 1/60:
+                g._last_present = now
+                g.present()
+        return g.keys.popleft() if g.keys else -1
+
     def close():
         if current["graphics"] is not None:
             current["graphics"].close()
@@ -226,7 +252,39 @@ def install(env, Procedure, String):
             visit(x, y)
             shown(g)
             return []
-        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW), 69 (point) or 85 (triangle)")
+        if 160 <= code <= 167 or 176 <= code <= 183:
+            return arc_or_sector(code, x, y)
+        raise ValueError(f"unsupported PLOT {code}; choose 4 (MOVE), 5 (DRAW), 69 (point), "
+                         "85 (triangle), 160-167 (arc) or 176-183 (sector)")
+
+    def arc_or_sector(code, x, y):
+        """PLOT 160-167 arc, 176-183 sector: the point before last is the centre,
+        the last point starts the arc (and sets the radius), anticlockwise to the
+        direction of x,y. The low 3 bits are BBC's usual relative/colour choice."""
+        g = gfx()
+        action = code & 7
+        if action in (2, 6):
+            raise NotImplementedError(f"PLOT {code}: inverting colours is not supported")
+        if action < 4:
+            x, y = current["pen"][0] + int(x), current["pen"][1] + int(y)
+        if action not in (0, 4):
+            (cx, cy), (sx, sy) = current["previous"], current["pen"]
+            radius = math.hypot(sx - cx, sy - cy)
+            start = math.atan2(sy - cy, sx - cx)
+            sweep = (math.atan2(y - cy, x - cx) - start) % (2 * math.pi) or 2 * math.pi
+            steps = max(4, math.ceil(sweep * radius * g.width / g.mode.virtual_width / 2))
+            arc = [g.virtual_to_pixel_centre(cx + radius * math.cos(start + sweep * i / steps),
+                                             cy + radius * math.sin(start + sweep * i / steps))
+                   for i in range(steps + 1)]
+            colour = palette_color(current["background" if action in (3, 7) else "colour"])
+            if code >= 176:
+                g.fill_polygon([g.virtual_to_pixel_centre(cx, cy)] + arc, colour)
+            else:
+                for (x0, y0), (x1, y1) in zip(arc, arc[1:]):
+                    g.line(math.floor(x0), math.floor(y0), math.floor(x1), math.floor(y1), colour)
+            shown(g)
+        visit(x, y)
+        return []
 
     def fill_rect(x0, y0, x1, y1, r=255, g=255, b=255):
         gfx().fill_rect(x0, y0, x1, y1, rgb(r, g, b))
@@ -305,9 +363,26 @@ def install(env, Procedure, String):
             g.set_auto_refresh(args[0] is not False and args[0] != [])
         else:
             g.refresh()
-            if _dispatcher is None and g.window_open:
-                g.present()
+            if g.window_open:
+                # Show this frame now, on the window's own thread in the Machine;
+                # waiting for its poll timer showed frames late and in bursts
+                if _dispatcher is None:
+                    g.present()
+                else:
+                    _dispatcher(_present_if_open, g)
+            pace_frame()
         return []
+
+    def pace_frame():
+        """Wait until 1/FRAME_RATE s since the last *REFRESH, so frames come evenly."""
+        now = time.perf_counter()
+        last = current.get("last_refresh")
+        if last is not None:
+            remaining = 1 / FRAME_RATE - (now - last)
+            if 0 < remaining:
+                time.sleep(remaining)
+                now = time.perf_counter()
+        current["last_refresh"] = now
 
     primitives = {
         "graphics-mode": select,
@@ -340,6 +415,7 @@ def install(env, Procedure, String):
         "graphics-virtual-rectangle": v_rect,
         "graphics-cls": cls,
         "graphics-refresh": refresh,
+        "graphics-key": key,
         "graphics-palette": set_palette,
     }
     for name, func in primitives.items():

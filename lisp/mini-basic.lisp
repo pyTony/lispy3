@@ -112,15 +112,20 @@
 ;; zones, TAB and PRINT's right-justified numbers, and the value of COUNT.
 ;; Unicode text counts characters, where BBCSDL in UTF-8 mode counts bytes.
 (define bbc-col 0)
+(define bbc-row 0)                 ; the text row, for VPOS
 (define bbc-zone-width 10)
 (define bbc-blank "")
 ;; Where PRINT writes: #t for the screen, or a file's text stream (PRINT #n)
 (define bbc-out #t)
+;; Screen text wraps here, like BBCSDL's 80-column window, so PRINT's
+;; 10-character fields stay whole whatever width the Listener or terminal has.
+(define bbc-screen-width 80)
 
 (define (bbc-write-visible text)
   (format bbc-out "~a" text)
   (let [s (str text)
         nl (s/rfind "\n")]
+    (if (eq? bbc-out #t) (set! bbc-row (+ bbc-row (s/count "\n"))))
     (if (< nl 0)
         (set! bbc-col (+ bbc-col (length s)))
         (set! bbc-col (- (length s) nl 1)))))
@@ -140,14 +145,18 @@
       (let [code (bbc-character-code character)]
         (if (or (not (null? bbc-vdu-pending)) (< code 32) (= code 127))
             (bbc-vdu (list code))
-            (bbc-write-visible (str character)))))
+            (begin
+              (if (>= bbc-col bbc-screen-width) (bbc-newline))
+              (bbc-write-visible (str character))))))
     (seq (str text)))))
 
 (define (bbc-newline)
   ;; A normal logical CR/LF is represented by stdout's native newline. If a
   ;; parameter is pending, both bytes must pass through the decoder instead.
   (if (or (null? bbc-vdu-pending) (not (eq? bbc-out #t)))
-      (begin (format bbc-out "~%") (set! bbc-col 0))
+      (begin (format bbc-out "~%")
+             (if (eq? bbc-out #t) (set! bbc-row (+ bbc-row 1)))
+             (set! bbc-col 0))
       (bbc-vdu (list 13 10))))
 
 (define (bbc-spaces n)
@@ -155,6 +164,9 @@
 
 (define (bbc-zone)
   (bbc-spaces (mod (- bbc-zone-width (mod bbc-col bbc-zone-width)) bbc-zone-width)))
+
+(define (bbc-end-comma)
+  (if (not (eq? bbc-number-print-style :mbasic)) (bbc-newline)))
 
 (define (bbc-tab n)
   (if (> bbc-col n) (bbc-newline))
@@ -171,7 +183,8 @@
   (bbc-ansi "2J")
   (bbc-ansi "H")
   (graphics-cls bbc-text-background)
-  (set! bbc-col 0))
+  (set! bbc-col 0)
+  (set! bbc-row 0))
 
 (define (bbc-wait & time)
   ;; WAIT n pauses n centiseconds
@@ -206,7 +219,8 @@
     (if (or (< column 0) (< row 0))
         (error "TAB: coordinates must be non-negative"))
     (bbc-ansi (str (+ row 1) ";" (+ column 1) "H"))
-    (set! bbc-col column)))
+    (set! bbc-col column)
+    (set! bbc-row row)))
 
 (define bbc-vdu-pending '())
 
@@ -378,7 +392,9 @@
   `(set! ,var ,(bbc-typed-value var exp)))
 
 (define (bbc-print-code items justify)
-  ;; :semi stops right-justifying numbers, :comma starts it again
+  ;; :semi stops right-justifying numbers, :comma starts it again.
+  ;; A final :semi keeps the line open. A final :comma does too in MBASIC,
+  ;; but BBC BASIC still ends PRINT I%, with a newline.
   (if (null? items)
       (list '(bbc-newline))
       (let [item (car items)
@@ -386,7 +402,7 @@
         (cond ((eq? item :semi)
                (if (null? more) '() (bbc-print-code more #f)))
               ((eq? item :comma)
-               (cons '(bbc-zone) (if (null? more) '() (bbc-print-code more #t))))
+               (cons '(bbc-zone) (if (null? more) '((bbc-end-comma)) (bbc-print-code more #t))))
               ((eq? item :nl)
                (cons '(bbc-newline) (bbc-print-code more justify)))
               ((and (pair? item) (list? item) (eq? (car item) 'TAB))
@@ -581,6 +597,9 @@
 (define (bbc-not a) (let [x (trunc a)] (x/__invert__)))
 
 (define (bbc-sgn x) (cond ((> x 0) 1) ((< x 0) -1) (else 0)))
+;; Not math's radians/degrees: turtle's zero-argument ones replace them once graphics load
+(define (bbc-rad x) (* x (/ pi 180)))
+(define (bbc-deg x) (* x (/ 180 pi)))
 
 (define (bbc-val s)
   (let [n (string->number s)] (if n n 0)))
@@ -601,10 +620,14 @@
   (if (not (string? s)) (error "LCASE$: expected a string"))
   (downcase s))
 
-(define (bbc-left s n) (substring s 0 (max 0 (min (trunc n) (length s)))))
+;; BBC's LEFT$(s$) is all but the last character and RIGHT$(s$) the last one
+(define (bbc-left s & n)
+  (let [k (if (null? n) (- (length s) 1) (trunc (car n)))]
+    (substring s 0 (max 0 (min k (length s))))))
 
-(define (bbc-right s n)
-  (let [l (length s)] (substring s (max 0 (- l (trunc n))) l)))
+(define (bbc-right s & n)
+  (let [l (length s) k (if (null? n) 1 (trunc (car n)))]
+    (substring s (max 0 (- l (max 0 (min k l)))) l)))
 
 (define (bbc-mid s p & n)
   (let [l (length s)
@@ -633,7 +656,7 @@
     "ACS" "ASN" "RAD" "DEG"))
 
 (define bbc-hex-digits "0123456789ABCDEFabcdef")
-(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "<<" ">>"))
+(define bbc-two-char-ops '("<=" ">=" "<>" "+=" "-=" "*=" "/=" "<<" ">>"))
 (define bbc-one-char-ops "+-*/^(),;'=<>~#.")
 
 (define (bbc-name-char? c) (or (c/isalnum) (eq? c #\_)))
@@ -697,6 +720,15 @@
                     (word/rstrip "(") ", so BBC BASIC does not read it as a variable;"
                     " use a lowercase or mixed-case name such as "
                     (downcase name) " or " (name/capitalize))))))
+
+;; A name made of a supported keyword run straight into another keyword,
+;; as BBCSDL reads it: the first keyword, else #f. TOTAL stays a name for
+;; bbc-check-variable-name to reject, since TAL is no keyword.
+(define (bbc-keyword-run-on text start name)
+  (let [word (bbc-sdl-keyword-at text start)]
+    (and word (member word bbc-keywords) (< (length word) (length name))
+         (bbc-sdl-keyword-at text (+ start (length word)))
+         word)))
 
 (define (bbc-tokenize text)
   (let [toks (list)
@@ -793,6 +825,12 @@
                       (emit-name :proc (substring name 4) raw))
                      ((and (> (length name) 2) (equal? (substring name 0 2) "FN"))
                       (emit-name :fn (substring name 2) raw))
+                     ((and (not (or in-data (eq? bbc-number-print-style :mbasic)))
+                           (bbc-keyword-run-on text i name))
+                      ;; SINRAD is SIN RAD and CIRCLEFILL is CIRCLE FILL
+                      (let [word (bbc-keyword-run-on text i name)]
+                        (emit-name :kw word word)
+                        (set! j (+ i (length word)))))
                      (else
                       ;; MBASIC names and unquoted DATA words are not BBC variables
                       (if (not (or in-data (eq? bbc-number-print-style :mbasic)))
@@ -929,8 +967,18 @@
   (let [x (bbc-value a) y (bbc-value b)]
     (bbc-e (cond ((equal? op "=") (list '= x y))
                  ((equal? op "<>") (list 'not (list '= x y)))
+                 ((or (eq? (bbc-type a) :str) (eq? (bbc-type b) :str))
+                  (list 'bbc-string-compare op x y))
                  (else (list (string->symbol op) x y)))
            :bool)))
+
+;; "APPLE" < "BANANA": strings compare character by character, as in BBC BASIC
+(define (bbc-string-compare op a b)
+  (let [s (format nil "~a" a) t (format nil "~a" b)]
+    (cond ((equal? op "<") (s/__lt__ t))
+          ((equal? op ">") (s/__gt__ t))
+          ((equal? op "<=") (s/__le__ t))
+          (else (s/__ge__ t)))))
 
 (define (bbc-p-compare)
   ;; The shifts << >> >>> bind like comparisons, as in BBC BASIC for SDL
@@ -989,12 +1037,12 @@
 (define bbc-functions
   '(("ABS" abs 1 1 :num) ("INT" floor 1 1 :num) ("SQR" sqrt 1 1 :num)
     ("SIN" sin 1 1 :num) ("COS" cos 1 1 :num) ("TAN" tan 1 1 :num) ("ATN" atan 1 1 :num)
-    ("ACS" acos 1 1 :num) ("ASN" asin 1 1 :num) ("RAD" radians 1 1 :num) ("DEG" degrees 1 1 :num)
+    ("ACS" acos 1 1 :num) ("ASN" asin 1 1 :num) ("RAD" bbc-rad 1 1 :num) ("DEG" bbc-deg 1 1 :num)
     ("LN" log 1 1 :num) ("LOG" log10 1 1 :num) ("EXP" exp 1 1 :num) ("SGN" bbc-sgn 1 1 :num)
     ("LEN" length 1 1 :num) ("VAL" bbc-val 1 1 :num) ("ASC" bbc-asc 1 1 :num)
     ("STR$" bbc-str 1 1 :str) ("CHR$" bbc-chr 1 1 :str)
     ("UCASE$" bbc-ucase 1 1 :str) ("LCASE$" bbc-lcase 1 1 :str)
-    ("LEFT$" bbc-left 2 2 :str) ("RIGHT$" bbc-right 2 2 :str) ("MID$" bbc-mid 2 3 :str)
+    ("LEFT$" bbc-left 1 2 :str) ("RIGHT$" bbc-right 1 2 :str) ("MID$" bbc-mid 2 3 :str)
     ("INSTR" bbc-instr 2 3 :num)))
 
 (define (bbc-lookup name table)
@@ -1417,3 +1465,5 @@
 (load "mini-basic-ext")
 (load "mini-basic-io")
 (load "mini-basic-num")
+(load "mini-basic-error")
+(load "mini-basic-more")
