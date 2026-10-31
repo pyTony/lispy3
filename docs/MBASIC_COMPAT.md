@@ -61,10 +61,13 @@ into a name, is rejected. Such a program stays an expected failure with that
 reason; it is not "fixed" to match MBASIC.
 
 Results on 2026-10-25 (39 programs), and Lispy again on 2026-10-31 after
-SWAP, `MID$` assignment, string comparison and INKEY$ were added:
+SWAP, `MID$` assignment, string comparison and INKEY$ were added, and after
+`\`, XOR/EQV/IMP, FIX/CINT, HEX$/OCT$, SPACE$, RANDOMIZE and `DEF FN NAME`
+(the second 2026-10-31 row):
 
 | Runner | Pass | Spacing only | Fail |
 | --- | --- | --- | --- |
+| Lispy MBASIC print style (2026-10-31, MBASIC operators) | 19 | 2 | 18 |
 | Lispy MBASIC print style (2026-10-31) | 10 | 2 | 27 |
 | Lispy MBASIC print style | 5 | 2 | 32 |
 | Python mini_basic `--dialect mits` | 25 | 1 | 13 |
