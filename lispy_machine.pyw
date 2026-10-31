@@ -75,6 +75,7 @@ from lispy_support import guide
 from lispy_support import syntax_highlight as SH
 from lispy_support import editor_tools as ET
 from lispy_support import basic_runner as BR
+from lispy_support import pil_engine as PE
 
 
 # =============================================================================
@@ -134,6 +135,10 @@ SYNTAX_TAGS = sorted({tag for lang in LANGUAGES for tag in lang.colors})
 BUILTIN_NAMES = frozenset(list(L.standard_env()) + ['load', 'save'])
 # The name being typed at the end of a line, for completion (":name" keywords included)
 SYMBOL_TAIL = re.compile(r"[\w\-+*/<>=!?:.]+$")
+
+# .pil files describe single x86 instructions; the Rust engine embeds its own copies.
+PIL_BUFFER_NOTE = (';; PIL descriptions run inside the PIL engine, which has them built in. '
+                   'Use Eval > PIL x86 engine, or (pil "demo hello") and (pil-run 1000) in Lisp.\n')
 
 # Remembers the View > Listener mode > Lisp REPL choice between runs
 SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".lispy3_machine.json")
@@ -1526,6 +1531,10 @@ class LispMachine(tk.Tk):
         self._output_mode = self.basic_output.get()
         self.basic_pygame = tk.BooleanVar(self, value=bool(self.settings.get('basic_pygame', False)))
         self.basic_settings_window = None
+        self.pil_settings_window = None
+        PE.DIRECTORY = self.settings.get('pil_directory', '')
+        PE.ENGINE = self.settings.get('pil_engine', '')
+        PE.NASM = self.settings.get('pil_nasm', '')
         if plain_repl is None:
             plain_repl = bool(self.settings.get("plain_repl", False)) and not self.settings.get('lispy_support.basic_repl', False)
         self.plain_repl = tk.BooleanVar(self, value=plain_repl)
@@ -1806,6 +1815,12 @@ class LispMachine(tk.Tk):
             dialect_m.add_command(label=label, command=lambda options=options: self.eval_basic_buffer_as(**options))
         eval_m.add_cascade(label="Run BASIC buffer as", menu=dialect_m)
         eval_m.add_command(label='BASIC Settings…', command=self._open_basic_settings)
+        pil_m = tk.Menu(eval_m, tearoff=0)
+        pil_m.add_command(label='Open PIL debugger', command=self.open_pil_debugger)
+        pil_m.add_command(label='Run DOS program in PIL…', command=self.run_pil_dos_program)
+        pil_m.add_command(label='Assemble and run x86 buffer', command=self.run_asm_buffer)
+        pil_m.add_command(label='PIL Settings…', command=self._open_pil_settings)
+        eval_m.add_cascade(label='PIL x86 engine', menu=pil_m)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
         eval_m.add_separator()
         eval_m.add_command(label="Eval listener input", accelerator="F9",     command=self._listener_submit)
@@ -2657,6 +2672,12 @@ class LispMachine(tk.Tk):
             line = int(str(selection[0]).split('.')[0]) if selection else int(text.index('insert').split('.')[0])
             self.eval_buffer(python_source=True, source=source, source_line=line)
             return
+        if language == 'PIL':
+            self.listener_write(PIL_BUFFER_NOTE, 'info')
+            return
+        if language == 'x86 assembly':
+            self.run_asm_buffer(tab)
+            return
         if language != 'Lisp':
             self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
             return
@@ -2932,6 +2953,104 @@ class LispMachine(tk.Tk):
         ttk.Label(frame, textvariable=status).pack(anchor='w', pady=(0,8))
         ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
 
+    def _launch_pil_tool(self, tool, *args):
+        """Start one of PIL's own Tk frontends (tools/*.py) with the configured engine."""
+        try:
+            engine, script = PE.find_engine(), PE.find_tool(tool)
+            subprocess.Popen([sys.executable, str(script), '--engine', str(engine), *map(str, args)],
+                             cwd=str(script.parent.parent))
+        except (PE.PilError, OSError) as error:
+            messagebox.showerror('PIL', str(error))
+            return False
+        self.listener_write(f';; Started PIL {tool} with {engine}.\n', 'info')
+        return True
+
+    def open_pil_debugger(self):
+        return LispMachine._launch_pil_tool(self, 'pil_debugger.py')
+
+    def run_pil_dos_program(self):
+        path = filedialog.askopenfilename(title='DOS program to run in PIL',
+            filetypes=[('DOS programs', '*.com *.COM *.exe *.EXE'), ('All files', '*')])
+        if path:
+            return LispMachine._launch_pil_tool(self, 'dos_terminal.py', path)
+        return False
+
+    def run_asm_buffer(self, tab=None):
+        """Assemble an x86 buffer with NASM and run it in PIL (DOS .COM, or ; pil: monitor)."""
+        tab = tab or self.current_tab()
+        if tab is None:
+            return False
+        source = tab.get_content()
+        origin = buffer_source_path(tab)
+        cwd = os.path.dirname(os.path.abspath(origin)) if origin else os.getcwd()
+        try:
+            options = PE.run_options(source)
+            program = PE.assemble(source, cwd=cwd, name=getattr(tab, 'path', None) or tab.name)
+            command = PE.launch_command(program, options)
+            subprocess.Popen(command, cwd=str(Path(command[1]).parent.parent))
+        except (PE.PilError, OSError) as error:
+            self.listener_write(f';; {error}\n', 'error')
+            line = PE.nasm_error_line(str(error))
+            if line is not None:
+                highlight = SyntaxError('NASM error')
+                highlight.lineno, highlight.offset, highlight.whole_line = line, 1, True
+                LispMachine._highlight_source_error(self, tab, highlight)
+            return False
+        where = 'the PIL debugger' if options['mode'] == 'monitor' else 'a PIL DOS window'
+        self.listener_write(f';; Assembled {program.name} ({program.stat().st_size} bytes); running it in {where}.\n', 'info')
+        return True
+
+    def _save_pil_settings(self):
+        PE.DIRECTORY = self.settings.get('pil_directory', '')
+        PE.ENGINE = self.settings.get('pil_engine', '')
+        PE.NASM = self.settings.get('pil_nasm', '')
+        save_settings(self.settings)
+
+    def _pil_engine_status(self):
+        try:
+            return 'Engine: '+str(PE.find_engine())
+        except PE.PilError as error:
+            return str(error)
+
+    def _open_pil_settings(self):
+        if self.pil_settings_window is not None and self.pil_settings_window.winfo_exists():
+            self.pil_settings_window.lift()
+            return
+        window = self.pil_settings_window = tk.Toplevel(self)
+        window.title('PIL Settings')
+        window.transient(self)
+        frame = ttk.Frame(window, padding=16)
+        frame.pack(fill='both', expand=True)
+        ttk.Label(frame, text='PIL x86 engine: a checkout of pyTony/PIL-Processor-Instruction-Language (dev branch) '
+                  'built with cargo build --release.', wraplength=560).pack(anchor='w', pady=(0,12))
+        status = tk.StringVar(window, value=LispMachine._pil_engine_status(self))
+        for label, key, ask in (('PIL folder', 'pil_directory', 'folder'),
+                                ('Engine (optional)', 'pil_engine', 'file'),
+                                ('NASM (optional)', 'pil_nasm', 'file')):
+            row = ttk.Frame(frame)
+            row.pack(fill='x', pady=4)
+            ttk.Label(row, text=label, width=18).pack(side='left')
+            value = tk.StringVar(window, value=self.settings.get(key, '') or
+                                 (PE.default_directory() if key == 'pil_directory' else ''))
+            ttk.Entry(row, textvariable=value, state='readonly', width=55).pack(side='left', fill='x', expand=True)
+            def browse(key=key, value=value, ask=ask):
+                path = (filedialog.askdirectory(parent=window, title='PIL folder') if ask == 'folder' else
+                        filedialog.askopenfilename(parent=window, title='Select '+label))
+                if path:
+                    self.settings[key] = path
+                    value.set(path)
+                    LispMachine._save_pil_settings(self)
+                    status.set(LispMachine._pil_engine_status(self))
+            def clear(key=key, value=value):
+                self.settings.pop(key, None)
+                value.set('')
+                LispMachine._save_pil_settings(self)
+                status.set(LispMachine._pil_engine_status(self))
+            ttk.Button(row, text='Browse…', command=browse).pack(side='left', padx=(8,0))
+            ttk.Button(row, text='Clear', command=clear).pack(side='left', padx=(4,0))
+        ttk.Label(frame, textvariable=status, wraplength=560).pack(anchor='w', pady=(8,8))
+        ttk.Button(frame, text='Close', command=window.destroy).pack(anchor='e')
+
     def _choose_basic_directory(self):
         path = filedialog.askdirectory(title='Python mini_basic project directory',
             initialdir=self.settings.get('basic_directory') or BR.default_package_root() or APP_DIR)
@@ -3075,6 +3194,12 @@ class LispMachine(tk.Tk):
             language = execution_language(tab)
             basic = language == 'BBC BASIC'
             python_source = language == 'Python'
+            if language == 'PIL':
+                self.listener_write(PIL_BUFFER_NOTE, 'info')
+                return
+            if language == 'x86 assembly':
+                self.run_asm_buffer(tab)
+                return
             if not basic and not python_source and language != 'Lisp':
                 self.listener_write(';; Select a Lisp, BBC BASIC or Python language for execution.\n', 'info')
                 return

@@ -450,6 +450,13 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("onscroll", "(onscroll f) - call (f x y step) on each mouse wheel turn; step 1 is up; (onscroll #f) stops"),
         ("reinit-turtle", "(reinit-turtle) - reopen a closed turtle window; also reset"),
     ],
+    "PIL x86 engine": [
+        ("pil", "(pil \"command\") - send one PIL debugger command, e.g. (pil \"demo hello\"); prints guest output, returns the reply text"),
+        ("pil-run", "(pil-run [steps]) - run up to steps instructions (default 1000); returns the stop status, e.g. halt"),
+        ("pil-state", "(pil-state) - registers, eip, flags, status and demo as a map: (get (pil-state) 'eax)"),
+        ("pil-start", "(pil-start [\"raw.bin\"]) - start a fresh PIL engine, optionally with a raw image at CS:0100"),
+        ("pil-stop", "(pil-stop) - end the PIL engine process"),
+    ],
 }
 
 _HELP_INDEX = {name: text for entries in HELP_TOPICS.values() for name, text in entries}
@@ -2314,6 +2321,9 @@ def standard_env() -> Env:
     # Independent RGB/BBC graphics; pygame is loaded only when a window opens.
     from lispy_support.lispy_graphics_bindings import install as install_graphics
     install_graphics(env, Procedure, String)
+    # Tony's PIL x86 engine, run as a separate process only when first used.
+    from lispy_support.pil_engine import install as install_pil
+    install_pil(env, Procedure, String)
     return env
 
 global_env = standard_env()

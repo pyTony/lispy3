@@ -1,0 +1,86 @@
+{
+  "name": "PIL",
+  "extensions": [
+    ".pil"
+  ],
+  "line_comment": "# ",
+  "rules": [
+    {
+      "tag": "comment",
+      "pattern": "#[^\\n]*"
+    },
+    {
+      "tag": "constant",
+      "pattern": "\\$[A-Z_]+"
+    },
+    {
+      "tag": "number",
+      "pattern": "\\b(?:0x[0-9a-f]+|\\d+)\\b"
+    }
+  ],
+  "word_pattern": "[A-Za-z_][A-Za-z0-9_]*",
+  "words": {
+    "keyword": [
+      "const",
+      "read",
+      "read_flag",
+      "zext",
+      "sext",
+      "trunc",
+      "add",
+      "sub",
+      "mul",
+      "div",
+      "rem",
+      "xor",
+      "and",
+      "or",
+      "not",
+      "shl",
+      "lshr",
+      "ashr",
+      "ult",
+      "bit",
+      "zero",
+      "parity",
+      "select",
+      "write",
+      "write_if",
+      "flag",
+      "flag_if",
+      "preserve_flag",
+      "preserve_flags",
+      "undef_flag",
+      "require_width",
+      "retire",
+      "read_ip",
+      "read_disp",
+      "branch_if",
+      "read_address",
+      "load",
+      "store",
+      "read_gpr",
+      "write_gpr"
+    ],
+    "special": [
+      "dst",
+      "src",
+      "current",
+      "next",
+      "all",
+      "remaining",
+      "16_or_32"
+    ],
+    "builtin": [
+      "CF",
+      "PF",
+      "AF",
+      "ZF",
+      "SF",
+      "TF",
+      "IF",
+      "DF",
+      "OF"
+    ]
+  }
+}
