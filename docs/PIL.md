@@ -15,11 +15,39 @@ PIL's own debugger window does.
 3. In the Machine, open **Eval > PIL x86 engine > PIL Settings** and choose the
    PIL folder. Lispy uses the newest `pil.exe` under `target/`. A PIL folder
    next to the Lispy folder is found without setting anything.
-4. For assembly buffers, install [NASM](https://www.nasm.us) and, if it is not
-   on PATH, choose `nasm.exe` in the same window.
+4. For assembly buffers, install NASM (see below). Everything else works
+   without it.
 
 For `python lispy3.py` the environment variables `PIL_DIRECTORY`, `PIL_ENGINE`
 and `NASM` do the same.
+
+## NASM (optional)
+
+[NASM](https://www.nasm.us) is the assembler Lispy uses for `.asm` buffers.
+Only F5/F6 in an assembly buffer and **Assemble and run x86 buffer** need it;
+`(pil ...)`, the PIL debugger and running a ready `.COM` or `.EXE` do not.
+
+- **Windows:** run the installer from [nasm.us](https://www.nasm.us), or
+  `winget install NASM.NASM`. The installer does not add NASM to PATH, but
+  Lispy still finds it in `C:\Program Files\NASM` and in
+  `%LOCALAPPDATA%\bin\NASM`, where a per-user install goes.
+- **Linux:** `sudo apt install nasm` (or your distribution's package).
+- **macOS:** `brew install nasm`.
+
+If NASM is somewhere else, choose `nasm.exe` in **PIL Settings**, or set the
+`NASM` environment variable for `python lispy3.py`. `nasm -v` in a terminal
+shows whether NASM is on PATH.
+
+## Checking the setup
+
+    pytest -rs tests/test_pil_engine.py tests/test_pil_live.py
+
+`test_pil_engine.py` needs nothing installed; only its assembly test is
+skipped without NASM. `test_pil_live.py` uses the real PIL: it runs the hello
+demo through the built engine, runs a NASM-assembled monitor program, and
+checks that PIL's own `programs/dos/*.asm` assemble in Lispy to the same bytes
+as their `.COM` files. Each test is skipped, with the reason shown by `-rs`,
+when the PIL checkout, the build or NASM is missing.
 
 ## From Lisp
 
