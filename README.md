@@ -307,6 +307,17 @@ The Listener's **To buffer** button (also **Eval → Listener to buffer**) opens
 
 **Help → Update** runs `git pull` in the program's folder, so a copy cloned with git updates without the command line. It warns about unsaved buffers first, and git refuses (and says which files) if your own edits to files in that folder would be overwritten. After a successful update it offers to restart the editor, reopening your saved buffers, so the new version is the one running.
 
+Lispy itself needs only Python (the Machine and turtle graphics use the Tkinter that comes with it). These extras are optional; each one only switches on the feature beside it:
+
+| Extra | Gives |
+|-------|-------|
+| NumPy | faster vectors in `lispy3-numpy.py` ([Faster runs](#faster-runs-with-lispy3-numpypy)) |
+| `pyreadline3` (Windows) | Tab completion and history in the terminal REPL |
+| a `mini_basic` checkout | running BASIC buffers (BASIC Settings) |
+| BBC BASIC for SDL | **Real BBC BASIC for SDL buffer** ([setup](docs/BBCSDL.md)) |
+| a built PIL | **Eval → PIL x86 engine** and `(pil ...)` ([PIL](docs/PIL.md#setting-up)) |
+| NASM | F5/F6 in `.asm` buffers, run in PIL ([NASM](docs/PIL.md#nasm-optional)) |
+
 `lispy_machine.pyw` and `lispy3.py` must sit in the **same folder** (or `lispy3.py` must be on `PYTHONPATH`). Importing `lispy3` has no side effects because the interpreter guards its entry point with `if __name__ == "__main__":`.
 
 ### The layout

@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- PIL x86 engine: NASM is documented as an optional extra (where to get it
+  on Windows, Linux and macOS, and where Lispy finds it off PATH), and the
+  README lists all optional extras. New `tests/test_pil_live.py` checks the
+  bridge against a real PIL build and NASM and is skipped when they are
+  missing; the NASM test in `test_pil_engine.py` now also finds a Windows
+  NASM that is not on PATH.
+
 - Unit tests. Lisp gets `deftest`, `check`, `check-equal`, `check-error`,
   `run-tests`, `test-names` and `clear-tests`; each workspace keeps its own
   tests. Lispy Machine: **Eval → Run tests in buffer (Ctrl+F6)** runs a Lisp
