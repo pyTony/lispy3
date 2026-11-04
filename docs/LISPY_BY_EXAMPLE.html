@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LISPY BY EXAMPLE</title>
+<style>
+  :root {
+    --bg: #fdfaf6; --text: #2c2623; --bar-bg: #f3ede2;
+    --hl-bg: #ffe97d; --hl-border: #d4a017; --accent: #2b579a;
+    --font-size: 19px;
+  }
+  [data-theme="dark"] {
+    --bg: #161819; --text: #e2dfd9; --bar-bg: #222527;
+    --hl-bg: #3d3511; --hl-border: #e5b822; --accent: #5b9bd5;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; display: flex; height: 100dvh; font-family: 'Georgia', serif;
+    background: var(--bg); color: var(--text); overflow: hidden;
+  }
+  #sidebar {
+    width: 280px; background: var(--bar-bg); border-right: 1px solid rgba(128,128,128,0.25);
+    display: flex; flex-direction: column; z-index: 20; transition: transform 0.25s ease;
+  }
+  @media (max-width: 768px) {
+    #sidebar {
+      position: fixed; top: 0; bottom: 0; left: 0;
+      transform: translateX(-100%); box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+    }
+    #sidebar.open { transform: translateX(0); }
+  }
+  #sidebar-header {
+    padding: 14px 16px; font-family: sans-serif; font-weight: bold;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(128,128,128,0.2);
+  }
+  #toc { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+  #toc li {
+    padding: 13px 16px; cursor: pointer; font-family: sans-serif; font-size: 0.95rem;
+    border-bottom: 1px solid rgba(128,128,128,0.1);
+  }
+  #toc li.active { background: var(--accent); color: #fff; font-weight: bold; }
+
+  #main { flex: 1; display: flex; flex-direction: column; height: 100dvh; width: 100%; }
+  #toolbar {
+    padding: 8px 12px; background: var(--bar-bg); display: flex; align-items: center;
+    gap: 8px; font-family: sans-serif; border-bottom: 1px solid rgba(128,128,128,0.2);
+    flex-wrap: wrap;
+  }
+  button, select {
+    padding: 7px 11px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.35);
+    background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.9rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border: none; font-weight: bold; }
+  #voice-select { max-width: 180px; }
+  #reader-content {
+    flex: 1; overflow-y: auto; padding: 28px 8%; font-size: var(--font-size);
+    line-height: 1.75; scroll-behavior: smooth;
+  }
+  @media (min-width: 1024px) { #reader-content { padding: 40px 16%; } }
+  .seg {
+    padding: 8px 12px; margin-bottom: 10px; border-radius: 6px;
+    border-left: 4px solid transparent; cursor: pointer;
+  }
+  .seg.active { background: var(--hl-bg); border-left-color: var(--hl-border); }
+  .seg.seg-code {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.86em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    background: rgba(128,128,128,0.1); border: 1px solid rgba(128,128,128,0.25);
+    border-left: 4px solid var(--accent); padding: 12px 16px; margin: 12px 0; overflow-x: auto;
+  }
+  .seg.seg-code.active { background: var(--hl-bg); border-left-color: var(--hl-border); }
+  .seg.seg-code pre { margin: 0; font: inherit; white-space: pre-wrap; }
+  .seg code.inline-code {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.88em; background: rgba(128,128,128,0.13); padding: 1px 5px; border-radius: 4px;
+  }
+  .seg.seg-subitem { padding-left: 28px; }
+  .toc-cover-item {
+    padding: 12px 16px !important; text-align: center; cursor: pointer;
+    border-bottom: 1px solid rgba(128,128,128,0.2) !important;
+  }
+  .toc-cover-item img {
+    max-width: 140px; max-height: 190px; border-radius: 6px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25); display: inline-block;
+  }
+  .book-figure {
+    margin: 0 auto 22px; text-align: center; max-width: 100%;
+  }
+  .book-figure img {
+    max-width: min(100%, 460px); max-height: 62dvh; height: auto;
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+  }
+  .inline-figure { margin: 14px auto 20px; }
+  .inline-figure img { max-width: min(100%, 640px); max-height: 80dvh; background: #fff; }
+  .book-figure figcaption {
+    font-family: sans-serif; font-size: 0.82rem; opacity: 0.78; margin-top: 6px;
+  }
+  .book-back-cover-figure { margin-top: 32px; padding-top: 18px; border-top: 1px solid rgba(128,128,128,0.25); }
+  #toc li.toc-group { padding: 0; cursor: default; }
+  #toc ul { list-style: none; padding: 0; margin: 0; }
+  #toc summary { padding: 14px 12px; font-weight: bold; cursor: pointer; line-height: 1.4; }
+  #toc [data-section] { padding: 10px 16px 10px 28px; font-size: .86rem; line-height: 1.4; }
+  #toc > li[data-section] { padding: 13px 16px; font-size: 0.95rem; font-weight: bold; }
+  h2.section-title { font-size: 1.15em; margin: 0 0 1.2em; }
+  dialog { width: min(760px, 94vw); max-height: 88dvh; overflow-y: auto; border: 1px solid #aaa; border-radius: 12px; padding: 24px; background: var(--bg); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  .library-header, .library-actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .library-header h2 { margin: 0; }
+  #gutenberg-search { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  #gutenberg-search label { display: flex; flex-direction: column; gap: 6px; }
+  #gutenberg-search input { padding: 9px; width: min(280px, 75vw); font: inherit; }
+  .library-book { border-top: 1px solid #aaa5; padding: 16px 0; }
+  .library-book h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .library-book p { margin: 6px 0 12px; }
+  .library-book button, .library-book a { margin-right: 10px; }
+  .library-note { font-size: .85rem; line-height: 1.5; }
+  button:disabled { opacity: .5; cursor: default; }
+  h1.chapter-title { font-size: 1.45em; margin-top: 0; margin-bottom: 0.8em; }
+  .chapter-title .chapter-label, .chapter-title .chapter-name {
+    display: block; font: inherit; color: inherit;
+  }
+  #toc .numbered-toc-item { padding: 0; border: 0; }
+  #toc .numbered-toc-item > [data-section] { display: block; padding: 9px 12px; }
+  #toc .numbered-toc-item ul { list-style: none; margin: 0; padding-left: 16px; }
+  #toc .numbered-toc-item .active { background: var(--accent); color: #fff; }
+  .numbered-heading { margin: 1.1em 0 .7em; }
+  h1.numbered-heading { font-size: 1.45em; }
+  h2.numbered-heading { font-size: 1.25em; }
+  h3.numbered-heading, h4.numbered-heading, h5.numbered-heading, h6.numbered-heading { font-size: 1.1em; }
+  #status-bar {
+    padding: 5px 14px; font-family: sans-serif; font-size: 0.8rem;
+    background: var(--bar-bg); opacity: 0.85; display: flex; justify-content: space-between; gap: 12px;
+  }
+  #progress-text { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <span>📖 Contents</span>
+      <button onclick="toggleSidebar()">✕</button>
+    </div>
+    <ul id="toc"></ul>
+  </aside>
+
+  <section id="main">
+    <div id="toolbar">
+      <button onclick="openBookFind()" title="Find in book (Ctrl+F)">Find</button>
+      <button onclick="toggleSidebar()" title="Table of Contents">☰</button>
+      <span id="current-book-title" style="font-weight:bold;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+
+      <button id="cover-btn" onclick="openCoverDialog()" title="View or select cover page / image">🖼 Cover</button>
+
+      <label style="font-size:.9rem;white-space:nowrap"><input id="speech-enabled" type="checkbox" checked onchange="setSpeechEnabled(this.checked)"> Read aloud</label>
+      <button id="prompter-btn" onclick="togglePrompter()">▶ Prompter</button>
+      <label style="font-size:.85rem">Scroll speed <input id="prompter-speed" type="range" min="5" max="100" value="30" aria-label="Prompter scroll speed" oninput="prompterSpeed = Number(this.value)" style="width:85px"></label>
+      <button id="play-btn" class="primary" onclick="togglePlay()">▶ Read</button>
+      <button onclick="stepSegment(-1)" title="Previous">⏮</button>
+      <button onclick="stepSegment(1)" title="Next">⏭</button>
+      <select id="voice-select" title="Select Voice"></select>
+      <select id="speed-select" onchange="updateSpeed(this.value)" title="Speed">
+        <option value="0.85">0.85x</option>
+        <option value="1.0" selected>1.0x</option>
+        <option value="1.15">1.15x</option>
+        <option value="1.3">1.3x</option>
+        <option value="1.5">1.5x</option>
+      </select>
+      <button onclick="adjustFont(-2)">A-</button>
+      <button onclick="adjustFont(2)">A+</button>
+      <button onclick="toggleTheme()">🌗</button>
+
+    </div>
+
+    <div id="reader-content"></div>
+
+    <div id="status-bar">
+      <span id="status-text">Tap any paragraph to start reading from there</span>
+      <span id="progress-text"></span>
+    </div>
+  </section>
+
+
+<dialog id="cover-dialog" aria-labelledby="cover-dialog-title" style="max-width:740px;width:94vw">
+  <div class="library-header"><h2 id="cover-dialog-title">Browse &amp; Select Cover Art</h2><button onclick="document.getElementById('cover-dialog').close()" aria-label="Close cover dialog">✕</button></div>
+  <div id="cover-preview-box" style="text-align:center;margin:6px 0"></div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:8px 0;padding:8px 10px;border:1px solid rgba(128,128,128,0.28);border-radius:6px">
+    <label>Apply selected art as:
+      <select id="cover-target-role" onchange="renderCoverDialogPreview()">
+        <option value="front" selected>Front Cover</option>
+        <option value="back">Back Cover</option>
+      </select>
+    </label>
+
+  </div>
+
+</dialog>
+<dialog id="book-find-dialog" aria-label="Find in book">
+  <form onsubmit="event.preventDefault(); moveBookFind(1)">
+    <label>Find in book <input id="book-find-query" type="search" oninput="searchBook()" autocomplete="off"></label>
+    <button type="button" onclick="moveBookFind(-1)">Previous</button>
+    <button type="submit">Next</button>
+    <button type="button" onclick="document.getElementById('book-find-dialog').close()">Close</button>
+    <p id="book-find-status" role="status" aria-live="polite">Search all chapters and text.</p>
+    <div id="book-find-results" style="max-height:45vh;overflow:auto"></div>
+  </form>
+</dialog>
+<script id="book-data" type="application/json">
+[
+  {
+    "title": "Lispy by Example",
+    "segments": [
+      "Short, runnable examples, one idea at a time. Type them at the `lispy3>` prompt or in the Listener of the editor; the line after each prompt is what Lispy answers. Start with the Quick Start if you have never used Lispy; look names up in the Quick Reference, or type `(help)`.",
+      "Things Lispy cannot do yet are marked **TO BE IMPLEMENTED**, with the way to do it today. The same list is in TODO.md."
+    ],
+    "toc_group": "Lispy by Example",
+    "chapter_title": "Lispy by Example"
+  },
+  {
+    "title": "Contents",
+    "segments": [
+      "• Getting help inside Lispy",
+      "• Numbers",
+      "• Strings and characters",
+      "• Atoms, symbols and strings",
+      "• Variables",
+      "• Functions",
+      "• True and false",
+      "• Choosing: if",
+      "• Lists",
+      "• Head and tail recursion",
+      "• Iteration: map, filter and while",
+      "• Vectors you can change",
+      "• Maps and keywords",
+      "• Local names: let",
+      "• Printing",
+      "• Files and workspaces",
+      "• Turtle graphics",
+      "• Macros",
+      "• Gotchas",
+      "• Coming from Scheme or lis.py",
+      "• Further reading"
+    ],
+    "toc_group": "Original printed contents",
+    "chapter_title": "Contents"
+  },
+  {
+    "title": "Getting help inside Lispy",
+    "segments": [
+      "```\nlispy3> (help)\nSpecial forms (write them as code, quote the name to ask about one: (help 'if)):\n  define set! lambda if begin let while quote save load\nLists and sequences:\n  car first cdr rest cons list length null? empty? append seq map filter get\n...\nlispy3> (help 'cdr)\n(cdr lst) - everything but the first item; same as rest\nlispy3> (help 'sqrt)\n(sqrt ...) - from Python's math: Return the square root of x.\n```",
+      "`(help name)` also works without the quote for functions. For special forms such as `if` and `while`, quote the name: `(help 'while)`. Asking about your own function shows its definition. In the editor, `(help)` opens the Lispy guide in its own window instead, at the page of built-ins; **Help → Lispy guide** (F1) opens it too, and its search box finds a word in every page of this manual."
+    ],
+    "toc_group": "Getting help inside Lispy",
+    "chapter_title": "Getting help inside Lispy"
+  },
+  {
+    "title": "Numbers",
+    "segments": [
+      "```\nlispy3> (+ 2 3)\n5\nlispy3> (- 10 4)\n6\nlispy3> (* 6 7)\n42\nlispy3> (/ 7 2)\n7/2\nlispy3> (/ 7.0 2)\n3.5\nlispy3> (floor (/ 7 2))\n3\nlispy3> (fmod 7 3)\n1.0\nlispy3> (sqrt 16)\n4.0\nlispy3> pi\n3.141592653589793\nlispy3> (max 3 9 2)\n9\n```",
+      "Every name in Python's `math` module works: `floor`, `ceil`, `sqrt`, `pow`, `log`, `sin`, `cos`, `fmod`, `gcd`, `lcm`, `isqrt`, `factorial`, `pi`, `e` and so on.",
+      "`+ - * /` and the comparisons take any number of values:",
+      "```\nlispy3> (+ 1 2 3 4)\n10\nlispy3> (\u003c 1 2 3)\n#t\n```"
+    ],
+    "toc_group": "Numbers",
+    "chapter_title": "Numbers"
+  },
+  {
+    "title": "Whole numbers",
+    "segments": [
+      "Whole numbers have no size limit, and these keep them whole:",
+      "```\nlispy3> (div 17 5)\n3\nlispy3> (mod 17 5)\n2\nlispy3> (divmod 17 5)\n(3 2)\nlispy3> (expt 2 100)\n1267650600228229401496703205376\nlispy3> (divmod (expt 10 30) 7)\n(142857142857142857142857142857 1)\n```",
+      "`div` and `mod` work like Python's `//` and `%`: `div` rounds down, and `mod` has the sign of the divisor. Scheme's `quotient` and `remainder` round toward zero instead, so they differ for negative numbers; `modulo` is the same as `mod`:",
+      "```\nlispy3> (divmod -17 5)\n(-4 3)\nlispy3> (quotient -17 5)\n-3\nlispy3> (remainder -17 5)\n-2\n```",
+      "Tests and conversions:",
+      "```\nlispy3> (even? 10)\n#t\nlispy3> (odd? 7)\n#t\nlispy3> (zero? 0)\n#t\nlispy3> (integer? 3.0)\n#t\nlispy3> (exact 3.0)\n3\nlispy3> (inexact 3)\n3.0\nlispy3> (number->string 255 16)\n\"ff\"\nlispy3> (string->number \"ff\" 16)\n255\nlispy3> (gcd 12 18)\n6\n```",
+      "`/` on whole numbers gives an exact **fraction**, as in Scheme: `(/ 7 2)` is `7/2`, `(/ 6 3)` is `2`, and you can type fractions too, `(+ 1/3 1/6)` is `1/2`. A decimal anywhere gives a decimal: `(/ 7.0 2)` is `3.5`, and `(exact->inexact 7/2)` turns a fraction into one. Use `div` when you want a whole number."
+    ],
+    "toc_group": "Numbers",
+    "chapter_title": "Numbers"
+  },
+  {
+    "title": "Strings and characters",
+    "segments": [
+      "A string is text in double quotes. A character is written `#\\a`; `#\\space`, `#\\newline` and `#\\tab` are the special ones."
+    ],
+    "toc_group": "Strings and characters",
+    "chapter_title": "Strings and characters"
+  },
+  {
+    "title": "Writing strings",
+    "segments": [
+      "| Write | You get | |-------|---------| | `\"hello\"` | `hello` | | `\"say \\\"hi\\\"\"` | `say \"hi\"` | | `\"back\\\\slash\"` | `back\\slash` | | `\"tab\\there\"` | `tab`, a tab, `here` | | `\"one\\ntwo\"` | `one` and `two` on two lines | | `\"\"\"He said \"hi\"; ok\"\"\"` | `He said \"hi\"; ok` |",
+      "In `\"...\"` a backslash starts an escape: `\\\"` quote, `\\\\` backslash, `\\n` new line, `\\t` tab. Any other backslash stays as it is, so `\"C:\\Users\"` is fine.",
+      "`\"\"\"...\"\"\"` is a raw string, as in Python: no escapes, and it may hold `\"` freely. It ends at the next `\"\"\"`.",
+      "Both kinds may run over several lines, and the REPL keeps reading until the string is closed:",
+      "```\nlispy3> (display \"first line\n... (1)> second line\")\nfirst line\nsecond line\n```",
+      "A `;` or `'` inside a string is just text, and so are the characters `#\\;`, `#\\'` and `#\\\"`.",
+      "```\nlispy3> (length \"don't; stop\")\n11\n```",
+      "When Lispy prints a string, or `save` writes one, it adds the escapes back, so the file reads in as the same text:",
+      "```\nlispy3> \"say \\\"hi\\\"\"\n\"say \\\"hi\\\"\"\nlispy3> (display \"say \\\"hi\\\"\")\nsay \"hi\"\n```",
+      "**TO BE IMPLEMENTED:** `\\r`, hex and Unicode escapes such as `\\x41;` or `\\u00e4`, more character names (`#\\return`, `#\\nul`, `#\\x41`), and string formatting (`format`, or `str` taking several values)."
+    ],
+    "toc_group": "Strings and characters",
+    "chapter_title": "Strings and characters"
+  },
+  {
+    "title": "Working with strings",
+    "segments": [
+      "```\nlispy3> (length \"hello\")\n5\nlispy3> (append \"Hello, \" \"world\")\n\"Hello, world\"\nlispy3> (seq \"hi\")\n(#\\h #\\i)\nlispy3> (car (seq \"hello\"))\n#\\h\n```",
+      "`seq` turns a string into a list of characters, and then every list tool works on it.",
+      "Count the `a`s in a word:",
+      "```\nlispy3> (define char-count (lambda [s ch] (length (filter (lambda [c] (= c ch)) (seq s)))))\nlispy3> (char-count \"banana\" #\\a)\n3\n```",
+      "Reverse a string:",
+      "```\nlispy3> (define reverse-string\n...       (lambda [s]\n...         (begin\n...           (define out \"\")\n...           (map (lambda [c] (set! out (append (str c) out))) (seq s))\n...           out)))\nlispy3> (reverse-string \"lispy\")\n\"ypsil\"\n```",
+      "Turn a number into text with `str`:",
+      "```\nlispy3> (append \"n=\" (str 12))\n\"n=12\"\nlispy3> (length (str 12345))\n5\n```",
+      "**TO BE IMPLEMENTED:** `substring`, `string-ref`, `upcase`/`downcase`, `split`, `string->number` and `list->string`. Today, work on the character list from `seq`. Character number `k` of a string, using `nth` from Head and tail recursion:",
+      "```\nlispy3> (nth (seq \"lispy\") 1)\n#\\i\n```"
+    ],
+    "toc_group": "Strings and characters",
+    "chapter_title": "Strings and characters"
+  },
+  {
+    "title": "Atoms, symbols and strings",
+    "segments": [
+      "Everything in Lispy is either a **list** (or vector or map) or an **atom**. An atom is any single value that is not a collection:",
+      "| Atom | Looks like | Evaluates to | Test | |------|-----------|--------------|------| | number | `42` `3.14` | itself | `number?` | | string | `\"car\"` | itself: the text `car` | `string?` | | character | `#\\c` | itself | | | true / false | `#t` `#f` | itself | | | keyword | `:name` | itself | `symbol?` | | **symbol** | `car` `x` `my-list` | **the value the name stands for** | `symbol?` |",
+      "A **symbol** is a name. Evaluating it looks the name up; quoting it gives you the name itself:",
+      "```\nlispy3> (define x 10)\nlispy3> x\n10\nlispy3> 'x\nx\nlispy3> (symbol? 'x)\n#t\n```",
+      "A **string** is text. It never looks anything up and always evaluates to itself, so `\"x\"` stays the text `x`:",
+      "```\nlispy3> \"x\"\n\"x\"\nlispy3> (string? \"x\")\n#t\nlispy3> (symbol? \"x\")\n#f\n```",
+      "In a call `(f a b)` Lispy evaluates `f` and calls the result, so the head must give a function. A symbol such as `car` does; a string does not, it is just text:",
+      "```\nlispy3> (\"car\" '(1 2))\nError: \"car\" is not a function (a string is data; use (string->symbol ...) to make a name)\n```",
+      "To go between the two, convert explicitly, as Scheme does:",
+      "```\nlispy3> (string->symbol \"car\")\ncar\nlispy3> (symbol->string 'car)\n\"car\"\nlispy3> (eval (list (string->symbol \"car\") ''(1 2)))\n1\n```",
+      "or turn a whole piece of text into code with `read`, and run it with `eval`:",
+      "```\nlispy3> (read \"(car '(1 2))\")\n(car (quote (1 2)))\nlispy3> (eval (read \"(car '(1 2))\"))\n1\n```",
+      "Why not just treat a string at the head of a list as a name? Because then a string would mean text in one place and a name in another, a typo like `(\"cra\" x)` would read as a call to look up, and lists of text such as `(\"apples\" \"pears\")` could no longer be kept as plain data. Keeping strings as data and converting on purpose is what Scheme, Common Lisp and Clojure all do.",
+      "One leftover: `str` turns a value into a **symbol**-like name, not a string, so `(symbol? (str 12))` is `#t` and `(= (str 12) \"12\")` is `#f`. Use `(symbol->string (str 12))` when you need a real string. **TO BE IMPLEMENTED:** `str` returning a string."
+    ],
+    "toc_group": "Atoms, symbols and strings",
+    "chapter_title": "Atoms, symbols and strings"
+  },
+  {
+    "title": "Variables",
+    "segments": [
+      "```\nlispy3> (define x 10)\nlispy3> x\n10\nlispy3> (set! x (+ x 1))\nlispy3> x\n11\n```",
+      "`define` makes a new name, `set!` changes one that exists."
+    ],
+    "toc_group": "Variables",
+    "chapter_title": "Variables"
+  },
+  {
+    "title": "Functions",
+    "segments": [
+      "```\nlispy3> (define square (lambda [x] (* x x)))\nlispy3> (square 12)\n144\nlispy3> (define hyp (lambda [a b] (sqrt (+ (square a) (square b)))))\nlispy3> (hyp 3 4)\n5.0\n```",
+      "Parameters may be written `[x y]` or `(x y)`. Functions are values: you can pass them on and keep them in variables.",
+      "```\nlispy3> (define twice (lambda [f x] (f (f x))))\nlispy3> (twice square 3)\n81\n```",
+      "The body is one expression; use `begin` for more:",
+      "```\nlispy3> (define shout (lambda [s] (begin (display s \"!\") (length s))))\nlispy3> (shout \"hey\")\nhey!\n3\n```",
+      "**TO BE IMPLEMENTED:** the shorthand `(define (square x) (* x x))`, and a lambda body of several expressions without `begin`."
+    ],
+    "toc_group": "Functions",
+    "chapter_title": "Functions"
+  },
+  {
+    "title": "True and false",
+    "segments": [
+      "True is written `#t` and false `#f`, as in Scheme. Comparisons give one of them.",
+      "```\nlispy3> (\u003c 1 2)\n#t\nlispy3> (= \"abc\" \"abc\")\n#t\nlispy3> (not (= 1 2))\n#t\nlispy3> (if #f \"yes\" \"no\")\n\"no\"\n```",
+      "In a test, only `#f` and the empty list `()` count as false; everything else, **even `0` and the empty string `\"\"`**, counts as true.",
+      "```\nlispy3> (if '() \"yes\" \"no\")\n\"no\"\nlispy3> (if 0 \"yes\" \"no\")\n\"yes\"\nlispy3> (if \"\" \"yes\" \"no\")\n\"yes\"\n```",
+      "`save` writes true and false as `#t` and `#f`, so they load back unchanged.",
+      "**TO BE IMPLEMENTED:** `and` / `or`. Today, use `if`: `(if a b a)` is \"a and b\", `(if a a b)` is \"a or b\"."
+    ],
+    "toc_group": "True and false",
+    "chapter_title": "True and false"
+  },
+  {
+    "title": "What things return",
+    "segments": [
+      "| Expression | Returns | Shown at the prompt | |------------|---------|---------------------| | a test: `(\u003c 1 2)`, `(null? x)`, `(not x)` | `#t` / `#f` | `#t` / `#f` | | `(define ...)`, `(set! ...)`, `(while ...)`, `(display ...)`, `(vector-set! ...)`, `(begin)` | nothing (Python `None`) | nothing | | `(car '())`, `(get map :missing)`, `(:missing map)` | the empty list | `()` | | `(if ...)`, `(begin ...)`, `(let ...)`, a lambda call | the value of the last expression | that value |",
+      "\"Nothing\" is not printed at the prompt, but it shows up as `None` if you put it in a list: `(list (display 1))` gives `(None)`. Lispy has no `nil`; the empty list `()` does that job, as in Scheme."
+    ],
+    "toc_group": "True and false",
+    "chapter_title": "True and false"
+  },
+  {
+    "title": "How other Lisps do it",
+    "segments": [
+      "| | true / false written as | printed as | false in a test | \"no value\" | |---|---|---|---|---| | **Lispy** | `#t` / `#f` | `#t` / `#f` | `#f`, `()` | `None`, not printed | | Norvig's `lis.py` | (none) | `True` / `False` | `False`, `0`, `()` (Python rules) | `None` | | Norvig's `lispy.py` | `#t` / `#f` | `#t` / `#f` | `False`, `0`, `()` (Python rules) | `None` | | Scheme (R7RS, Racket, Guile) | `#t` / `#f` | `#t` / `#f` | **only** `#f` | unspecified | | Common Lisp | `t` / `nil` | `T` / `NIL` | **only** `nil`, which is also `()` | `nil` | | Clojure | `true` / `false` | `true` / `false` | `false` and `nil` | `nil` |",
+      "So Lispy writes and prints Scheme's `#t` / `#f`, and, like Common Lisp and Clojure's `nil`, also treats the empty list as false. Unlike Norvig's interpreters, which use Python's truth rules, `0` is true, as in every Lisp. The one difference from real Scheme to remember: there `()` is true too, and only `#f` is false."
+    ],
+    "toc_group": "True and false",
+    "chapter_title": "True and false"
+  },
+  {
+    "title": "Choosing: if",
+    "segments": [
+      "```\nlispy3> (define grade (lambda [p] (if (>= p 90) \"A\" (if (>= p 75) \"B\" \"C\"))))\nlispy3> (grade 80)\n\"B\"\n```",
+      "`if` needs the else part. For many choices, nest the `if`s as above.",
+      "**TO BE IMPLEMENTED:** `cond`, for a chain of tests without nesting."
+    ],
+    "toc_group": "Choosing: if",
+    "chapter_title": "Choosing: if"
+  },
+  {
+    "title": "Lists",
+    "segments": [
+      "```\nlispy3> (define nums '(3 1 4 1 5))\nlispy3> (car nums)\n3\nlispy3> (cdr nums)\n(1 4 1 5)\nlispy3> (cons 9 nums)\n(9 3 1 4 1 5)\nlispy3> (length nums)\n5\nlispy3> (null? '())\n#t\nlispy3> (append '(1 2) '(3))\n(1 2 3)\nlispy3> (list 1 \"two\" #\\3 'four)\n(1 \"two\" #\\3 four)\n```",
+      "`'(...)` is a quoted list: its items are not evaluated. `[...]` is a vector; its items **are** evaluated:",
+      "```\nlispy3> [1 (+ 1 1) 3]\n[1 2 3]\nlispy3> (vector? [1 2])\n#t\n```",
+      "A dot makes a pair whose tail is not a list, as in Scheme:",
+      "```\nlispy3> (cons 1 2)\n(1 . 2)\nlispy3> (cdr '(1 . 2))\n2\n```",
+      "`car`/`first` give the **head**, `cdr`/`rest` give the **tail**. The head of an empty list is `()`.",
+      "**TO BE IMPLEMENTED:** built-in `reverse`, `nth`, `last`, `range`, `reduce`/`fold`, `apply`, `sort` and `member`. Each is a few lines of recursion; see the next section."
+    ],
+    "toc_group": "Lists",
+    "chapter_title": "Lists"
+  },
+  {
+    "title": "Head and tail recursion",
+    "segments": [
+      "The classic Lisp pattern: do something with the head, recurse on the tail, stop at the empty list.",
+      "Sum of a list:",
+      "```\nlispy3> (define sum-list\n...       (lambda [lst]\n...         (if (null? lst)\n...             0\n...             (+ (car lst) (sum-list (cdr lst))))))\nlispy3> (sum-list '(1 2 3 4))\n10\n```",
+      "Length, written yourself:",
+      "```\nlispy3> (define my-length (lambda [lst] (if (null? lst) 0 (+ 1 (my-length (rest lst))))))\nlispy3> (my-length [10 20 30])\n3\n```",
+      "Your own `map`:",
+      "```\nlispy3> (define my-map (lambda [f lst] (if (null? lst) '() (cons (f (car lst)) (my-map f (cdr lst))))))\nlispy3> (my-map (lambda [x] (* x 10)) '(1 2 3))\n(10 20 30)\n```",
+      "Reverse with an accumulator (the result is built up in `acc`):",
+      "```\nlispy3> (define my-reverse (lambda [lst acc] (if (null? lst) acc (my-reverse (cdr lst) (cons (car lst) acc)))))\nlispy3> (my-reverse '(1 2 3) '())\n(3 2 1)\n```",
+      "Item number `k`, and the last item:",
+      "```\nlispy3> (define nth (lambda [lst k] (if (= k 0) (car lst) (nth (cdr lst) (- k 1)))))\nlispy3> (nth '(a b c d) 2)\nc\nlispy3> (define last (lambda [lst] (if (null? (cdr lst)) (car lst) (last (cdr lst)))))\nlispy3> (last '(1 2 3))\n3\n```",
+      "Numbers from `a` up to (not including) `b`:",
+      "```\nlispy3> (define range (lambda [a b] (if (>= a b) '() (cons a (range (+ a 1) b)))))\nlispy3> (range 0 5)\n(0 1 2 3 4)\n```",
+      "Fold a list into one value:",
+      "```\nlispy3> (define reduce (lambda [f acc lst] (if (null? lst) acc (reduce f (f acc (car lst)) (cdr lst)))))\nlispy3> (reduce + 0 '(1 2 3 4 5))\n15\n```",
+      "Lists inside lists:",
+      "```\nlispy3> (define flatten\n...       (lambda [x]\n...         (if (null? x) '()\n...           (if (number? (car x))\n...               (cons (car x) (flatten (cdr x)))\n...               (append (flatten (car x)) (flatten (cdr x)))))))\nlispy3> (flatten '(1 (2 3) (4 (5))))\n(1 2 3 4 5)\n```",
+      "Recursion on numbers works the same way:",
+      "```\nlispy3> (define fact (lambda [n] (if (\u003c n 2) 1 (* n (fact (- n 1))))))\nlispy3> (fact 20)\n2432902008176640000\n```",
+      "**How deep can it go?** About 200 nested calls. Past that Lispy stops with *\"recursion too deep ... Use while, map or filter\"*. Even a tail call such as `my-reverse` counts, because Lispy does not reuse the call. **TO BE IMPLEMENTED:** tail-call optimisation, so that tail recursion can run any number of times. Until then, use `map`, `filter` or `while` for long lists and big counts."
+    ],
+    "toc_group": "Head and tail recursion",
+    "chapter_title": "Head and tail recursion"
+  },
+  {
+    "title": "Iteration: map, filter and while",
+    "segments": [
+      "`map` and `filter` walk a list without recursion, so they work on lists of any length:",
+      "```\nlispy3> (map (lambda [x] (* x x)) (range 1 6))\n(1 4 9 16 25)\nlispy3> (filter even? (range 1 11))\n(2 4 6 8 10)\nlispy3> (map (lambda [c] (= c #\\space)) (seq \"a b\"))\n(#f #t #f)\n```",
+      "`while` repeats its body while the test is true:",
+      "```\nlispy3> (define i 1)\nlispy3> (while (\u003c= i 3) (display \"i = \" i) (set! i (+ i 1)))\ni = 1\ni = 2\ni = 3\n```",
+      "Sum 1 to 100:",
+      "```\nlispy3> (define total 0)\nlispy3> (define n 1)\nlispy3> (while (\u003c= n 100) (set! total (+ total n)) (set! n (+ n 1)))\nlispy3> total\n5050\n```",
+      "Collect results into a list:",
+      "```\nlispy3> (define k 0)\nlispy3> (define squares '())\nlispy3> (while (\u003c k 5) (set! squares (cons (* k k) squares)) (set! k (+ k 1)))\nlispy3> squares\n(16 9 4 1 0)\n```",
+      "Fibonacci, loop style, with local variables:",
+      "```\nlispy3> (define fib-loop\n...       (lambda [n]\n...         (let [a 0 b 1 i 0]\n...           (begin\n...             (while (\u003c i n)\n...               (define t b)\n...               (set! b (+ a b))\n...               (set! a t)\n...               (set! i (+ i 1)))\n...             a))))\nlispy3> (fib-loop 50)\n12586269025\n```",
+      "**TO BE IMPLEMENTED:** `for-each`, `dotimes` and a counting `for` loop. Today use `map` (and ignore its result) or `while`."
+    ],
+    "toc_group": "Iteration: map, filter and while",
+    "chapter_title": "Iteration: map, filter and while"
+  },
+  {
+    "title": "Vectors you can change",
+    "segments": [
+      "```\nlispy3> (define v (make-vector 3 0))\nlispy3> (vector-set! v 0 42)\nlispy3> v\n[42 0 0]\nlispy3> (vector-ref v 0)\n42\n```",
+      "Items are numbered from 0. `sieve_lispy3.lisp` uses these for the prime sieve.",
+      "`pi_digits.lisp` uses a vector, `while` loops and `divmod` to print the first n decimals of pi with a spigot algorithm, which needs only whole numbers:",
+      "```\n$ python lispy3.py pi_digits.lisp\n3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679\n```",
+      "Change `(define n 100)` at the top of the file for another length, or `(load \"pi_digits\")` in the REPL and call `(pi-digits 20)`."
+    ],
+    "toc_group": "Vectors you can change",
+    "chapter_title": "Vectors you can change"
+  },
+  {
+    "title": "Maps and keywords",
+    "segments": [
+      "```\nlispy3> (define book {:title \"SICP\" :year 1985})\nlispy3> (:year book)\n1985\nlispy3> (get book :title)\n\"SICP\"\nlispy3> (get book :nope)\n()\n```",
+      "A keyword starts with `:` and stands for itself. Calling a keyword like a function looks it up in a map.",
+      "**TO BE IMPLEMENTED:** `assoc` / `dissoc` to add or remove keys, `keys`, `vals`, and `contains?`. Today, build a new map literal."
+    ],
+    "toc_group": "Maps and keywords",
+    "chapter_title": "Maps and keywords"
+  },
+  {
+    "title": "Local names: let",
+    "segments": [
+      "```\nlispy3> (let [a 2 b 3] (* a b))\n6\n```",
+      "The names live only inside the one body expression; use `begin` inside `let` for more."
+    ],
+    "toc_group": "Local names: let",
+    "chapter_title": "Local names: let"
+  },
+  {
+    "title": "Printing",
+    "segments": [
+      "```\nlispy3> (display \"total: \" 5050)\ntotal: 5050\nlispy3> (display '(1 2 3))\n(1 2 3)\nlispy3> (pretty-print book)\n{:title \"SICP\" :year 1985}\n```",
+      "`display` puts its values next to each other with nothing between them and ends the line."
+    ],
+    "toc_group": "Printing",
+    "chapter_title": "Printing"
+  },
+  {
+    "title": "Files and workspaces",
+    "segments": [
+      "```\nlispy3> (save \"mine\")\nWorkspace saved to .../lisp/mine.lisp\nlispy3> (load \"mine\")\nWorkspace loaded from .../lisp/mine.lisp. Defined: ...\nlispy3> (load \"lsystems\")\n```",
+      "`save` writes all your definitions as Lisp code; `load` runs any `.lisp` file. From the command line: `python lispy3.py prog.lisp`, or `python lispy3.py -i prog.lisp` to stay at the prompt afterwards."
+    ],
+    "toc_group": "Files and workspaces",
+    "chapter_title": "Files and workspaces"
+  },
+  {
+    "title": "Text files and streams",
+    "segments": [
+      "Text files work as in Common Lisp: `with-open-file` opens a stream, runs the body and always closes the file.",
+      "```\nlispy3> (with-open-file (out \"notes.txt\" :direction :output)\n          (write-line \"first line\" out)\n          (format out \"~a squared is ~a~%\" 7 49))\nlispy3> (with-open-file (in \"notes.txt\")\n          (let ((line (read-line in nil #f)))\n            (while line\n              (display \"> \" line)\n              (set! line (read-line in nil #f)))))\n> first line\n> 7 squared is 49\n```",
+      "`:if-exists :append` adds to the end of a file instead of replacing it. `(read-line in nil #f)` gives `#f` at the end of the file; plain `(read-line in)` stops with an error there. Without a stream, `read-line`, `write-line`, `princ` and `format t` use the console, which is also `*standard-input*` and `*standard-output*`.",
+      "A string can be a stream too:",
+      "```\nlispy3> (with-output-to-string (s) (princ 1 s) (write-char #\\- s) (princ 2 s))\n\"1-2\"\nlispy3> (with-input-from-string (s \"a\\nb\") (read-line s) (read-line s))\n\"b\"\n```"
+    ],
+    "toc_group": "Files and workspaces",
+    "chapter_title": "Files and workspaces"
+  },
+  {
+    "title": "Turtle graphics",
+    "segments": [
+      "Every name in Python's `turtle` module is a Lispy function:",
+      "```\nlispy3> (define square-shape\n...       (lambda [size]\n...         (begin (fd size) (rt 90) (fd size) (rt 90) (fd size) (rt 90) (fd size) (rt 90))))\nlispy3> (square-shape 100)\n```",
+      "`(help 'fd)` explains any turtle name. For drawing plants and snowflakes see the L-system section of the README. If you close the window, type `(reinit-turtle)`."
+    ],
+    "toc_group": "Turtle graphics",
+    "chapter_title": "Turtle graphics"
+  },
+  {
+    "title": "Lazy streams",
+    "segments": [
+      "A stream is a list whose rest is worked out only when it is needed, so it can go on for ever. `cons-stream` makes one, as in Structure and Interpretation of Computer Programs:",
+      "```\nlispy3> (define (integers-from n) (cons-stream n (integers-from (+ n 1))))\nlispy3> (define naturals (integers-from 0))\nlispy3> (stream-head naturals 5)\n(0 1 2 3 4)\nlispy3> (stream-head (stream-filter odd? (stream-map * naturals naturals)) 4)\n(1 9 25 49)\n```",
+      "A stream can even be defined in terms of itself. Each item is worked out once and kept, so this is fast:",
+      "```\nlispy3> (define fibs (cons-stream 0 (cons-stream 1 (stream-map + fibs (stream-cdr fibs)))))\nlispy3> (stream-ref fibs 60)\n1548008755920\n```",
+      "Underneath are Scheme's promises: `(delay exp)` waits, `(force p)` works `exp` out the first time and gives the kept value after that.",
+      "```\nlispy3> (define p (delay (begin (display \"working\") 42)))\nlispy3> (list (force p) (force p))\nworking\n(42 42)\n```"
+    ],
+    "toc_group": "Lazy streams",
+    "chapter_title": "Lazy streams"
+  },
+  {
+    "title": "Macros",
+    "segments": [
+      "**TO BE IMPLEMENTED:** Lispy has no macros yet: no `define-macro`, no quasiquote `` ` ``, `,` and `,@`, no `gensym`. `(help)` lists no macro forms for that reason. It does have `eval`, below.",
+      "A macro is a function that runs on **code** before it is evaluated, and returns new code. That is how a Lisp adds forms like `unless`, `and`, `or` or `cond` in Lisp itself. Norvig's `lispy.py` has `define-macro` with quasiquote, and defines `and` that way:",
+      "```\n(define-macro and (lambda args\n   (if (null? args) #t\n       (if (= (length args) 1) (car args)\n           `(if ,(car args) (and ,@(cdr args)) #f)))))\n```",
+      "(This does **not** run in Lispy; it is the reference for the TODO item, in `original/norvig/lispy.py` of fluentpython/lispy.)",
+      "What works today: `quote` gives you code as data, which you can take apart and build with list functions:",
+      "```\nlispy3> (define code '(if (\u003c x 1) \"small\" \"big\"))\nlispy3> (car code)\nif\nlispy3> (car (cdr code))\n(\u003c x 1)\n```",
+      "`eval` runs code held as data. Build the code with `quote`, `list` and `cons`, then run it:",
+      "```\nlispy3> (eval '(+ 1 2))\n3\nlispy3> (eval (list '* 6 7))\n42\nlispy3> (define code '(if (\u003c 1 2) \"small\" \"big\"))\nlispy3> (eval code)\n\"small\"\nlispy3> (eval (cons '+ '(1 2)))\n3\n```",
+      "`eval` always runs in the global environment, as Scheme's `(eval x (interaction-environment))` does: inside a function, `(eval 'x)` sees the global `x`, not the function's own parameter `x`. Together with `quote` and the list functions, this is the \"do it by hand\" version of a macro: a function builds code, `eval` runs it.",
+      "```\nlispy3> (define make-adder-code (lambda [n] (list 'lambda '[x] (list '+ 'x n))))\nlispy3> (make-adder-code 5)\n(lambda [x] (+ x 5))\nlispy3> ((eval (make-adder-code 5)) 10)\n15\n```",
+      "`read` turns text into code for `eval`: `(eval (read \"(+ 1 2)\"))` is `3`. See Atoms, symbols and strings.",
+      "A new control form can also be a function that takes its body as a lambda with no parameters, so the body only runs when called:",
+      "```\nlispy3> (define unless\n...       (lambda [test body]\n...         (if test '() (body))))\nlispy3> (unless (= 1 2) (lambda [] (begin (display \"ran\") 42)))\nran\n42\n```"
+    ],
+    "toc_group": "Macros",
+    "chapter_title": "Macros"
+  },
+  {
+    "title": "Gotchas",
+    "segments": [
+      "• `+ - * /` take exactly two arguments.",
+      "• `if` needs an else part, and a lambda body is one expression (use `begin`).",
+      "• `\"\"` and `0` count as true in a test; `#f` and `()` count as false.",
+      "• `(str 12)` makes text that prints like a string, but `(= (str 12) \"12\")` is `#f`. Compare numbers as numbers instead. **TO BE IMPLEMENTED:** `str` should return a real string.",
+      "• Recursion stops after about 200 nested calls; use `map`, `filter` or `while` for big jobs.",
+      "• **TO BE IMPLEMENTED:** catching errors inside a program (`try` / `error`)."
+    ],
+    "toc_group": "Gotchas",
+    "chapter_title": "Gotchas"
+  },
+  {
+    "title": "Coming from Scheme or lis.py",
+    "segments": [
+      "Lispy grew out of Peter Norvig's `lis.py`, like the interpreters in Luciano Ramalho's fluentpython/lispy. Scheme examples from there, from *SICP* or from *The Little Schemer* mostly run after a few changes:",
+      "| Scheme / lis.py | Lispy today | |-----------------|-------------| | `(define (square x) (* x x))` | `(define square (lambda [x] (* x x)))` | | `(lambda (x) e1 e2)` | `(lambda [x] (begin e1 e2))` | | `(cond (a x) (b y) (else z))` | `(if a x (if b y z))` | | `(and a b)` / `(or a b)` | `(if a b a)` / `(if a a b)` | | `#t` / `#f` | `#t` / `#f` (the same) | | `(+ a b c)` | `(+ (+ a b) c)` | | `(modulo a b)`, `(quotient a b)`, `(remainder a b)` | the same; also `div`, `mod`, `divmod` | | `(equal? a b)` | `(= a b)` | | `(apply f lst)` | **TO BE IMPLEMENTED** | | deep tail recursion | `while`, `map`, `filter` (no tail-call optimisation yet) |",
+      "For example, `fact-iter.scm` from fluentpython/lispy (`mylis/mylis_2/examples`) becomes:",
+      "```\nlispy3> (define factorial-iter\n...       (lambda [n product]\n...         (if (= n 1) product (factorial-iter (- n 1) (* n product)))))\nlispy3> (factorial-iter 10 1)\n3628800\n```",
+      "and `member.scm`, which needs `cond`, becomes nested `if`s:",
+      "```\nlispy3> (define member\n...       (lambda [item lst]\n...         (if (null? lst) '()\n...           (if (= item (car lst)) lst\n...             (member item (cdr lst))))))\nlispy3> (member 7 '(5 7 11))\n(7 11)\n```",
+      "Lispy adds what lis.py does not have: strings and characters, `[vectors]`, `{maps}` with `:keywords`, `while`, `let`, `save`/`load`, turtle graphics and the editor."
+    ],
+    "toc_group": "Coming from Scheme or lis.py",
+    "chapter_title": "Coming from Scheme or lis.py"
+  },
+  {
+    "title": "Further reading",
+    "segments": [
+      "• Norvig, (How to Write a (Lisp) Interpreter (in Python)) and the sequel: where Lispy comes from.",
+      "• fluentpython/lispy: `lis.py` with type hints and pattern matching (`original/py3.10`), `cond`/`and`/`or` and tail calls (`mylis/mylis_2`), example programs, tests, and a reading list (SICP, The Little Schemer, How to Design Programs, ...). Most of Lispy's TODO list points there for a reference implementation.",
+      "• Abelson and Sussman, Structure and Interpretation of Computer Programs: the classic for head and tail recursion."
+    ],
+    "toc_group": "Further reading",
+    "chapter_title": "Further reading"
+  }
+]
+</script>
+<script id="reader-script">
+let BOOK_ID = "4f668f252f19a038";
+let DEFAULT_LANG = "en-US";
+let BOOK = JSON.parse(document.getElementById('book-data').textContent);
+
+const ORIGINAL_BOOK = { chapters: BOOK, id: BOOK_ID, lang: DEFAULT_LANG, title: document.title };
+const INITIAL_OPEN_TOKEN = (typeof location !== 'undefined' && location.protocol === 'http:')
+  ? new URLSearchParams(location.search).get('open')
+  : null;
+let curChap = 0;
+let curSeg = -1;
+let isPlaying = false;
+let bookFindMatches = [];
+let bookFindIndex = -1;
+function openBookFind() {
+  const dialog = document.getElementById('book-find-dialog');
+  if (!dialog.open) dialog.showModal();
+  searchBook();
+  document.getElementById('book-find-query').focus();
+}
+function searchBook() {
+  const query = document.getElementById('book-find-query').value.trim().toLocaleLowerCase();
+  bookFindMatches = [];
+  bookFindIndex = -1;
+  const results = document.getElementById('book-find-results');
+  results.replaceChildren();
+  if (query) BOOK.forEach((chapter, c) => {
+    const passages = [(chapter.chapter_title || '') + ' ' + chapter.title, ...chapter.segments];
+    passages.forEach((text, s) => {
+      if (text.toLocaleLowerCase().includes(query)) bookFindMatches.push({c, s: s - 1, text});
+    });
+  });
+  document.getElementById('book-find-status').textContent = query
+    ? `${bookFindMatches.length} matching passages` : 'Search all chapters and text.';
+  bookFindMatches.slice(0, 100).forEach((match, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.cssText = 'display:block;text-align:left;margin:6px 0;width:100%';
+    const pos = match.text.toLocaleLowerCase().indexOf(query);
+    button.textContent = BOOK[match.c].title + ' — ' + match.text.slice(Math.max(0, pos - 40), pos + query.length + 100);
+    button.onclick = () => showBookFind(index);
+    results.appendChild(button);
+  });
+}
+function showBookFind(index) {
+  if (!bookFindMatches.length) return;
+  bookFindIndex = (index + bookFindMatches.length) % bookFindMatches.length;
+  const match = bookFindMatches[bookFindIndex];
+  document.getElementById('book-find-dialog').close();
+  loadChapter(match.c, match.s);
+  const root = document.getElementById(`seg_${match.c}_${match.s}`);
+  const query = document.getElementById('book-find-query').value.trim().toLocaleLowerCase();
+  if (root && query) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node => {
+      const text = node.textContent;
+      const lower = text.toLocaleLowerCase();
+      const fragment = document.createDocumentFragment();
+      let start = 0, pos;
+      while ((pos = lower.indexOf(query, start)) !== -1) {
+        fragment.append(document.createTextNode(text.slice(start, pos)));
+        const mark = document.createElement('mark');
+        mark.textContent = text.slice(pos, pos + query.length);
+        fragment.append(mark);
+        start = pos + query.length;
+      }
+      fragment.append(document.createTextNode(text.slice(start)));
+      node.replaceWith(fragment);
+    });
+  }
+  progressText.textContent += ` • Find ${bookFindIndex + 1}/${bookFindMatches.length} (F3: next)`;
+}
+function moveBookFind(direction) {
+  showBookFind(bookFindIndex < 0 ? (direction < 0 ? bookFindMatches.length - 1 : 0) : bookFindIndex + direction);
+}
+document.addEventListener('keydown', event => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+    event.preventDefault(); openBookFind();
+  } else if (event.key === 'F3') {
+    event.preventDefault(); moveBookFind(event.shiftKey ? -1 : 1);
+  }
+});
+let speechEnabled = true;
+let prompterRunning = false;
+let prompterSpeed = 30;
+let prompterFrame = null;
+let prompterLastTime = null;
+let prompterBottomTime = null;
+let speechRate = 1.0;
+let fontSize = 19;
+const synth = window.speechSynthesis;
+
+const tocEl = document.getElementById('toc');
+const contentEl = document.getElementById('reader-content');
+const playBtn = document.getElementById('play-btn');
+const voiceSelect = document.getElementById('voice-select');
+const statusText = document.getElementById('status-text');
+const progressText = document.getElementById('progress-text');
+
+function openBookDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open('ebook_reader_db', 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains('books')) req.result.createObjectStore('books');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveActiveBook(record) {
+  try { localStorage.removeItem('ebook_active_book'); } catch {}
+  try {
+    localStorage.setItem('ebook_active_book', JSON.stringify(record));
+    try {
+      const db = await openBookDB();
+      const tx = db.transaction('books', 'readwrite');
+      tx.objectStore('books').delete('active');
+      tx.oncomplete = () => db.close();
+      tx.onerror = () => db.close();
+    } catch {}
+    return;
+  } catch {}
+  try {
+    const db = await openBookDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('books', 'readwrite');
+      tx.objectStore('books').put(record, 'active');
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+    localStorage.setItem('ebook_active_book', JSON.stringify({storedInIDB: true}));
+  } catch { /* Save book remains available if browser storage is disabled. */ }
+}
+
+async function loadActiveBookFromIDB() {
+  const db = await openBookDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('books', 'readonly');
+    const req = tx.objectStore('books').get('active');
+    req.onsuccess = () => { db.close(); resolve(req.result || null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+
+async function clearActiveBook() {
+  try { localStorage.removeItem('ebook_active_book'); } catch {}
+  try {
+    const db = await openBookDB();
+    const tx = db.transaction('books', 'readwrite');
+    tx.objectStore('books').delete('active');
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+  } catch {}
+}
+
+function populateVoices() {
+  if (!synth) return;
+  const voices = synth.getVoices();
+  if (!voices.length) return;
+  voiceSelect.innerHTML = '';
+  let bestIdx = 0;
+  voices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${v.name} (${v.lang})`;
+    if (v.lang.toLowerCase().startsWith(DEFAULT_LANG.toLowerCase())) {
+      bestIdx = i;
+    }
+    voiceSelect.appendChild(opt);
+  });
+  voiceSelect.selectedIndex = bestIdx;
+}
+
+function init() {
+  try { speechEnabled = localStorage.getItem('ebook_speech_enabled') !== 'false'; } catch {}
+  document.getElementById('speech-enabled').checked = speechEnabled;
+  try {
+    const savedLang = localStorage.getItem('ebook_conversion_lang');
+    const langSelect = document.getElementById('conversion-language');
+    if (savedLang && Array.from(langSelect.options).some(o => o.value === savedLang)) {
+      langSelect.value = savedLang;
+    }
+  } catch {}
+  const quitBtn = document.getElementById('quit-server-btn');
+  if (quitBtn) quitBtn.hidden = (typeof location === 'undefined' || location.protocol !== 'http:');
+
+  populateVoices();
+  if (synth && synth.onvoiceschanged !== undefined) {
+    synth.onvoiceschanged = populateVoices;
+  }
+
+  document.getElementById('current-book-title').textContent = document.title;
+  if (INITIAL_OPEN_TOKEN) {
+    contentEl.textContent = 'Opening selected book…';
+    statusText.textContent = 'Opening selected book…';
+    playBtn.disabled = true;
+    return;
+  }
+
+  try {
+    const stored = JSON.parse(localStorage.getItem('ebook_active_book') || 'null');
+    if (typeof location !== 'undefined' && location.protocol === 'http:' && stored) {
+      if (stored.chapters && stored.chapters.length) {
+        useLibraryBook(stored.chapters, stored.title, stored.id, stored.lang, false);
+        return;
+      }
+      if (stored.storedInIDB) {
+        contentEl.textContent = 'Loading book…';
+        playBtn.disabled = true;
+        loadActiveBookFromIDB().then(record => {
+          if (libraryImported) return;
+          if (record && record.chapters && record.chapters.length) {
+            useLibraryBook(record.chapters, record.title, record.id, record.lang, false);
+            refreshRedoAvailability();
+          } else {
+            renderContents();
+            loadChapter(0, -1, false);
+          }
+        }).catch(() => {
+          if (!libraryImported) { renderContents(); loadChapter(0, -1, false); }
+        });
+        return;
+      }
+    }
+  } catch { /* A corrupt or unavailable saved session must not block reading. */ }
+  renderContents();
+
+  let saved = {c: 0, s: -1};
+  try { saved = JSON.parse(localStorage.getItem('ebook_pos_' + BOOK_ID) || '{"c":0,"s":-1}'); } catch {}
+  loadChapter(saved.c || 0, saved.s ?? -1, false);
+}
+
+function numberedHeading(title) {
+  const match = title.match(/^(?:(?:chapter|luku)\s+)?(\d+(?:\.\d+)*|[A-Z](?:\.\d+)+)\.?\s+(.+)$/i);
+  return match ? {number: match[1], depth: match[1].split('.').length} : null;
+}
+
+function renderContents() {
+  tocEl.replaceChildren();
+  const coverChapIdx = BOOK.findIndex(c => c.cover_image);
+  if (coverChapIdx !== -1 && BOOK[coverChapIdx].cover_image) {
+    const coverLi = document.createElement('li');
+    coverLi.className = 'toc-cover-item';
+    const coverImg = document.createElement('img');
+    coverImg.src = BOOK[coverChapIdx].cover_image;
+    coverImg.alt = BOOK[coverChapIdx].cover_caption || document.title || 'Book cover';
+    coverLi.appendChild(coverImg);
+    coverLi.onclick = () => {
+      loadChapter(coverChapIdx, -1, isPlaying);
+      if (window.innerWidth <= 768) toggleSidebar(false);
+    };
+    tocEl.appendChild(coverLi);
+  }
+  const groups = new Map();
+  const numberedNodes = new Map();
+  BOOK.forEach((c, idx) => {
+    const info = numberedHeading(c.title);
+    if (!info || c.toc_group === 'Original printed contents') return;
+    const item = document.createElement('li');
+    item.className = 'numbered-toc-item';
+    const label = document.createElement('span');
+    label.textContent = c.title;
+    label.dataset.section = idx;
+    label.tabIndex = 0;
+    label.setAttribute('role', 'button');
+    label.onclick = event => {
+      event.stopPropagation();
+      loadChapter(idx, -1, isPlaying);
+      if (window.innerWidth <= 768) toggleSidebar(false);
+    };
+    label.onkeydown = event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); label.click(); }
+    };
+    const children = document.createElement('ul');
+    item.append(label, children);
+    numberedNodes.set(info.number, {item, children, idx});
+  });
+  // Count only the sections that will actually be listed under each group,
+  // so a group holding a single item is shown flat instead of as a collapsible pane.
+  const groupCounts = new Map();
+  BOOK.forEach((c, idx) => {
+    const info = numberedHeading(c.title);
+    const numbered = info && numberedNodes.get(info.number);
+    if (numbered && numbered.idx === idx) return;
+    const name = c.toc_group || 'Contents';
+    groupCounts.set(name, (groupCounts.get(name) || 0) + 1);
+  });
+  BOOK.forEach((c, idx) => {
+    const info = numberedHeading(c.title);
+    const numbered = info && numberedNodes.get(info.number);
+    if (numbered && numbered.idx === idx) {
+      const parentNumber = info.number.split('.').slice(0, -1).join('.');
+      const parent = numberedNodes.get(parentNumber);
+      (parent ? parent.children : tocEl).appendChild(numbered.item);
+      return;
+    }
+    const name = c.toc_group || 'Contents';
+    const count = groupCounts.get(name) || 1;
+    const isCollapsible = count > 1;
+
+    const li = document.createElement('li');
+    li.textContent = (count > 1 && c.title === name) ? 'Overview — ' + c.title : c.title;
+    li.dataset.section = idx;
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.onclick = () => {
+      loadChapter(idx, -1, isPlaying);
+      if (window.innerWidth <= 768) toggleSidebar(false);
+    };
+    li.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); }
+    };
+
+    if (!isCollapsible) {
+      tocEl.appendChild(li);
+      return;
+    }
+
+    if (!groups.has(name)) {
+      const item = document.createElement('li');
+      item.className = 'toc-group';
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = name;
+      const list = document.createElement('ul');
+      details.append(summary, list);
+      item.appendChild(details);
+      tocEl.appendChild(item);
+      groups.set(name, list);
+    }
+    groups.get(name).appendChild(li);
+  });
+}
+
+function toggleSidebar(force) {
+  const sb = document.getElementById('sidebar');
+  if (typeof force === 'boolean') sb.classList.toggle('open', force);
+  else sb.classList.toggle('open');
+}
+
+function appendInlineFormatted(parent, lineText) {
+  // Supports **bold**, __bold__, `code`, *italic*, and Gutenberg _italic_ / =bold= conventions
+  const tokenRe = /(\*\*([^*\n]+)\*\*|__([^_\n]+)__|`([^`\n]+)`|(?<![=\w])=([A-Za-zÄÖÅäöå0-9][^=\n]{0,60}?[A-Za-zÄÖÅäöå0-9.!?])=(?![=\w])|(?<![*\w])\*([^*\n]+?)\*(?![*\w])|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}]))/gu;
+  let lastIdx = 0;
+  let match;
+  while ((match = tokenRe.exec(lineText)) !== null) {
+    if (match.index > lastIdx) {
+      parent.appendChild(document.createTextNode(lineText.slice(lastIdx, match.index)));
+    }
+    if (match[2] !== undefined || match[3] !== undefined || match[5] !== undefined) {
+      const strong = document.createElement('strong');
+      strong.textContent = match[2] ?? match[3] ?? match[5];
+      parent.appendChild(strong);
+    } else if (match[4] !== undefined) {
+      const code = document.createElement('code');
+      code.className = 'inline-code';
+      code.textContent = match[4];
+      parent.appendChild(code);
+    } else if (match[6] !== undefined || match[7] !== undefined) {
+      const em = document.createElement('em');
+      em.textContent = match[6] ?? match[7];
+      parent.appendChild(em);
+    }
+    lastIdx = tokenRe.lastIndex;
+  }
+  if (lastIdx < lineText.length) {
+    parent.appendChild(document.createTextNode(lineText.slice(lastIdx)));
+  }
+}
+
+function renderFormattedSegment(div, text) {
+  if (typeof text === 'string' && text.startsWith('```') && text.endsWith('```')) {
+    div.classList.add('seg-code');
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.textContent = text.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '');
+    pre.appendChild(code);
+    div.appendChild(pre);
+    return;
+  }
+  if (typeof text === 'string' && (text.startsWith('◦ ') || text.startsWith('  '))) {
+    div.classList.add('seg-subitem');
+  }
+  const lines = String(text ?? '').split('\n');
+  lines.forEach((line, idx) => {
+    if (idx > 0) div.appendChild(document.createElement('br'));
+    appendInlineFormatted(div, line);
+  });
+}
+
+function createBookFigure(src, captionText, extraClass = '', altText = '') {
+  const fig = document.createElement('figure');
+  fig.className = ('book-figure ' + extraClass).trim();
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = captionText || altText || document.title || 'Illustration';
+  img.loading = 'lazy';
+  fig.appendChild(img);
+  if (captionText) {
+    const cap = document.createElement('figcaption');
+    cap.textContent = captionText;
+    fig.appendChild(cap);
+  }
+  return fig;
+}
+
+let renderedBook = null;
+let manualReadingScroll = false;
+function renderBookChapter(cIdx) {
+  const section = document.createElement('section');
+  section.id = `chapter_${cIdx}`;
+  section.className = 'reading-section';
+  const chapObj = BOOK[cIdx];
+  if (chapObj.cover_image) {
+    section.appendChild(createBookFigure(chapObj.cover_image, chapObj.cover_caption || '', 'book-cover-figure'));
+  }
+  const titleSegment = document.createElement('div');
+  titleSegment.className = 'seg title-segment';
+  titleSegment.id = `seg_${cIdx}_-1`;
+  titleSegment.tabIndex = 0;
+  titleSegment.setAttribute('role', 'button');
+  titleSegment.setAttribute('aria-label', 'Read chapter title');
+  titleSegment.onclick = () => { stopSpeech(); curChap = cIdx; curSeg = -1; highlightSegment(curSeg); speakCurrentSegment(); };
+  titleSegment.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); titleSegment.click(); } };
+  const heading = document.createElement('h1');
+  heading.className = 'chapter-title';
+  const fullTitle = chapObj.chapter_title || chapObj.title;
+  const chapterParts = fullTitle.match(/^((?:chapter|part|luku|osa)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten))\b\s*(?:[:.\-–—]\s*)?(.+)$/i);
+  if (chapterParts) {
+    const label = document.createElement('span');
+    label.className = 'chapter-label';
+    label.textContent = chapterParts[1];
+    const name = document.createElement('span');
+    name.className = 'chapter-name';
+    name.textContent = chapterParts[2];
+    // Both lines belong to the same semantic heading and inherit its title style.
+    heading.append(label, document.createTextNode(' '), name);
+  } else {
+    heading.textContent = fullTitle;
+  }
+  const firstInChapter = !cIdx || !chapObj.chapter_title || BOOK[cIdx - 1].chapter_title !== chapObj.chapter_title;
+  const numberInfo = numberedHeading(chapObj.title);
+  if (numberInfo && chapObj.toc_group !== 'Original printed contents') {
+    const numberedTitle = document.createElement('h' + Math.min(6, numberInfo.depth));
+    numberedTitle.className = 'numbered-heading';
+    numberedTitle.textContent = chapObj.title;
+    titleSegment.appendChild(numberedTitle);
+  } else if (firstInChapter || chapObj.title === chapObj.chapter_title) titleSegment.appendChild(heading);
+  if (!numberInfo && chapObj.chapter_title && chapObj.title !== chapObj.chapter_title) {
+    const subtitle = document.createElement('h2');
+    subtitle.className = 'section-title';
+    subtitle.textContent = chapObj.title;
+    titleSegment.appendChild(subtitle);
+  }
+  section.appendChild(titleSegment);
+  if (chapObj.image) {
+    section.appendChild(createBookFigure(chapObj.image, chapObj.image_caption || '', 'chapter-illustration'));
+  }
+  // Pictures extracted from the source PDF sit between segments, in reading order. They are not
+  // segments themselves, so speech, search and progress are unaffected by them.
+  const pdfFigures = Array.isArray(chapObj.figures) ? chapObj.figures : [];
+  const appendFigure = fig => section.appendChild(createBookFigure(
+    fig.image, '', 'inline-figure', fig.page ? 'Illustration from page ' + fig.page : 'Illustration'));
+  pdfFigures.forEach(fig => { if (fig && fig.image && Number(fig.after) < 0) appendFigure(fig); });
+  chapObj.segments.forEach((text, i) => {
+    const div = document.createElement('div');
+    div.className = 'seg';
+    div.id = `seg_${cIdx}_${i}`;
+    renderFormattedSegment(div, text);
+    div.onclick = () => {
+      stopSpeech();
+      curChap = cIdx;
+      curSeg = i;
+      highlightSegment(curSeg);
+      speakCurrentSegment();
+    };
+    section.appendChild(div);
+    pdfFigures.forEach(fig => { if (fig && fig.image && Number(fig.after) === i) appendFigure(fig); });
+  });
+  pdfFigures.forEach(fig => {
+    if (fig && fig.image && Number(fig.after) >= chapObj.segments.length) appendFigure(fig);
+  });
+  if (chapObj.back_image) {
+    section.appendChild(createBookFigure(chapObj.back_image, chapObj.back_caption || 'Back Cover', 'book-back-cover-figure'));
+  }
+
+  return section;
+}
+
+function loadChapter(cIdx, sIdx = -1, autoSpeak = false) {
+  stopSpeech();
+  if (!BOOK.length) {
+    contentEl.textContent = 'No readable text found in this document.';
+    playBtn.disabled = true;
+    return;
+  }
+  prompterBottomTime = null;
+  curChap = Math.max(0, Math.min(BOOK.length - 1, cIdx));
+  curSeg = Math.max(-1, Math.min(BOOK[curChap].segments.length - 1, sIdx));
+
+  tocEl.querySelectorAll('[data-section]').forEach(li => {
+    const active = Number(li.dataset.section) === curChap;
+    li.classList.toggle('active', active);
+    const details = li.closest('details');
+    if (active && details && !['Front matter', 'Original printed contents'].includes(BOOK[curChap].toc_group)) {
+      details.open = true;
+    }
+  });
+
+  if (renderedBook !== BOOK || !document.getElementById('chapter_0')) {
+    contentEl.replaceChildren();
+    BOOK.forEach((_, index) => contentEl.appendChild(renderBookChapter(index)));
+    renderedBook = BOOK;
+  } else {
+    document.getElementById(`chapter_${curChap}`).replaceWith(renderBookChapter(curChap));
+  }
+
+  highlightSegment(curSeg);
+
+  playBtn.disabled = !speechEnabled;
+  if (autoSpeak) speakCurrentSegment();
+}
+
+function highlightSegment(sIdx, scroll = true) {
+  if (scroll) manualReadingScroll = false;
+  document.querySelectorAll('.seg.active').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById(`seg_${curChap}_${sIdx}`);
+  if (target) {
+    target.classList.add('active');
+    if (scroll) target.scrollIntoView({ behavior: 'instant', block: 'center' });
+  }
+  tocEl.querySelectorAll('[data-section]').forEach(li => li.classList.toggle('active', Number(li.dataset.section) === curChap));
+  const total = BOOK[curChap].segments.length;
+  progressText.textContent = sIdx === -1 ? `${BOOK[curChap].title} • Title` : `${BOOK[curChap].title} (${sIdx + 1}/${total})`;
+  try { localStorage.setItem('ebook_pos_' + BOOK_ID, JSON.stringify({ c: curChap, s: sIdx })); } catch { /* Reading works without browser storage. */ }
+}
+
+// Manual reading keeps the active passage and saved position in sync without
+// moving the viewport or starting speech. All sections remain in the document.
+let readingScrollFrame = null;
+contentEl.addEventListener('wheel', () => { manualReadingScroll = true; }, {passive: true});
+contentEl.addEventListener('touchstart', () => { manualReadingScroll = true; }, {passive: true});
+contentEl.addEventListener('pointerdown', () => { manualReadingScroll = true; });
+document.addEventListener('keydown', event => {
+  if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' '].includes(event.key)
+      && !event.target.closest('input, textarea, select, dialog')) manualReadingScroll = true;
+});
+contentEl.addEventListener('scroll', () => {
+  if (readingScrollFrame !== null || isPlaying || (!manualReadingScroll && !prompterRunning)) return;
+  readingScrollFrame = requestAnimationFrame(() => {
+    readingScrollFrame = null;
+    if (isPlaying || !BOOK.length) return;
+    const box = contentEl.getBoundingClientRect();
+    const focusY = box.top + box.height * .5;
+    const sections = contentEl.querySelectorAll('.reading-section');
+    let index = 0;
+    sections.forEach((section, i) => { if (section.getBoundingClientRect().top <= focusY) index = i; });
+    const section = sections[index];
+    if (!section) return;
+    let segment = -1;
+    section.querySelectorAll('.seg').forEach(el => {
+      if (el.getBoundingClientRect().top <= focusY) segment = Number(el.id.split('_').pop());
+    });
+    curChap = index; curSeg = segment;
+    highlightSegment(curSeg, false);
+  });
+}, {passive: true});
+
+function stopPrompter() {
+  prompterRunning = false;
+  if (prompterFrame !== null) cancelAnimationFrame(prompterFrame);
+  prompterFrame = null; prompterLastTime = null; prompterBottomTime = null;
+  contentEl.style.scrollBehavior = '';
+  document.getElementById('prompter-btn').textContent = '▶ Prompter';
+}
+
+function togglePrompter() {
+  if (prompterRunning) { stopPrompter(); return; }
+  if (!BOOK.length) return;
+  prompterRunning = true;
+  contentEl.style.scrollBehavior = 'auto';
+  prompterLastTime = null; prompterBottomTime = null;
+  document.getElementById('prompter-btn').textContent = '⏸ Prompter';
+  prompterFrame = requestAnimationFrame(prompterTick);
+}
+
+function prompterTick(time) {
+  if (!prompterRunning) return;
+  const elapsed = prompterLastTime === null ? 0 : Math.min((time - prompterLastTime) / 1000, .1);
+  prompterLastTime = time;
+  const bottom = Math.max(0, contentEl.scrollHeight - contentEl.clientHeight);
+  contentEl.scrollTop = Math.min(bottom, contentEl.scrollTop + elapsed * prompterSpeed);
+  if (contentEl.scrollTop >= bottom - 1) {
+    if (prompterBottomTime === null) prompterBottomTime = time;
+    const words = BOOK[curChap].segments.join(' ').split(/\s+/).length;
+    const pause = bottom > 0 ? 2500 : Math.max(8000, words / 3 * 1000);
+    if (time - prompterBottomTime >= pause && !isPlaying) {
+      stopPrompter(); return;
+    }
+  } else prompterBottomTime = null;
+  prompterFrame = requestAnimationFrame(prompterTick);
+}
+
+function setSpeechEnabled(enabled) {
+  speechEnabled = Boolean(enabled);
+  document.getElementById('speech-enabled').checked = speechEnabled;
+  if (!speechEnabled) stopSpeech();
+  playBtn.disabled = !speechEnabled || !BOOK.length;
+  statusText.textContent = speechEnabled ? 'Read aloud enabled' : 'Silent reading';
+  try { localStorage.setItem('ebook_speech_enabled', String(speechEnabled)); } catch {}
+}
+
+function isPrintedContentsChapter(idx) {
+  const ch = BOOK[idx];
+  if (!ch) return false;
+  if (ch.toc_group === 'Original printed contents') return true;
+  if (/^(?:table\s+of\s+)?contents$|^sisällys$/i.test((ch.title || '').trim())) return true;
+  const segs = ch.segments || [];
+  if (segs.length > 0 && segs.length <= 40) {
+    const dotLeaderSegs = segs.filter(s => /(?:\.\s*){4,}\s*[0-9ivxlcdm]+\b/i.test(String(s || ''))).length;
+    if (dotLeaderSegs >= Math.ceil(segs.length * 0.5)) return true;
+  }
+  return false;
+}
+
+function nextReadableChapterIndex(fromChap) {
+  let next = fromChap + 1;
+  if (!isPrintedContentsChapter(fromChap)) {
+    while (next < BOOK.length && isPrintedContentsChapter(next)) {
+      next++;
+    }
+    if (next >= BOOK.length) {
+      next = fromChap + 1;
+    }
+  }
+  return next < BOOK.length ? next : -1;
+}
+
+function prevReadableChapterIndex(fromChap) {
+  let prev = fromChap - 1;
+  if (!isPrintedContentsChapter(fromChap)) {
+    while (prev >= 0 && isPrintedContentsChapter(prev)) {
+      prev--;
+    }
+    if (prev < 0) {
+      prev = fromChap - 1;
+    }
+  }
+  return prev >= 0 ? prev : -1;
+}
+
+function spokenChapterTitle(index) {
+  const section = BOOK[index];
+  if (index === 0 && /^title\s*&\s*front\s*matter$/i.test((section.title || '').trim())) {
+    return document.title || section.title;
+  }
+  const parent = section.chapter_title;
+  const firstInChapter = parent && (!index || BOOK[index - 1].chapter_title !== parent);
+  return firstInChapter && parent !== section.title ? parent + '. ' + section.title : section.title;
+}
+
+function speakCurrentSegment() {
+  if (!speechEnabled || !BOOK.length) return;
+  if (!synth) {
+    statusText.textContent = "Speech synthesis is not supported in this browser.";
+    return;
+  }
+  synth.cancel();
+
+  // On the cover/front-matter chapter, if the heading is a generic placeholder ("Title & Front Matter")
+  // or already repeated in the first segment, start directly at segment 0 so the cover title is read naturally once.
+  if (curChap === 0 && curSeg === -1 && BOOK[0].segments.length > 0) {
+    const rawH = (BOOK[0].title || '').trim();
+    const firstSeg = (BOOK[0].segments[0] || '').trim();
+    const normH = rawH.toLowerCase().replace(/[^a-z0-9äöå]+/g, '');
+    const normFirst = firstSeg.toLowerCase().replace(/[^a-z0-9äöå]+/g, '');
+    if (/^title\s*&\s*front\s*matter$/i.test(rawH) || (normH && normFirst && (normFirst.includes(normH) || normH.includes(normFirst)))) {
+      curSeg = 0;
+    }
+  }
+  
+  let text = curSeg === -1 ? spokenChapterTitle(curChap) : BOOK[curChap].segments[curSeg];
+  
+  let speakText = String(text || '')
+    .replace(/^```[^\n]*\n?/, '')
+    .replace(/\n?```$/, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/(?<![*\w])\*([^*\n]+?)\*(?![*\w])/g, '$1')
+    .replace(/(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])/gu, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^[•◦]\s+/gm, '')
+    .replace(/[├└│─]+/g, ' ')
+    .replace(/(?:\.\s*){3,}\s*\d*\b/g, '. ')
+    .replace(/\.{2,}|…+/g, '. ')
+    .replace(/[-=_*~#]{3,}/g, ' ')
+    .replace(/Hak Ja Han Moon/g, 'Hak Tsa Han Muun')
+    .replace(/Hak Ja Han/g, 'Hak Tsa Han')
+    .trim();
+
+  // Skip segments that contain only dots/separators/punctuation with no pronounceable words
+  if (!/[\p{L}\p{N}]/u.test(speakText)) {
+    if (curSeg + 1 < BOOK[curChap].segments.length) {
+      curSeg++;
+      speakCurrentSegment();
+    } else {
+      const nextChap = nextReadableChapterIndex(curChap);
+      if (nextChap !== -1) loadChapter(nextChap, -1, true);
+      else stopSpeech();
+    }
+    return;
+  }
+
+  const utter = new SpeechSynthesisUtterance(speakText);
+  utter.lang = DEFAULT_LANG;
+  utter.rate = speechRate;
+
+  const voices = synth.getVoices();
+  const selectedVoice = voices[voiceSelect.value];
+  if (selectedVoice) utter.voice = selectedVoice;
+
+  utter.onstart = () => {
+    isPlaying = true;
+    playBtn.textContent = "⏸ Pause";
+    statusText.textContent = "Reading…";
+    highlightSegment(curSeg);
+  };
+
+  utter.onend = () => {
+    if (!isPlaying) return;
+    if (curSeg + 1 < BOOK[curChap].segments.length) {
+      curSeg++;
+      speakCurrentSegment();
+    } else {
+      const nextChap = nextReadableChapterIndex(curChap);
+      if (nextChap !== -1) {
+        loadChapter(nextChap, -1, true);
+      } else {
+        stopSpeech();
+        statusText.textContent = "Finished reading.";
+      }
+    }
+  };
+
+  synth.speak(utter);
+}
+
+function stopSpeech() {
+  isPlaying = false;
+  if (synth) synth.cancel();
+  playBtn.textContent = "▶ Read";
+  statusText.textContent = "Paused";
+}
+
+function togglePlay() {
+  if (!BOOK.length) return;
+  if (isPlaying) stopSpeech();
+  else speakCurrentSegment();
+}
+
+function stepSegment(delta) {
+  if (!BOOK.length) return;
+  const next = curSeg + delta;
+  if (next >= -1 && next < BOOK[curChap].segments.length) {
+    curSeg = next;
+    highlightSegment(curSeg);
+    if (isPlaying) speakCurrentSegment();
+  } else if (delta > 0) {
+    const nextChap = nextReadableChapterIndex(curChap);
+    if (nextChap !== -1) loadChapter(nextChap, -1, isPlaying);
+  } else if (delta < 0) {
+    const prevChap = prevReadableChapterIndex(curChap);
+    if (prevChap !== -1) loadChapter(prevChap, BOOK[prevChap].segments.length - 1, isPlaying);
+  }
+}
+
+function updateSpeed(val) {
+  speechRate = parseFloat(val);
+  if (isPlaying) speakCurrentSegment();
+}
+
+function adjustFont(delta) {
+  fontSize = Math.max(14, Math.min(32, fontSize + delta));
+  document.documentElement.style.setProperty('--font-size', fontSize + 'px');
+}
+
+function toggleTheme() {
+  const dark = document.body.getAttribute('data-theme') === 'dark';
+  document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+}
+
+
+
+function getCoverTargetRole() {
+  const sel = document.getElementById('cover-target-role');
+  return sel && sel.value === 'back' ? 'back' : 'front';
+}
+
+function renderCoverDialogPreview() {
+  const box = document.getElementById('cover-preview-box');
+  const removeBtn = document.getElementById('cover-remove-btn');
+  if (!box) return;
+  box.replaceChildren();
+  const role = getCoverTargetRole();
+  const hasFront = BOOK.length && BOOK[0] && BOOK[0].cover_image;
+  const hasBack = BOOK.length && BOOK[BOOK.length - 1] && BOOK[BOOK.length - 1].back_image;
+  const activeImg = role === 'back' ? (hasBack ? BOOK[BOOK.length - 1].back_image : null) : (hasFront ? BOOK[0].cover_image : null);
+  const activeCap = role === 'back' ? (hasBack ? BOOK[BOOK.length - 1].back_caption : '') : (hasFront ? BOOK[0].cover_caption : '');
+  if (removeBtn) removeBtn.disabled = !activeImg;
+  if (activeImg) {
+    const img = document.createElement('img');
+    img.src = activeImg;
+    img.alt = activeCap || (role === 'back' ? 'Back cover' : 'Front cover');
+    img.style.cssText = 'max-height:175px;max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+    const cap = document.createElement('div');
+    cap.style.cssText = 'font-size:0.8rem;opacity:0.8;margin-top:3px';
+    cap.textContent = (role === 'back' ? 'Current Back Cover: ' : 'Current Front Cover: ') + (activeCap || document.title);
+    box.append(img, cap);
+  } else {
+    const empty = document.createElement('p');
+    empty.style.cssText = 'font-size:0.88rem;opacity:0.75;margin:6px 0';
+    empty.textContent = 'No ' + (role === 'back' ? 'back' : 'front') + ' cover image is currently set for this book.';
+    box.appendChild(empty);
+  }
+}
+
+function openCoverDialog() {
+  const dlg = document.getElementById('cover-dialog');
+  if (!dlg) return;
+  const qInput = document.getElementById('cover-search-query');
+  if (qInput && !qInput.value && document.title && document.title !== 'Ebook Reader') {
+    qInput.value = document.title;
+  }
+  const statusEl = document.getElementById('cover-dialog-status');
+  if (statusEl) statusEl.textContent = '';
+  renderCoverDialogPreview();
+  dlg.showModal();
+  if (typeof browseCoverArt === 'function') browseCoverArt(false);
+}
+
+
+
+
+
+init();
+
+
+</script>
+</body>
+</html>

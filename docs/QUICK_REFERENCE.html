@@ -1,0 +1,2683 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>QUICK REFERENCE</title>
+
+<style>
+
+  :root {
+
+    --bg: #fdfaf6; --text: #2c2623; --bar-bg: #f3ede2;
+
+    --hl-bg: #ffe97d; --hl-border: #d4a017; --accent: #2b579a;
+
+    --font-size: 19px;
+
+  }
+
+  [data-theme="dark"] {
+
+    --bg: #161819; --text: #e2dfd9; --bar-bg: #222527;
+
+    --hl-bg: #3d3511; --hl-border: #e5b822; --accent: #5b9bd5;
+
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+
+    margin: 0; display: flex; height: 100dvh; font-family: 'Georgia', serif;
+
+    background: var(--bg); color: var(--text); overflow: hidden;
+
+  }
+
+  #sidebar {
+
+    width: 280px; background: var(--bar-bg); border-right: 1px solid rgba(128,128,128,0.25);
+
+    display: flex; flex-direction: column; z-index: 20; transition: transform 0.25s ease;
+
+  }
+
+  @media (max-width: 768px) {
+
+    #sidebar {
+
+      position: fixed; top: 0; bottom: 0; left: 0;
+
+      transform: translateX(-100%); box-shadow: 4px 0 15px rgba(0,0,0,0.3);
+
+    }
+
+    #sidebar.open { transform: translateX(0); }
+
+  }
+
+  #sidebar-header {
+
+    padding: 14px 16px; font-family: sans-serif; font-weight: bold;
+
+    display: flex; justify-content: space-between; align-items: center;
+
+    border-bottom: 1px solid rgba(128,128,128,0.2);
+
+  }
+
+  #toc { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; }
+
+  #toc li {
+
+    padding: 13px 16px; cursor: pointer; font-family: sans-serif; font-size: 0.95rem;
+
+    border-bottom: 1px solid rgba(128,128,128,0.1);
+
+  }
+
+  #toc li.active { background: var(--accent); color: #fff; font-weight: bold; }
+
+
+
+  #main { flex: 1; display: flex; flex-direction: column; height: 100dvh; width: 100%; }
+
+  #toolbar {
+
+    padding: 8px 12px; background: var(--bar-bg); display: flex; align-items: center;
+
+    gap: 8px; font-family: sans-serif; border-bottom: 1px solid rgba(128,128,128,0.2);
+
+    flex-wrap: wrap;
+
+  }
+
+  button, select {
+
+    padding: 7px 11px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.35);
+
+    background: var(--bg); color: var(--text); cursor: pointer; font-size: 0.9rem;
+
+  }
+
+  button.primary { background: var(--accent); color: #fff; border: none; font-weight: bold; }
+
+  #voice-select { max-width: 180px; }
+
+  #reader-content {
+
+    flex: 1; overflow-y: auto; padding: 28px 8%; font-size: var(--font-size);
+
+    line-height: 1.75; scroll-behavior: smooth;
+
+  }
+
+  @media (min-width: 1024px) { #reader-content { padding: 40px 16%; } }
+
+  .seg {
+
+    padding: 8px 12px; margin-bottom: 10px; border-radius: 6px;
+
+    border-left: 4px solid transparent; cursor: pointer;
+
+  }
+
+  .seg.active { background: var(--hl-bg); border-left-color: var(--hl-border); }
+
+  .seg.seg-code {
+
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+
+    font-size: 0.86em; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+
+    background: rgba(128,128,128,0.1); border: 1px solid rgba(128,128,128,0.25);
+
+    border-left: 4px solid var(--accent); padding: 12px 16px; margin: 12px 0; overflow-x: auto;
+
+  }
+
+  .seg.seg-code.active { background: var(--hl-bg); border-left-color: var(--hl-border); }
+
+  .seg.seg-code pre { margin: 0; font: inherit; white-space: pre-wrap; }
+
+  .seg code.inline-code {
+
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+
+    font-size: 0.88em; background: rgba(128,128,128,0.13); padding: 1px 5px; border-radius: 4px;
+
+  }
+
+  .seg.seg-table {
+
+    margin: 14px 0; padding: 6px 12px; overflow-x: auto; border-radius: 6px;
+
+    border-left: 4px solid transparent;
+
+  }
+
+  .seg.seg-table.active { background: rgba(128,128,128,0.04); border-left-color: var(--hl-border); }
+
+  .seg.seg-table table {
+
+    width: 100%; border-collapse: collapse; font-size: 0.9em; line-height: 1.5; margin: 4px 0;
+
+  }
+
+  .seg.seg-table thead {
+
+    background: rgba(128,128,128,0.07); border-bottom: 2px solid rgba(128,128,128,0.35);
+
+  }
+
+  .seg.seg-table th, .seg.seg-table td {
+
+    padding: 8px 14px; text-align: left; border-bottom: 1px solid rgba(128,128,128,0.22);
+
+    vertical-align: top;
+
+  }
+
+  .seg.seg-table th { font-weight: 600; }
+
+  .seg.seg-table tr:last-child td { border-bottom: none; }
+
+  .seg.seg-table tbody tr {
+
+    cursor: pointer; transition: background 0.15s ease;
+
+  }
+
+  .seg.seg-table tbody tr:hover { background: rgba(128,128,128,0.09); }
+
+  .seg.seg-table tbody tr.active-row {
+
+    background: var(--hl-bg) !important;
+
+  }
+
+  .seg.seg-table tbody tr.active-row td {
+
+    border-top: 1px solid var(--hl-border);
+
+    border-bottom: 2px solid var(--hl-border);
+
+  }
+
+  .seg.seg-table tbody tr.active-row td:first-child {
+
+    border-left: 4px solid var(--hl-border);
+
+    border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+
+    padding-left: 10px;
+
+  }
+
+  .seg.seg-table tbody tr.active-row td:last-child {
+
+    border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+
+  }
+
+  .seg.seg-subitem { padding-left: 28px; }
+
+  .toc-cover-item {
+
+    padding: 12px 16px !important; text-align: center; cursor: pointer;
+
+    border-bottom: 1px solid rgba(128,128,128,0.2) !important;
+
+  }
+
+  .toc-cover-item img {
+
+    max-width: 140px; max-height: 190px; border-radius: 6px;
+
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25); display: inline-block;
+
+  }
+
+  .book-figure {
+
+    margin: 0 auto 22px; text-align: center; max-width: 100%;
+
+  }
+
+  .book-figure img {
+
+    max-width: min(100%, 460px); max-height: 62dvh; height: auto;
+
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+
+  }
+
+  .inline-figure { margin: 14px auto 20px; }
+
+  .inline-figure img { max-width: min(100%, 640px); max-height: 80dvh; background: #fff; }
+
+  .book-figure figcaption {
+
+    font-family: sans-serif; font-size: 0.82rem; opacity: 0.78; margin-top: 6px;
+
+  }
+
+  .book-back-cover-figure { margin-top: 32px; padding-top: 18px; border-top: 1px solid rgba(128,128,128,0.25); }
+
+  #toc li.toc-group { padding: 0; cursor: default; }
+
+  #toc ul { list-style: none; padding: 0; margin: 0; }
+
+  #toc summary { padding: 14px 12px; font-weight: bold; cursor: pointer; line-height: 1.4; }
+
+  #toc [data-section] { padding: 10px 16px 10px 28px; font-size: .86rem; line-height: 1.4; }
+
+  #toc > li[data-section] { padding: 13px 16px; font-size: 0.95rem; font-weight: bold; }
+
+  h2.section-title { font-size: 1.15em; margin: 0 0 1.2em; }
+
+  dialog { width: min(760px, 94vw); max-height: 88dvh; overflow-y: auto; border: 1px solid #aaa; border-radius: 12px; padding: 24px; background: var(--bg); color: var(--text); }
+
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+
+  .library-header, .library-actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+
+  .library-header h2 { margin: 0; }
+
+  #gutenberg-search { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+
+  #gutenberg-search label { display: flex; flex-direction: column; gap: 6px; }
+
+  #gutenberg-search input { padding: 9px; width: min(280px, 75vw); font: inherit; }
+
+  .library-book { border-top: 1px solid #aaa5; padding: 16px 0; }
+
+  .library-book h3 { margin: 0 0 6px; font-size: 1.05rem; }
+
+  .library-book p { margin: 6px 0 12px; }
+
+  .library-book button, .library-book a { margin-right: 10px; }
+
+  .library-note { font-size: .85rem; line-height: 1.5; }
+
+  button:disabled { opacity: .5; cursor: default; }
+
+  h1.chapter-title { font-size: 1.45em; margin-top: 0; margin-bottom: 0.8em; }
+
+  .chapter-title .chapter-label, .chapter-title .chapter-name {
+
+    display: block; font: inherit; color: inherit;
+
+  }
+
+  #toc .numbered-toc-item { padding: 0; border: 0; }
+
+  #toc .numbered-toc-item > [data-section] { display: block; padding: 9px 12px; }
+
+  #toc .numbered-toc-item ul { list-style: none; margin: 0; padding-left: 16px; }
+
+  #toc .numbered-toc-item .active { background: var(--accent); color: #fff; }
+
+  .numbered-heading { margin: 1.1em 0 .7em; }
+
+  h1.numbered-heading { font-size: 1.45em; }
+
+  h2.numbered-heading { font-size: 1.25em; }
+
+  h3.numbered-heading, h4.numbered-heading, h5.numbered-heading, h6.numbered-heading { font-size: 1.1em; }
+
+  #status-bar {
+
+    padding: 5px 14px; font-family: sans-serif; font-size: 0.8rem;
+
+    background: var(--bar-bg); opacity: 0.85; display: flex; justify-content: space-between; gap: 12px;
+
+  }
+
+  #progress-text { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+</style>
+
+</head>
+
+<body>
+
+  <aside id="sidebar">
+
+    <div id="sidebar-header">
+
+      <span>📖 Contents</span>
+
+      <button onclick="toggleSidebar()">✕</button>
+
+    </div>
+
+    <ul id="toc"></ul>
+
+  </aside>
+
+
+
+  <section id="main">
+
+    <div id="toolbar">
+
+      <button onclick="openBookFind()" title="Find in book (Ctrl+F)">Find</button>
+
+      <button onclick="toggleSidebar()" title="Table of Contents">☰</button>
+
+      <span id="current-book-title" style="font-weight:bold;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+
+
+
+      <button id="cover-btn" onclick="openCoverDialog()" title="View or select cover page / image">🖼 Cover</button>
+
+
+
+      <label style="font-size:.9rem;white-space:nowrap"><input id="speech-enabled" type="checkbox" checked onchange="setSpeechEnabled(this.checked)"> Read aloud</label>
+
+      <button id="prompter-btn" onclick="togglePrompter()">▶ Prompter</button>
+
+      <label style="font-size:.85rem">Scroll speed <input id="prompter-speed" type="range" min="5" max="100" value="30" aria-label="Prompter scroll speed" oninput="prompterSpeed = Number(this.value)" style="width:85px"></label>
+
+      <button id="play-btn" class="primary" onclick="togglePlay()">▶ Read</button>
+
+      <button onclick="stepSegment(-1)" title="Previous">⏮</button>
+
+      <button onclick="stepSegment(1)" title="Next">⏭</button>
+
+      <select id="voice-select" title="Select Voice"></select>
+
+      <select id="speed-select" onchange="updateSpeed(this.value)" title="Speed">
+
+        <option value="0.85">0.85x</option>
+
+        <option value="1.0" selected>1.0x</option>
+
+        <option value="1.15">1.15x</option>
+
+        <option value="1.3">1.3x</option>
+
+        <option value="1.5">1.5x</option>
+
+      </select>
+
+      <button onclick="adjustFont(-2)">A-</button>
+
+      <button onclick="adjustFont(2)">A+</button>
+
+      <button onclick="toggleTheme()">🌗</button>
+
+
+
+    </div>
+
+
+
+    <div id="reader-content"></div>
+
+
+
+    <div id="status-bar">
+
+      <span id="status-text">Tap any paragraph to start reading from there</span>
+
+      <span id="progress-text"></span>
+
+    </div>
+
+  </section>
+
+
+
+
+
+<dialog id="cover-dialog" aria-labelledby="cover-dialog-title" style="max-width:740px;width:94vw">
+
+  <div class="library-header"><h2 id="cover-dialog-title">Cover Art</h2><button onclick="document.getElementById('cover-dialog').close()" aria-label="Close cover dialog">✕</button></div>
+
+  <div id="cover-preview-box" style="text-align:center;margin:6px 0"></div>
+
+
+
+</dialog>
+
+<dialog id="book-find-dialog" aria-label="Find in book">
+
+  <form onsubmit="event.preventDefault(); moveBookFind(1)">
+
+    <label>Find in book <input id="book-find-query" type="search" oninput="searchBook()" autocomplete="off"></label>
+
+    <button type="button" onclick="moveBookFind(-1)">Previous</button>
+
+    <button type="submit">Next</button>
+
+    <button type="button" onclick="document.getElementById('book-find-dialog').close()">Close</button>
+
+    <p id="book-find-status" role="status" aria-live="polite">Search all chapters and text.</p>
+
+    <div id="book-find-results" style="max-height:45vh;overflow:auto"></div>
+
+  </form>
+
+</dialog>
+
+<script id="book-data" type="application/json">
+
+[
+  {
+    "title": "Lispy Quick Reference",
+    "segments": [
+      "Every built-in on one page. Inside Lispy, `(help)` prints this list and `(help 'name)` explains one entry. Examples: Lispy by Example. First steps: Quick Start."
+    ],
+    "toc_group": "Lispy Quick Reference",
+    "chapter_title": "Lispy Quick Reference"
+  },
+  {
+    "title": "Syntax",
+    "segments": [
+      "| Write | Meaning |\n|-------|---------|\n| `(f a b)` | call `f` with `a` and `b` |\n| `42` `3.14` | numbers |\n| `\"text\"` | string; escapes `\\\"` `\\\\` `\\n` `\\t`; may span lines |\n| `\"\"\"text\"\"\"` | raw string: no escapes, may hold `\"` |\n| `#\\a` `#\\space` `#\\newline` `#\\tab` | characters |\n| `#t` `#f` | true, false |\n| `name` | variable |\n| `:key` | keyword, stands for itself |\n| `'(1 2 3)` | quoted list, items not evaluated |\n| `[1 (+ 1 1)]` | vector, items evaluated: `[1 2]` |\n| `7/2` | an exact fraction |\n| `#b1010` `#xFF` `#o17` | whole numbers in base 2, 16 and 8, as in Scheme and Common Lisp |\n| `'(1 . 2)` | a pair whose tail is not a list |\n| `{:a 1 :b 2}` | map |\n| `; text` | comment to the end of the line |"
+    ],
+    "toc_group": "Syntax",
+    "chapter_title": "Syntax"
+  },
+  {
+    "title": "Special forms",
+    "segments": [
+      "| Form | What it does |\n|------|--------------|\n| `(define name value)` | name a value or a function |\n| `(define-memo (f a b) body...)` | like `define`, caching calls only when all arguments are exact numbers (integers/fractions) |\n| `(set! name value)` | change an existing variable |\n| `(setf x 1 y 2)` `(incf x)` `(incf x 5)` `(decf x)` | Common Lisp: set variables, add to or subtract from one; each gives the new value |\n| `(time exp)` | run `exp`, print how long it took in seconds, give its value |\n| `(lambda [a b] body)` | a function; one body expression |\n| `#'f` `(funcall f a b)` | Common Lisp spellings: `#'f` is just `f` (one namespace), `funcall` calls it |\n| `(defun f (a &optional (b 10) &rest more &key x (y 2)) ...)` | Common Lisp parameters: `&optional` may be left out (default, or `()`), `&rest` collects the rest, `&key` is passed as `:y 5`; `(b 10 b-given)` tells whether `b` was passed |\n| `(if test then else)` | choose; else is required |\n| `(when test body...)` `(unless test body...)` | run body when test is true (`unless`: false), else `()` |\n| `(begin e1 e2 ...)` | run in order, return the last |\n| `(let [a 1 b 2] body)` | local names for one body; Scheme's `(let ((a 1) (b 2)) body)` and named `(let loop ((i 0)) ...)` work too |\n| `(while test body...)` | loop while test is true |\n| `(loop for x in lst when (odd? x) collect x)` | Common Lisp `loop`: `for x in`/`on`/`across`, `for i from 1 to 10 by 2` (also `below` `downto` `above`), `for x = a then b`, `with`, `repeat`, `while`, `until`, `do`, `collect` `append` `sum` `count` `maximize` `minimize` (`into v`), `when`/`unless` ... `else` ... `end`, `always` `never` `thereis`, `initially`, `finally`; `(help 'loop)` |\n| `(return x)` | leave the running `loop` at once with `x` |\n| `(quote x)` / `'x` | `x` itself, unevaluated |\n| `(:key map)` | look `:key` up in `map` |\n| `(save \"name\")` | write definitions to `lisp/name.lisp`; imported bindings require keeping original source |\n| `(load \"name\")` | run `name.lisp`; a bare name is looked for in the current folder, then (in the Machine) the current buffer's folder and the chosen programs folder, then `lisp/` and `lisp/programs/` |\n| `(import (only library a b))` | select public exports; also prefix/rename; see Libraries |"
+    ],
+    "toc_group": "Special forms",
+    "chapter_title": "Special forms"
+  },
+  {
+    "title": "Lists and strings",
+    "segments": [
+      "| Function | Result |\n|----------|--------|\n| `(car lst)` / `(first lst)` | head: first item, `()` if empty |\n| `(cdr lst)` / `(rest lst)` | tail: all but the first item |\n| `(cons x lst)` | `lst` with `x` in front |\n| `(list a b ...)` | a new list |\n| `(length x)` | items in a list, characters in a string |\n| `(null? lst)` / `(empty? lst)` | true for `()` |\n| `(append a b)` | join two lists or two strings |\n| `(seq \"abc\")` | `(#\\a #\\b #\\c)` |\n| `(map f lst)` | `(f item)` for every item |\n| `(filter f lst)` | items where `(f item)` is true |\n| `(get map key)` | value for `key`, `()` if missing |\n| `(string-append \"a\" \"b\" ...)` | strings joined into one, `\"\"` for none |\n| `(str x)` | `x` as text (a symbol-like name, see Atoms, symbols and strings) |\n| `(string? x)` | true for a string |\n| `(string->symbol \"car\")` / `(symbol->string 'car)` | name from text / text from name |"
+    ],
+    "toc_group": "Lists and strings",
+    "chapter_title": "Lists and strings"
+  },
+  {
+    "title": "Numbers and tests",
+    "segments": [
+      "| Function | Result |\n|----------|--------|\n| `(+ a b ...)` `(- a b ...)` `(* a b ...)` `(/ a b ...)` | arithmetic, any number of values (`plus` = `+`); `/` gives an exact fraction for whole numbers, `(/ 7 2)` is `7/2` |\n| `(div a b)` `(mod a b)` `(divmod a b)` | whole-number division rounding down, what is left over, both as `(div mod)`; like Python's `//`, `%`, `divmod` |\n| `(quotient a b)` `(remainder a b)` `(modulo a b)` | Scheme's: round toward zero, left over with the sign of `a`; `modulo` = `mod` |\n| `(expt a b)` | power, exact for whole numbers |\n| `(even? n)` `(odd? n)` `(zero? x)` `(positive? x)` `(negative? x)` `(integer? x)` | number tests |\n| `(exact 3.0)` `(inexact 3)` | `3` and `3.0`; `(exact 0.1)` is `1/10` |\n| `(exact x tol)` `(rationalize x tol)` | simplest fraction within `tol` of `x`: `(exact pi 1/100)` is `22/7`, `(rationalize 3/10 1/10)` is `1/3`; `rationalize` gives a decimal for a decimal, as in Scheme |\n| `(number->string 255 16)` `(string->number \"ff\" 16)` | `\"ff\"` and `255`, any base from 2 to 36 |\n| `(import bitwise)` | bit operations from `lisp/bitwise.sld`, Scheme (SRFI 151) names: `bitwise-and` `bitwise-ior` `bitwise-xor` `bitwise-not` `arithmetic-shift` `bit-count` `integer-length` `(bit-set? i n)` `(bit-field n start end)`; Common Lisp aliases `logand` `logior` `logxor` `lognot` `ash` `logcount` `logbitp`; fixed width: `(signed-field n 32)`, `(logical-shift-right n k 32)` |\n| `(= a b ...)` | equal: numbers, strings, symbols, characters |\n| `(\u003c a b ...)` `(> a b ...)` `(\u003c= a b ...)` `(>= a b ...)` | compare; true when each is in order with the next |\n| `(not x)` | true when `x` is `#f` or `()` |\n| `(1+ x)` `(1- x)` | `x` plus one, minus one |\n| `(abs x)` `(round x)` | absolute value, nearest whole number (a half goes to the even one: `(round 2.5)` is `2`) |\n| `(floor x)` `(ceil x)` `(trunc x)` | round down (like BASIC `INT`: `(floor -2.5)` is `-3`), round up, round toward zero (`(trunc -2.7)` is `-2`) |\n| `(min a b ...)` `(max a b ...)` | smallest, largest |\n| `(number? x)` `(symbol? x)` | type tests |\n| `sqrt floor ceil fmod pow log exp sin cos tan gcd lcm isqrt factorial comb ...` | everything in Python's `math` |\n| `pi` `e` `inf` | constants from `math` |",
+      "True is `#t`, false is `#f`. False in a test: `#f` and `()`. Everything else is true, including `0` and `\"\"`. Tests return `#t`/`#f`; `define`, `set!`, `while` and `display` return nothing; a missing value is `()`. How this compares with Scheme, Common Lisp and Clojure: True and false."
+    ],
+    "toc_group": "Numbers and tests",
+    "chapter_title": "Numbers and tests"
+  },
+  {
+    "title": "Vectors, time and output",
+    "segments": [
+      "| Function | Result |\n|----------|--------|\n| `(make-vector n fill)` | `n` items of `fill` (default 0) |\n| `(vector-ref v i)` | item `i`, counting from 0 |\n| `(vector-set! v i x)` | store `x` at `i` |\n| `(aref v i j ...)` | item of nested vectors, one index per level: `(aref m 1 0)` is row 1, column 0 |\n| `(mat* a b)` | matrix product of nested vectors or lists; a flat `a` is a row, a flat `b` a column. `(mat* a b out)` writes the result into `out`, which may be `a` or `b` |\n| `(vector 1 2)` `(vector? v)` `(vector-length v)` | make a vector, test for one, its length |\n| `(vector->list v)` `(list->vector lst)` | convert between vectors and lists |\n| `(clock)` | seconds since Lispy started, for timing |\n| `(clock->string)` / `(clock->string t)` | date and time now, or of a `(clock)` value `t`, like `\"2026-10-17 21:53:20\"`; add a format such as `\"%H:%M\"` |\n| `(get-universal-time)` | seconds since 1900-01-01 GMT, as in Common Lisp |\n| `(universal-time->string [ut] [format])` | a universal time (default now) as local `\"2026-10-17 22:03:00\"`; format like `\"%H:%M\"` |\n| `(get-decoded-time)` | now as `(second minute hour date month year day-of-week daylight-p zone)` |\n| `(decode-universal-time ut [zone])` | `ut` as that list; day 0 is Monday, `zone` is hours west of Greenwich |\n| `(encode-universal-time s m h date month year [zone])` | back to a universal time |\n| `(get-internal-real-time)` / `(get-internal-run-time)` | timer / processor time in `internal-time-units-per-second` (1000) units |\n| `(sleep seconds)` | wait |\n| `(display a b ...)` | print values side by side, then a new line |\n| `(pretty-print x)` / `(pprint x)` | print indented |\n| `(help)` / `(help 'name)` | list built-ins / explain one |\n| `(eval code)` | run code held as data: `(eval '(+ 1 2))` is `3` |\n| `(read \"text\")` | turn text into code: `(eval (read \"(+ 1 2)\"))` is `3` |\n| `(slurp \"file.txt\")` | the whole text file as one string; looks in `lisp/` if not found here |\n| `(open-file \"data.bin\" \"rb\")` | open a binary file; modes `\"rb\"`, `\"wb\"`, `\"w+b\"`, `\"r+b\"`, `\"ab\"` |\n| `(read-byte f [eof-value])` / `(write-byte n f)` | read or write one byte; `read-byte` gives `eof-value` (`#f`) at the end |\n| `(file-position f [n])` / `(file-length f)` / `(close f)` | byte position (or move to `n`), length, close |\n| `(with-open-file (s \"notes.txt\" :direction :output) body...)` | run `body` with `s` open on a text file, then close it, even after an error |\n| `(open \"notes.txt\" [:direction :input/:output/:io] [:if-exists :supersede/:append/:error/nil] [:if-does-not-exist :error/:create/nil])` | a text file stream, as in Common Lisp; output replaces an existing file unless `:if-exists` says otherwise; `:element-type '(unsigned-byte 8)` opens it binary |\n| `(read-line [s [eof-error-p [eof-value]]])` | the next line without its newline; `(read-line s nil :eof)` gives `:eof` at the end instead of an error; no stream reads the console |\n| `(read-char [s ...])` / `(peek-char nil [s ...])` | the next character; `peek-char` leaves it to be read |\n| `(write-line \"text\" [s])` / `(write-string \"text\" [s])` / `(write-char #\\a [s])` | write text with a newline, text alone, one character |\n| `(princ x [s])` / `(prin1 x [s])` / `(terpri [s])` | write `x` as `display` shows it, or as readable Lisp; end the line |\n| `(format s \"~a~%\" x)` | formatted text to the stream `s`; `t` prints, `nil` gives a string |\n| `(with-output-to-string (s) body...)` | everything `body` writes to `s`, as a string |\n| `(with-input-from-string (s \"one\\ntwo\") body...)` | run `body` reading from the string through `s` |\n| `(make-string-output-stream)` / `(get-output-stream-string s)` | a stream to write to; take the text so far, leaving it empty |\n| `(make-string-input-stream \"text\" [start [end]])` | a stream reading from the string |\n| `*standard-output*` / `*standard-input*` | where printing goes and where `read-line` reads from |\n| `(streamp x)` `(input-stream-p s)` `(output-stream-p s)` `(open-stream-p s)` | stream tests |\n| `(finish-output [s])` / `(force-output [s])` | send buffered output on now |\n| `(delay exp)` / `(force p)` | a promise worked out by the first `force` and kept; `force` gives anything else back as it is |\n| `(delay-force exp)` / `(make-promise x)` / `(promise? x)` | `(delay (force exp))` that can chain without running out of stack; a promise already holding `x`; test for a promise |\n| `(cons-stream a b)` | a lazy stream as in SICP: `b` is worked out only when `stream-cdr` asks for it |\n| `(stream-car s)` / `(stream-cdr s)` | first item / the rest of a stream |\n| `the-empty-stream` `(stream-null? s)` `(stream-pair? s)` | the empty stream, `()`, and tests |\n| `(stream-ref s n)` / `(stream-head s n)` / `(stream-tail s n)` | item `n`; the first `n` items as a list; the stream after them |\n| `(stream-map f s ...)` / `(stream-filter pred s)` | lazy streams of results / of the items `pred` is true for |\n| `(stream-for-each f s)` / `(stream->list s [n])` | for a finite stream, or its first `n` items |\n| `(stream 1 2 3)` / `(list->stream lst)` | a finite stream of the items |\n| `(run-program \"sbcl\" (list \"--version\") [input])` | run another program, feeding it the input text; prints what it prints, gives its exit code |\n| `lispy-home` | the folder `lispy3.py` is in |\n| `(memoize f)` | `f` that remembers its results; a call with the same arguments gives the saved value |\n| `(memoize-exact f)` | cache only all-exact numeric argument lists; bypass floats, booleans, strings, complex values and containers |",
+      "Only in `python lispy3-numpy.py` (NumPy optional):",
+      "| Form | Meaning |\n|------|---------|\n| `(make-num-vector n fill)` | like `make-vector`; a NumPy array when NumPy is installed. `(make-num-vector [1 2 3])` takes the items of a vector or list |\n| `(vector-fill! v x [start] [stop])` | set a range of items to `x` |\n| `(vector-slice-set! v start stop step x)` | set every `step`th item from `start` below `stop` to `x` |\n| `(sum v)` | total of the items |\n| `(array ...)` `(zeros n)` `(ones n)` `(arange n)` `(linspace a b n)` `(a+ a b)` `(dot a b)` `(mean a)` ... | NumPy arrays and maths, NumPy only |"
+    ],
+    "toc_group": "Vectors, time and output",
+    "chapter_title": "Vectors, time and output"
+  },
+  {
+    "title": "Turtle graphics",
+    "segments": [
+      "| Function | Result |\n|----------|--------|\n| `fd bk lt rt pu pd goto setheading circle color ...` | everything in Python's `turtle` |\n| `(push-pose)` / `(pop-pose)` | remember / return to position and heading |\n| `(clear-poses)` | forget remembered poses |\n| `(onscroll f)` / `(onscroll #f)` | call `(f x y step)` on each mouse wheel turn, step 1 away from you, -1 towards; stop |\n| `(reinit-turtle)` / `(reset)` | reopen a closed turtle window |"
+    ],
+    "toc_group": "Turtle graphics",
+    "chapter_title": "Turtle graphics"
+  },
+  {
+    "title": "PIL x86 engine",
+    "segments": [
+      "Needs a built PIL engine; see Eval > PIL x86 engine > PIL Settings.",
+      "| Function | Result |\n|----------|--------|\n| `(pil \"demo hello\")` | send one PIL debugger command; guest output is printed, the reply text returned |\n| `(pil-run 1000)` | run up to 1000 instructions; the stop status, such as `halt` |\n| `(pil-state)` | map of `eax` ... `edi`, `eip`, `flags`, `status`, `demo` |\n| `(pil-start)` / `(pil-start \"raw.bin\")` / `(pil-stop)` | fresh engine, optionally with a raw image; end it |"
+    ],
+    "toc_group": "PIL x86 engine",
+    "chapter_title": "PIL x86 engine"
+  },
+  {
+    "title": "Unit tests",
+    "segments": [
+      "| Form | Meaning |\n|---|---|\n| `(deftest name body...)` | Define a test |\n| `(check exp)` | Fail when exp is false or raises an error |\n| `(check-equal expected exp)` | Fail unless `(equal? expected exp)` |\n| `(check-error exp)` | Fail unless exp raises an error |\n| `(run-tests [name...])` | Run tests, print a summary, give `#t` when all passed |",
+      "Ctrl+F6 (Eval → Run tests in buffer) runs a Lisp buffer's tests in a fresh workspace, or a Python buffer with unittest. See UNIT_TESTS.md."
+    ],
+    "toc_group": "Unit tests",
+    "chapter_title": "Unit tests"
+  },
+  {
+    "title": "Limits to remember",
+    "segments": [
+      "• About 200 nested calls of recursion; use `map`, `filter` or `while` for more.",
+      "• `if` needs else; lambda has one body expression."
+    ],
+    "toc_group": "Limits to remember",
+    "chapter_title": "Limits to remember"
+  },
+  {
+    "title": "To be implemented",
+    "segments": [
+      "Not in Lispy yet (details and workarounds in Lispy by Example, the list in TODO.md): `cond`, `and`, `or`, `apply`, `eq?`, `equal?`, `list?`, `procedure?`, `(define (f x) ...)`, several body expressions in `lambda`, tail-call optimisation, `reverse`, `nth`, `last`, `range`, `reduce`, `sort`, `member`, `for-each`, `dotimes`, `substring`, `string-ref`, `upcase`, `downcase`, `split`, `string->number`, `\\r`/hex/Unicode string escapes, `format`, `str` returning a real string, `assoc`, `dissoc`, `keys`, `vals`, `contains?`, `try`/`error`, macros (`define-macro`, quasiquote).",
+      "Most of these have a reference implementation in fluentpython/lispy, a set of `lis.py` variants close to Lispy; Coming from Scheme or lis.py shows how to translate their examples."
+    ],
+    "toc_group": "TO BE IMPLEMENTED",
+    "chapter_title": "TO BE IMPLEMENTED"
+  },
+  {
+    "title": "Workspace lifecycle",
+    "segments": [
+      "| Form | Effect |\n|---|---|\n| `(new-workspace [name])` | Fresh state; editor buffers and saved stack remain |\n| `(workspace-push [name])` | Preserve exact state; enter fresh state |\n| `(workspace-pop)` | Clean temporary resources; restore saved state |\n| `(workspace-name)` / `(workspace-depth)` | Current label / saved count |\n| `(workspace-on-discard cleanup)` | Register managed workspace cleanup |\n| `(module-on-unload cleanup)` | Register cleanup inside module/library |\n| `(unload \"file.lisp\")` / `(reload \"file.lisp\")` | Detach / replace an explicit imported file module |",
+      "F6/Shift+F6 run a fresh program; F5, Ctrl+Shift+Enter and Listener Eval reuse current state. See WORKSPACES.md for effects and limitations."
+    ],
+    "toc_group": "Workspace lifecycle",
+    "chapter_title": "Workspace lifecycle"
+  }
+]
+
+</script>
+
+<script id="reader-script">
+
+let BOOK_ID = "bdc947675a";
+
+let DEFAULT_LANG = "en-US";
+
+let BOOK = JSON.parse(document.getElementById('book-data').textContent);
+
+
+
+const ORIGINAL_BOOK = { chapters: BOOK, id: BOOK_ID, lang: DEFAULT_LANG, title: document.title };
+
+const INITIAL_OPEN_TOKEN = (typeof location !== 'undefined' && location.protocol === 'http:')
+
+  ? new URLSearchParams(location.search).get('open')
+
+  : null;
+
+let curChap = 0;
+
+let curSeg = -1;
+
+let curTableRow = -1;
+
+let isPlaying = false;
+
+let bookFindMatches = [];
+
+let bookFindIndex = -1;
+
+function openBookFind() {
+
+  const dialog = document.getElementById('book-find-dialog');
+
+  if (!dialog.open) dialog.showModal();
+
+  searchBook();
+
+  document.getElementById('book-find-query').focus();
+
+}
+
+function searchBook() {
+
+  const query = document.getElementById('book-find-query').value.trim().toLocaleLowerCase();
+
+  bookFindMatches = [];
+
+  bookFindIndex = -1;
+
+  const results = document.getElementById('book-find-results');
+
+  results.replaceChildren();
+
+  if (query) BOOK.forEach((chapter, c) => {
+
+    const passages = [(chapter.chapter_title || '') + ' ' + chapter.title, ...chapter.segments];
+
+    passages.forEach((text, s) => {
+
+      if (text.toLocaleLowerCase().includes(query)) bookFindMatches.push({c, s: s - 1, text});
+
+    });
+
+  });
+
+  document.getElementById('book-find-status').textContent = query
+
+    ? `${bookFindMatches.length} matching passages` : 'Search all chapters and text.';
+
+  bookFindMatches.slice(0, 100).forEach((match, index) => {
+
+    const button = document.createElement('button');
+
+    button.type = 'button';
+
+    button.style.cssText = 'display:block;text-align:left;margin:6px 0;width:100%';
+
+    const pos = match.text.toLocaleLowerCase().indexOf(query);
+
+    button.textContent = BOOK[match.c].title + ' — ' + match.text.slice(Math.max(0, pos - 40), pos + query.length + 100);
+
+    button.onclick = () => showBookFind(index);
+
+    results.appendChild(button);
+
+  });
+
+}
+
+function showBookFind(index) {
+
+  if (!bookFindMatches.length) return;
+
+  bookFindIndex = (index + bookFindMatches.length) % bookFindMatches.length;
+
+  const match = bookFindMatches[bookFindIndex];
+
+  document.getElementById('book-find-dialog').close();
+
+  loadChapter(match.c, match.s);
+
+  const root = document.getElementById(`seg_${match.c}_${match.s}`);
+
+  const query = document.getElementById('book-find-query').value.trim().toLocaleLowerCase();
+
+  if (root && query) {
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+
+    const nodes = [];
+
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    nodes.forEach(node => {
+
+      const text = node.textContent;
+
+      const lower = text.toLocaleLowerCase();
+
+      const fragment = document.createDocumentFragment();
+
+      let start = 0, pos;
+
+      while ((pos = lower.indexOf(query, start)) !== -1) {
+
+        fragment.append(document.createTextNode(text.slice(start, pos)));
+
+        const mark = document.createElement('mark');
+
+        mark.textContent = text.slice(pos, pos + query.length);
+
+        fragment.append(mark);
+
+        start = pos + query.length;
+
+      }
+
+      fragment.append(document.createTextNode(text.slice(start)));
+
+      node.replaceWith(fragment);
+
+    });
+
+  }
+
+  progressText.textContent += ` • Find ${bookFindIndex + 1}/${bookFindMatches.length} (F3: next)`;
+
+}
+
+function moveBookFind(direction) {
+
+  showBookFind(bookFindIndex < 0 ? (direction < 0 ? bookFindMatches.length - 1 : 0) : bookFindIndex + direction);
+
+}
+
+document.addEventListener('keydown', event => {
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+
+    event.preventDefault(); openBookFind();
+
+  } else if (event.key === 'F3') {
+
+    event.preventDefault(); moveBookFind(event.shiftKey ? -1 : 1);
+
+  }
+
+});
+
+let speechEnabled = true;
+
+let prompterRunning = false;
+
+let prompterSpeed = 30;
+
+let prompterFrame = null;
+
+let prompterLastTime = null;
+
+let prompterBottomTime = null;
+
+let speechRate = 1.0;
+
+let fontSize = 19;
+
+const synth = window.speechSynthesis;
+
+
+
+const tocEl = document.getElementById('toc');
+
+const contentEl = document.getElementById('reader-content');
+
+const playBtn = document.getElementById('play-btn');
+
+const voiceSelect = document.getElementById('voice-select');
+
+const statusText = document.getElementById('status-text');
+
+const progressText = document.getElementById('progress-text');
+
+
+
+function openBookDB() {
+
+  return new Promise((resolve, reject) => {
+
+    if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
+
+    const req = indexedDB.open('ebook_reader_db', 1);
+
+    req.onupgradeneeded = () => {
+
+      if (!req.result.objectStoreNames.contains('books')) req.result.createObjectStore('books');
+
+    };
+
+    req.onsuccess = () => resolve(req.result);
+
+    req.onerror = () => reject(req.error);
+
+  });
+
+}
+
+
+
+async function saveActiveBook(record) {
+
+  try { localStorage.removeItem('ebook_active_book'); } catch {}
+
+  try {
+
+    localStorage.setItem('ebook_active_book', JSON.stringify(record));
+
+    try {
+
+      const db = await openBookDB();
+
+      const tx = db.transaction('books', 'readwrite');
+
+      tx.objectStore('books').delete('active');
+
+      tx.oncomplete = () => db.close();
+
+      tx.onerror = () => db.close();
+
+    } catch {}
+
+    return;
+
+  } catch {}
+
+  try {
+
+    const db = await openBookDB();
+
+    await new Promise((resolve, reject) => {
+
+      const tx = db.transaction('books', 'readwrite');
+
+      tx.objectStore('books').put(record, 'active');
+
+      tx.oncomplete = () => { db.close(); resolve(); };
+
+      tx.onerror = () => { db.close(); reject(tx.error); };
+
+    });
+
+    localStorage.setItem('ebook_active_book', JSON.stringify({storedInIDB: true}));
+
+  } catch { /* Browser storage fallback */ }
+
+}
+
+
+
+async function loadActiveBookFromIDB() {
+
+  const db = await openBookDB();
+
+  return new Promise((resolve, reject) => {
+
+    const tx = db.transaction('books', 'readonly');
+
+    const req = tx.objectStore('books').get('active');
+
+    req.onsuccess = () => { db.close(); resolve(req.result || null); };
+
+    req.onerror = () => { db.close(); reject(req.error); };
+
+  });
+
+}
+
+
+
+async function clearActiveBook() {
+
+  try { localStorage.removeItem('ebook_active_book'); } catch {}
+
+  try {
+
+    const db = await openBookDB();
+
+    const tx = db.transaction('books', 'readwrite');
+
+    tx.objectStore('books').delete('active');
+
+    tx.oncomplete = () => db.close();
+
+    tx.onerror = () => db.close();
+
+  } catch {}
+
+}
+
+
+
+function populateVoices() {
+
+  if (!synth) return;
+
+  const voices = synth.getVoices();
+
+  if (!voices.length) return;
+
+  voiceSelect.innerHTML = '';
+
+  let bestIdx = 0;
+
+  voices.forEach((v, i) => {
+
+    const opt = document.createElement('option');
+
+    opt.value = i;
+
+    opt.textContent = `${v.name} (${v.lang})`;
+
+    if (v.lang.toLowerCase().startsWith(DEFAULT_LANG.toLowerCase())) {
+
+      bestIdx = i;
+
+    }
+
+    voiceSelect.appendChild(opt);
+
+  });
+
+  voiceSelect.selectedIndex = bestIdx;
+
+}
+
+
+
+function init() {
+
+  try { speechEnabled = localStorage.getItem('ebook_speech_enabled') !== 'false'; } catch {}
+
+  document.getElementById('speech-enabled').checked = speechEnabled;
+
+  try {
+
+    const savedLang = localStorage.getItem('ebook_conversion_lang');
+
+    const langSelect = document.getElementById('conversion-language');
+
+    if (savedLang && Array.from(langSelect.options).some(o => o.value === savedLang)) {
+
+      langSelect.value = savedLang;
+
+    }
+
+  } catch {}
+
+  const quitBtn = document.getElementById('quit-server-btn');
+
+  if (quitBtn) quitBtn.hidden = (typeof location === 'undefined' || location.protocol !== 'http:');
+
+
+
+  populateVoices();
+
+  if (synth && synth.onvoiceschanged !== undefined) {
+
+    synth.onvoiceschanged = populateVoices;
+
+  }
+
+
+
+  document.getElementById('current-book-title').textContent = document.title;
+
+  if (INITIAL_OPEN_TOKEN) {
+
+    contentEl.textContent = 'Opening selected book…';
+
+    statusText.textContent = 'Opening selected book…';
+
+    playBtn.disabled = true;
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const stored = JSON.parse(localStorage.getItem('ebook_active_book') || 'null');
+
+    if (typeof location !== 'undefined' && location.protocol === 'http:' && stored) {
+
+      if (stored.chapters && stored.chapters.length) {
+
+        useLibraryBook(stored.chapters, stored.title, stored.id, stored.lang, false);
+
+        return;
+
+      }
+
+      if (stored.storedInIDB) {
+
+        contentEl.textContent = 'Loading book…';
+
+        playBtn.disabled = true;
+
+        loadActiveBookFromIDB().then(record => {
+
+          if (libraryImported) return;
+
+          if (record && record.chapters && record.chapters.length) {
+
+            useLibraryBook(record.chapters, record.title, record.id, record.lang, false);
+
+            refreshRedoAvailability();
+
+          } else {
+
+            renderContents();
+
+            loadChapter(0, -1, false);
+
+          }
+
+        }).catch(() => {
+
+          if (!libraryImported) { renderContents(); loadChapter(0, -1, false); }
+
+        });
+
+        return;
+
+      }
+
+    }
+
+  } catch { /* A corrupt or unavailable saved session must not block reading. */ }
+
+  renderContents();
+
+
+
+  let saved = {c: 0, s: -1};
+
+  try { saved = JSON.parse(localStorage.getItem('ebook_pos_' + BOOK_ID) || '{"c":0,"s":-1}'); } catch {}
+
+  loadChapter(saved.c || 0, saved.s ?? -1, false);
+
+}
+
+
+
+function numberedHeading(title) {
+
+  const match = title.match(/^(?:(?:chapter|luku)\s+)?(\d+(?:\.\d+)*|[A-Z](?:\.\d+)+)\.?\s+(.+)$/i);
+
+  return match ? {number: match[1], depth: match[1].split('.').length} : null;
+
+}
+
+
+
+function renderContents() {
+
+  tocEl.replaceChildren();
+
+  const coverChapIdx = BOOK.findIndex(c => c.cover_image);
+
+  if (coverChapIdx !== -1 && BOOK[coverChapIdx].cover_image) {
+
+    const coverLi = document.createElement('li');
+
+    coverLi.className = 'toc-cover-item';
+
+    const coverImg = document.createElement('img');
+
+    coverImg.src = BOOK[coverChapIdx].cover_image;
+
+    coverImg.alt = BOOK[coverChapIdx].cover_caption || document.title || 'Book cover';
+
+    coverLi.appendChild(coverImg);
+
+    coverLi.onclick = () => {
+
+      loadChapter(coverChapIdx, -1, isPlaying);
+
+      if (window.innerWidth <= 768) toggleSidebar(false);
+
+    };
+
+    tocEl.appendChild(coverLi);
+
+  }
+
+  const groups = new Map();
+
+  const numberedNodes = new Map();
+
+  BOOK.forEach((c, idx) => {
+
+    const info = numberedHeading(c.title);
+
+    if (!info || c.toc_group === 'Original printed contents') return;
+
+    const item = document.createElement('li');
+
+    item.className = 'numbered-toc-item';
+
+    const label = document.createElement('span');
+
+    label.textContent = c.title;
+
+    label.dataset.section = idx;
+
+    label.tabIndex = 0;
+
+    label.setAttribute('role', 'button');
+
+    label.onclick = event => {
+
+      event.stopPropagation();
+
+      loadChapter(idx, -1, isPlaying);
+
+      if (window.innerWidth <= 768) toggleSidebar(false);
+
+    };
+
+    label.onkeydown = event => {
+
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); label.click(); }
+
+    };
+
+    const children = document.createElement('ul');
+
+    item.append(label, children);
+
+    numberedNodes.set(info.number, {item, children, idx});
+
+  });
+
+  // Count only the sections that will actually be listed under each group,
+
+  // so a group holding a single item is shown flat instead of as a collapsible pane.
+
+  const groupCounts = new Map();
+
+  BOOK.forEach((c, idx) => {
+
+    const info = numberedHeading(c.title);
+
+    const numbered = info && numberedNodes.get(info.number);
+
+    if (numbered && numbered.idx === idx) return;
+
+    const name = c.toc_group || 'Contents';
+
+    groupCounts.set(name, (groupCounts.get(name) || 0) + 1);
+
+  });
+
+  BOOK.forEach((c, idx) => {
+
+    const info = numberedHeading(c.title);
+
+    const numbered = info && numberedNodes.get(info.number);
+
+    if (numbered && numbered.idx === idx) {
+
+      const parentNumber = info.number.split('.').slice(0, -1).join('.');
+
+      const parent = numberedNodes.get(parentNumber);
+
+      (parent ? parent.children : tocEl).appendChild(numbered.item);
+
+      return;
+
+    }
+
+    const name = c.toc_group || 'Contents';
+
+    const count = groupCounts.get(name) || 1;
+
+    const isCollapsible = count > 1;
+
+
+
+    const li = document.createElement('li');
+
+    li.textContent = (count > 1 && c.title === name) ? 'Overview — ' + c.title : c.title;
+
+    li.dataset.section = idx;
+
+    li.tabIndex = 0;
+
+    li.setAttribute('role', 'button');
+
+    li.onclick = () => {
+
+      loadChapter(idx, -1, isPlaying);
+
+      if (window.innerWidth <= 768) toggleSidebar(false);
+
+    };
+
+    li.onkeydown = e => {
+
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); }
+
+    };
+
+
+
+    if (!isCollapsible) {
+
+      tocEl.appendChild(li);
+
+      return;
+
+    }
+
+
+
+    if (!groups.has(name)) {
+
+      const item = document.createElement('li');
+
+      item.className = 'toc-group';
+
+      const details = document.createElement('details');
+
+      const summary = document.createElement('summary');
+
+      summary.textContent = name;
+
+      const list = document.createElement('ul');
+
+      details.append(summary, list);
+
+      item.appendChild(details);
+
+      tocEl.appendChild(item);
+
+      groups.set(name, list);
+
+    }
+
+    groups.get(name).appendChild(li);
+
+  });
+
+}
+
+
+
+function toggleSidebar(force) {
+
+  const sb = document.getElementById('sidebar');
+
+  if (typeof force === 'boolean') sb.classList.toggle('open', force);
+
+  else sb.classList.toggle('open');
+
+}
+
+
+
+function appendInlineFormatted(parent, lineText) {
+
+  // Supports **bold**, __bold__, `code`, *italic*, and Gutenberg _italic_ / =bold= conventions
+
+  const tokenRe = /(\*\*([^*\n]+)\*\*|__([^_\n]+)__|`([^`\n]+)`|(?<![=\w])=([A-Za-zÄÖÅäöå0-9][^=\n]{0,60}?[A-Za-zÄÖÅäöå0-9.!?])=(?![=\w])|(?<![*\w])\*([^*\n]+?)\*(?![*\w])|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}]))/gu;
+
+  let lastIdx = 0;
+
+  let match;
+
+  while ((match = tokenRe.exec(lineText)) !== null) {
+
+    if (match.index > lastIdx) {
+
+      parent.appendChild(document.createTextNode(lineText.slice(lastIdx, match.index)));
+
+    }
+
+    if (match[2] !== undefined || match[3] !== undefined || match[5] !== undefined) {
+
+      const strong = document.createElement('strong');
+
+      strong.textContent = match[2] ?? match[3] ?? match[5];
+
+      parent.appendChild(strong);
+
+    } else if (match[4] !== undefined) {
+
+      const code = document.createElement('code');
+
+      code.className = 'inline-code';
+
+      code.textContent = match[4];
+
+      parent.appendChild(code);
+
+    } else if (match[6] !== undefined || match[7] !== undefined) {
+
+      const em = document.createElement('em');
+
+      em.textContent = match[6] ?? match[7];
+
+      parent.appendChild(em);
+
+    }
+
+    lastIdx = tokenRe.lastIndex;
+
+  }
+
+  if (lastIdx < lineText.length) {
+
+    parent.appendChild(document.createTextNode(lineText.slice(lastIdx)));
+
+  }
+
+}
+
+
+
+function isTableSeparatorLine(line) {
+
+  const s = String(line || '').trim();
+
+  if (!s || !s.includes('|')) return false;
+
+  const inner = s.replace(/^\|/, '').replace(/\|$/, '');
+
+  const cells = inner.split('|').map(c => c.trim());
+
+  if (!cells.length) return false;
+
+  return cells.every(c => /^:?-+:?$/.test(c));
+
+}
+
+
+
+function isMarkdownTableText(text) {
+
+  if (typeof text !== 'string' || !text.includes('\n') || !text.includes('|')) return false;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  if (lines.length < 2) return false;
+
+  return lines[0].includes('|') && isTableSeparatorLine(lines[1]);
+
+}
+
+
+
+function highlightTableRow(cIdx, sIdx, rIdx) {
+
+  document.querySelectorAll('.active-row').forEach(el => el.classList.remove('active-row'));
+
+  const segEl = document.getElementById(`seg_${cIdx}_${sIdx}`);
+
+  if (!segEl) return;
+
+  const rows = segEl.querySelectorAll('tbody tr');
+
+  if (rIdx >= 0 && rIdx < rows.length) {
+
+    rows[rIdx].classList.add('active-row');
+
+    if (!manualReadingScroll) {
+
+      try { rows[rIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch {}
+
+    }
+
+  }
+
+}
+
+
+
+function renderMarkdownTable(div, text, cIdx, sIdx) {
+
+  div.classList.add('seg-table');
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  if (lines.length < 2) return;
+
+
+
+  const parseCells = (line) => {
+
+    const raw = line.replace(/^\|/, '').replace(/\|$/, '');
+
+    return raw.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'));
+
+  };
+
+
+
+  const sepCells = parseCells(lines[1]);
+
+  const alignments = sepCells.map(c => {
+
+    const left = c.startsWith(':');
+
+    const right = c.endsWith(':');
+
+    if (left && right) return 'center';
+
+    if (right) return 'right';
+
+    if (left) return 'left';
+
+    return '';
+
+  });
+
+
+
+  const table = document.createElement('table');
+
+  const thead = document.createElement('thead');
+
+  const headerTr = document.createElement('tr');
+
+  const headerCells = parseCells(lines[0]);
+
+  headerCells.forEach((cellText, idx) => {
+
+    const th = document.createElement('th');
+
+    if (alignments[idx]) th.style.textAlign = alignments[idx];
+
+    appendInlineFormatted(th, cellText);
+
+    headerTr.appendChild(th);
+
+  });
+
+  thead.appendChild(headerTr);
+
+  table.appendChild(thead);
+
+
+
+  const tbody = document.createElement('tbody');
+
+  for (let i = 2; i < lines.length; i++) {
+
+    const rowIdx = i - 2;
+
+    const rowCells = parseCells(lines[i]);
+
+    if (!rowCells.some(Boolean)) continue;
+
+    const tr = document.createElement('tr');
+
+    tr.dataset.row = String(rowIdx);
+
+    tr.onclick = (e) => {
+
+      e.stopPropagation();
+
+      stopSpeech();
+
+      curChap = typeof cIdx === 'number' ? cIdx : curChap;
+
+      curSeg = typeof sIdx === 'number' ? sIdx : curSeg;
+
+      curTableRow = rowIdx;
+
+      highlightSegment(curSeg, false);
+
+      highlightTableRow(curChap, curSeg, curTableRow);
+
+      if (speechEnabled) speakCurrentSegment();
+
+    };
+
+    rowCells.forEach((cellText, idx) => {
+
+      const td = document.createElement('td');
+
+      if (alignments[idx]) td.style.textAlign = alignments[idx];
+
+      appendInlineFormatted(td, cellText);
+
+      tr.appendChild(td);
+
+    });
+
+    while (tr.children.length < headerCells.length) {
+
+      tr.appendChild(document.createElement('td'));
+
+    }
+
+    tbody.appendChild(tr);
+
+  }
+
+  table.appendChild(tbody);
+
+  div.appendChild(table);
+
+}
+
+
+
+function renderFormattedSegment(div, text, cIdx, sIdx) {
+
+  if (isMarkdownTableText(text)) {
+
+    renderMarkdownTable(div, text, cIdx, sIdx);
+
+    return;
+
+  }
+
+  if (typeof text === 'string' && text.startsWith('```') && text.endsWith('```')) {
+
+    div.classList.add('seg-code');
+
+    const pre = document.createElement('pre');
+
+    const code = document.createElement('code');
+
+    code.textContent = text.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '');
+
+    pre.appendChild(code);
+
+    div.appendChild(pre);
+
+    return;
+
+  }
+
+  if (typeof text === 'string' && (text.startsWith('◦ ') || text.startsWith('  '))) {
+
+    div.classList.add('seg-subitem');
+
+  }
+
+  const lines = String(text ?? '').split('\n');
+
+  lines.forEach((line, idx) => {
+
+    if (idx > 0) div.appendChild(document.createElement('br'));
+
+    appendInlineFormatted(div, line);
+
+  });
+
+}
+
+
+
+function createBookFigure(src, captionText, extraClass = '', altText = '') {
+
+  const fig = document.createElement('figure');
+
+  fig.className = ('book-figure ' + extraClass).trim();
+
+  const img = document.createElement('img');
+
+  img.src = src;
+
+  img.alt = captionText || altText || document.title || 'Illustration';
+
+  img.loading = 'lazy';
+
+  fig.appendChild(img);
+
+  if (captionText) {
+
+    const cap = document.createElement('figcaption');
+
+    cap.textContent = captionText;
+
+    fig.appendChild(cap);
+
+  }
+
+  return fig;
+
+}
+
+
+
+let renderedBook = null;
+
+let manualReadingScroll = false;
+
+function renderBookChapter(cIdx) {
+
+  const section = document.createElement('section');
+
+  section.id = `chapter_${cIdx}`;
+
+  section.className = 'reading-section';
+
+  const chapObj = BOOK[cIdx];
+
+  if (chapObj.cover_image) {
+
+    section.appendChild(createBookFigure(chapObj.cover_image, chapObj.cover_caption || '', 'book-cover-figure'));
+
+  }
+
+  const titleSegment = document.createElement('div');
+
+  titleSegment.className = 'seg title-segment';
+
+  titleSegment.id = `seg_${cIdx}_-1`;
+
+  titleSegment.tabIndex = 0;
+
+  titleSegment.setAttribute('role', 'button');
+
+  titleSegment.setAttribute('aria-label', 'Read chapter title');
+
+  titleSegment.onclick = () => { stopSpeech(); curChap = cIdx; curSeg = -1; highlightSegment(curSeg); speakCurrentSegment(); };
+
+  titleSegment.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); titleSegment.click(); } };
+
+  const heading = document.createElement('h1');
+
+  heading.className = 'chapter-title';
+
+  const fullTitle = chapObj.chapter_title || chapObj.title;
+
+  const chapterParts = fullTitle.match(/^((?:chapter|part|luku|osa)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten))\b\s*(?:[:.\-–—]\s*)?(.+)$/i);
+
+  if (chapterParts) {
+
+    const label = document.createElement('span');
+
+    label.className = 'chapter-label';
+
+    label.textContent = chapterParts[1];
+
+    const name = document.createElement('span');
+
+    name.className = 'chapter-name';
+
+    name.textContent = chapterParts[2];
+
+    // Both lines belong to the same semantic heading and inherit its title style.
+
+    heading.append(label, document.createTextNode(' '), name);
+
+  } else {
+
+    heading.textContent = fullTitle;
+
+  }
+
+  const firstInChapter = !cIdx || !chapObj.chapter_title || BOOK[cIdx - 1].chapter_title !== chapObj.chapter_title;
+
+  const numberInfo = numberedHeading(chapObj.title);
+
+  if (numberInfo && chapObj.toc_group !== 'Original printed contents') {
+
+    const numberedTitle = document.createElement('h' + Math.min(6, numberInfo.depth));
+
+    numberedTitle.className = 'numbered-heading';
+
+    numberedTitle.textContent = chapObj.title;
+
+    titleSegment.appendChild(numberedTitle);
+
+  } else if (firstInChapter || chapObj.title === chapObj.chapter_title) titleSegment.appendChild(heading);
+
+  if (!numberInfo && chapObj.chapter_title && chapObj.title !== chapObj.chapter_title) {
+
+    const subtitle = document.createElement('h2');
+
+    subtitle.className = 'section-title';
+
+    subtitle.textContent = chapObj.title;
+
+    titleSegment.appendChild(subtitle);
+
+  }
+
+  section.appendChild(titleSegment);
+
+  if (chapObj.image) {
+
+    section.appendChild(createBookFigure(chapObj.image, chapObj.image_caption || '', 'chapter-illustration'));
+
+  }
+
+  // Pictures extracted from the source PDF sit between segments, in reading order. They are not
+
+  // segments themselves, so speech, search and progress are unaffected by them.
+
+  const pdfFigures = Array.isArray(chapObj.figures) ? chapObj.figures : [];
+
+  const appendFigure = fig => section.appendChild(createBookFigure(
+
+    fig.image, '', 'inline-figure', fig.page ? 'Illustration from page ' + fig.page : 'Illustration'));
+
+  pdfFigures.forEach(fig => { if (fig && fig.image && Number(fig.after) < 0) appendFigure(fig); });
+
+  chapObj.segments.forEach((text, i) => {
+
+    const div = document.createElement('div');
+
+    div.className = 'seg';
+
+    div.id = `seg_${cIdx}_${i}`;
+
+    renderFormattedSegment(div, text, cIdx, i);
+
+    div.onclick = () => {
+
+      stopSpeech();
+
+      curChap = cIdx;
+
+      curSeg = i;
+
+      curTableRow = 0;
+
+      highlightSegment(curSeg);
+
+      speakCurrentSegment();
+
+    };
+
+    section.appendChild(div);
+
+    pdfFigures.forEach(fig => { if (fig && fig.image && Number(fig.after) === i) appendFigure(fig); });
+
+  });
+
+  pdfFigures.forEach(fig => {
+
+    if (fig && fig.image && Number(fig.after) >= chapObj.segments.length) appendFigure(fig);
+
+  });
+
+  if (chapObj.back_image) {
+
+    section.appendChild(createBookFigure(chapObj.back_image, chapObj.back_caption || 'Back Cover', 'book-back-cover-figure'));
+
+  }
+
+
+
+  return section;
+
+}
+
+
+
+function loadChapter(cIdx, sIdx = -1, autoSpeak = false) {
+
+  stopSpeech();
+
+  if (!BOOK.length) {
+
+    contentEl.textContent = 'No readable text found in this document.';
+
+    playBtn.disabled = true;
+
+    return;
+
+  }
+
+  prompterBottomTime = null;
+
+  curChap = Math.max(0, Math.min(BOOK.length - 1, cIdx));
+
+  curSeg = Math.max(-1, Math.min(BOOK[curChap].segments.length - 1, sIdx));
+
+
+
+  tocEl.querySelectorAll('[data-section]').forEach(li => {
+
+    const active = Number(li.dataset.section) === curChap;
+
+    li.classList.toggle('active', active);
+
+    const details = li.closest('details');
+
+    if (active && details && !['Front matter', 'Original printed contents'].includes(BOOK[curChap].toc_group)) {
+
+      details.open = true;
+
+    }
+
+  });
+
+
+
+  if (renderedBook !== BOOK || !document.getElementById('chapter_0')) {
+
+    contentEl.replaceChildren();
+
+    BOOK.forEach((_, index) => contentEl.appendChild(renderBookChapter(index)));
+
+    renderedBook = BOOK;
+
+  } else {
+
+    document.getElementById(`chapter_${curChap}`).replaceWith(renderBookChapter(curChap));
+
+  }
+
+
+
+  highlightSegment(curSeg);
+
+
+
+  playBtn.disabled = !speechEnabled;
+
+  if (autoSpeak) speakCurrentSegment();
+
+}
+
+
+
+function highlightSegment(sIdx, scroll = true) {
+
+  if (scroll) manualReadingScroll = false;
+
+  document.querySelectorAll('.seg.active').forEach(el => el.classList.remove('active'));
+
+  document.querySelectorAll('.active-row').forEach(el => el.classList.remove('active-row'));
+
+  const target = document.getElementById(`seg_${curChap}_${sIdx}`);
+
+  if (target) {
+
+    target.classList.add('active');
+
+    if (/\bseg-table\b/.test(target.className || '')) {
+
+      if (curTableRow < 0) curTableRow = 0;
+
+      highlightTableRow(curChap, sIdx, curTableRow);
+
+    }
+
+    if (scroll) target.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+  }
+
+  tocEl.querySelectorAll('[data-section]').forEach(li => li.classList.toggle('active', Number(li.dataset.section) === curChap));
+
+  const total = BOOK[curChap].segments.length;
+
+  progressText.textContent = sIdx === -1 ? `${BOOK[curChap].title} • Title` : `${BOOK[curChap].title} (${sIdx + 1}/${total})`;
+
+  try { localStorage.setItem('ebook_pos_' + BOOK_ID, JSON.stringify({ c: curChap, s: sIdx })); } catch { /* Reading works without browser storage. */ }
+
+}
+
+
+
+// Manual reading keeps the active passage and saved position in sync without
+
+// moving the viewport or starting speech. All sections remain in the document.
+
+let readingScrollFrame = null;
+
+contentEl.addEventListener('wheel', () => { manualReadingScroll = true; }, {passive: true});
+
+contentEl.addEventListener('touchstart', () => { manualReadingScroll = true; }, {passive: true});
+
+contentEl.addEventListener('pointerdown', () => { manualReadingScroll = true; });
+
+document.addEventListener('keydown', event => {
+
+  if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End', ' '].includes(event.key)
+
+      && !event.target.closest('input, textarea, select, dialog')) manualReadingScroll = true;
+
+});
+
+contentEl.addEventListener('scroll', () => {
+
+  if (readingScrollFrame !== null || isPlaying || (!manualReadingScroll && !prompterRunning)) return;
+
+  readingScrollFrame = requestAnimationFrame(() => {
+
+    readingScrollFrame = null;
+
+    if (isPlaying || !BOOK.length) return;
+
+    const box = contentEl.getBoundingClientRect();
+
+    const focusY = box.top + box.height * .5;
+
+    const sections = contentEl.querySelectorAll('.reading-section');
+
+    let index = 0;
+
+    sections.forEach((section, i) => { if (section.getBoundingClientRect().top <= focusY) index = i; });
+
+    const section = sections[index];
+
+    if (!section) return;
+
+    let segment = -1;
+
+    section.querySelectorAll('.seg').forEach(el => {
+
+      if (el.getBoundingClientRect().top <= focusY) segment = Number(el.id.split('_').pop());
+
+    });
+
+    curChap = index; curSeg = segment;
+
+    highlightSegment(curSeg, false);
+
+  });
+
+}, {passive: true});
+
+
+
+function stopPrompter() {
+
+  prompterRunning = false;
+
+  if (prompterFrame !== null) cancelAnimationFrame(prompterFrame);
+
+  prompterFrame = null; prompterLastTime = null; prompterBottomTime = null;
+
+  contentEl.style.scrollBehavior = '';
+
+  document.getElementById('prompter-btn').textContent = '▶ Prompter';
+
+}
+
+
+
+function togglePrompter() {
+
+  if (prompterRunning) { stopPrompter(); return; }
+
+  if (!BOOK.length) return;
+
+  prompterRunning = true;
+
+  contentEl.style.scrollBehavior = 'auto';
+
+  prompterLastTime = null; prompterBottomTime = null;
+
+  document.getElementById('prompter-btn').textContent = '⏸ Prompter';
+
+  prompterFrame = requestAnimationFrame(prompterTick);
+
+}
+
+
+
+function prompterTick(time) {
+
+  if (!prompterRunning) return;
+
+  const elapsed = prompterLastTime === null ? 0 : Math.min((time - prompterLastTime) / 1000, .1);
+
+  prompterLastTime = time;
+
+  const bottom = Math.max(0, contentEl.scrollHeight - contentEl.clientHeight);
+
+  contentEl.scrollTop = Math.min(bottom, contentEl.scrollTop + elapsed * prompterSpeed);
+
+  if (contentEl.scrollTop >= bottom - 1) {
+
+    if (prompterBottomTime === null) prompterBottomTime = time;
+
+    const words = BOOK[curChap].segments.join(' ').split(/\s+/).length;
+
+    const pause = bottom > 0 ? 2500 : Math.max(8000, words / 3 * 1000);
+
+    if (time - prompterBottomTime >= pause && !isPlaying) {
+
+      stopPrompter(); return;
+
+    }
+
+  } else prompterBottomTime = null;
+
+  prompterFrame = requestAnimationFrame(prompterTick);
+
+}
+
+
+
+function setSpeechEnabled(enabled) {
+
+  speechEnabled = Boolean(enabled);
+
+  document.getElementById('speech-enabled').checked = speechEnabled;
+
+  if (!speechEnabled) stopSpeech();
+
+  playBtn.disabled = !speechEnabled || !BOOK.length;
+
+  statusText.textContent = speechEnabled ? 'Read aloud enabled' : 'Silent reading';
+
+  try { localStorage.setItem('ebook_speech_enabled', String(speechEnabled)); } catch {}
+
+}
+
+
+
+function isPrintedContentsChapter(idx) {
+
+  const ch = BOOK[idx];
+
+  if (!ch) return false;
+
+  if (ch.toc_group === 'Original printed contents') return true;
+
+  if (/^(?:table\s+of\s+)?contents$|^sisällys$/i.test((ch.title || '').trim())) return true;
+
+  const segs = ch.segments || [];
+
+  if (segs.length > 0 && segs.length <= 40) {
+
+    const dotLeaderSegs = segs.filter(s => /(?:\.\s*){4,}\s*[0-9ivxlcdm]+\b/i.test(String(s || ''))).length;
+
+    if (dotLeaderSegs >= Math.ceil(segs.length * 0.5)) return true;
+
+  }
+
+  return false;
+
+}
+
+
+
+function nextReadableChapterIndex(fromChap) {
+
+  let next = fromChap + 1;
+
+  if (!isPrintedContentsChapter(fromChap)) {
+
+    while (next < BOOK.length && isPrintedContentsChapter(next)) {
+
+      next++;
+
+    }
+
+    if (next >= BOOK.length) {
+
+      next = fromChap + 1;
+
+    }
+
+  }
+
+  return next < BOOK.length ? next : -1;
+
+}
+
+
+
+function prevReadableChapterIndex(fromChap) {
+
+  let prev = fromChap - 1;
+
+  if (!isPrintedContentsChapter(fromChap)) {
+
+    while (prev >= 0 && isPrintedContentsChapter(prev)) {
+
+      prev--;
+
+    }
+
+    if (prev < 0) {
+
+      prev = fromChap - 1;
+
+    }
+
+  }
+
+  return prev >= 0 ? prev : -1;
+
+}
+
+
+
+function spokenChapterTitle(index) {
+
+  const section = BOOK[index];
+
+  if (index === 0 && /^title\s*&\s*front\s*matter$/i.test((section.title || '').trim())) {
+
+    return document.title || section.title;
+
+  }
+
+  const parent = section.chapter_title;
+
+  const firstInChapter = parent && (!index || BOOK[index - 1].chapter_title !== parent);
+
+  return firstInChapter && parent !== section.title ? parent + '. ' + section.title : section.title;
+
+}
+
+
+
+function speakCurrentSegment() {
+
+  if (!speechEnabled || !BOOK.length) return;
+
+  if (!synth) {
+
+    statusText.textContent = "Speech synthesis is not supported in this browser.";
+
+    return;
+
+  }
+
+  synth.cancel();
+
+
+
+  // On the cover/front-matter chapter, if the heading is a generic placeholder ("Title & Front Matter")
+
+  // or already repeated in the first segment, start directly at segment 0 so the cover title is read naturally once.
+
+  if (curChap === 0 && curSeg === -1 && BOOK[0].segments.length > 0) {
+
+    const rawH = (BOOK[0].title || '').trim();
+
+    const firstSeg = (BOOK[0].segments[0] || '').trim();
+
+    const normH = rawH.toLowerCase().replace(/[^a-z0-9äöå]+/g, '');
+
+    const normFirst = firstSeg.toLowerCase().replace(/[^a-z0-9äöå]+/g, '');
+
+    if (/^title\s*&\s*front\s*matter$/i.test(rawH) || (normH && normFirst && (normFirst.includes(normH) || normH.includes(normFirst)))) {
+
+      curSeg = 0;
+
+    }
+
+  }
+
+  
+
+  let isTable = false;
+
+  let tableHeaders = [];
+
+  let tableDataRows = [];
+
+  if (curSeg !== -1 && curSeg < BOOK[curChap].segments.length && isMarkdownTableText(BOOK[curChap].segments[curSeg])) {
+
+    isTable = true;
+
+    const rawTable = BOOK[curChap].segments[curSeg];
+
+    const lines = rawTable.split('\n').map(l => l.trim()).filter(Boolean);
+
+    const parseCells = (line) => {
+
+      const raw = line.replace(/^\|/, '').replace(/\|$/, '');
+
+      return raw.split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'));
+
+    };
+
+    tableHeaders = parseCells(lines[0]);
+
+    tableDataRows = lines.slice(2).map(parseCells).filter(r => r.some(Boolean));
+
+    if (curTableRow < 0 || curTableRow >= tableDataRows.length) {
+
+      curTableRow = 0;
+
+    }
+
+    highlightTableRow(curChap, curSeg, curTableRow);
+
+  }
+
+
+
+  let text = '';
+
+  if (curSeg === -1) {
+
+    text = spokenChapterTitle(curChap);
+
+  } else if (isTable) {
+
+    const cells = tableDataRows[curTableRow] || [];
+
+    if (cells.length === 2) {
+
+      text = cells[0] + ': ' + cells[1];
+
+    } else {
+
+      text = cells.map((c, idx) => (tableHeaders[idx] ? tableHeaders[idx] + ': ' + c : c)).join(', ');
+
+    }
+
+  } else {
+
+    text = BOOK[curChap].segments[curSeg];
+
+  }
+
+  
+
+  let speakText = String(text || '')
+
+    .replace(/^```[^\n]*\n?/, '')
+
+    .replace(/\n?```$/, '')
+
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+
+    .replace(/__([^_]+)__/g, '$1')
+
+    .replace(/(?<![*\w])\*([^*\n]+?)\*(?![*\w])/g, '$1')
+
+    .replace(/(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])/gu, '$1')
+
+    .replace(/`([^`]+)`/g, '$1')
+
+    .replace(/^[•◦]\s+/gm, '')
+
+    .replace(/[├└│─]+/g, ' ')
+
+    .replace(/(?:\.\s*){3,}\s*\d*\b/g, '. ')
+
+    .replace(/\.{2,}|…+/g, '. ')
+
+    .replace(/[-=_*~#]{3,}/g, ' ')
+
+    .replace(/Hak Ja Han Moon/g, 'Hak Tsa Han Muun')
+
+    .replace(/Hak Ja Han/g, 'Hak Tsa Han')
+
+    .trim();
+
+
+
+  // Skip segments that contain only dots/separators/punctuation with no pronounceable words
+
+  if (!/[\p{L}\p{N}]/u.test(speakText)) {
+
+    if (isTable && curTableRow + 1 < tableDataRows.length) {
+
+      curTableRow++;
+
+      highlightTableRow(curChap, curSeg, curTableRow);
+
+      speakCurrentSegment();
+
+      return;
+
+    }
+
+    curTableRow = -1;
+
+    if (curSeg + 1 < BOOK[curChap].segments.length) {
+
+      curSeg++;
+
+      speakCurrentSegment();
+
+    } else {
+
+      const nextChap = nextReadableChapterIndex(curChap);
+
+      if (nextChap !== -1) loadChapter(nextChap, -1, true);
+
+      else stopSpeech();
+
+    }
+
+    return;
+
+  }
+
+
+
+  const utter = new SpeechSynthesisUtterance(speakText);
+
+  utter.lang = DEFAULT_LANG;
+
+  utter.rate = speechRate;
+
+
+
+  const voices = synth.getVoices();
+
+  const selectedVoice = voices[voiceSelect.value];
+
+  if (selectedVoice) utter.voice = selectedVoice;
+
+
+
+  utter.onstart = () => {
+
+    isPlaying = true;
+
+    playBtn.textContent = "⏸ Pause";
+
+    statusText.textContent = "Reading…";
+
+    highlightSegment(curSeg);
+
+  };
+
+
+
+  utter.onend = () => {
+
+    if (!isPlaying) return;
+
+    if (isTable && curTableRow + 1 < tableDataRows.length) {
+
+      curTableRow++;
+
+      highlightTableRow(curChap, curSeg, curTableRow);
+
+      speakCurrentSegment();
+
+      return;
+
+    }
+
+    curTableRow = -1;
+
+    if (!isPlaying) return;
+
+    if (curSeg + 1 < BOOK[curChap].segments.length) {
+
+      curSeg++;
+
+      speakCurrentSegment();
+
+    } else {
+
+      const nextChap = nextReadableChapterIndex(curChap);
+
+      if (nextChap !== -1) {
+
+        loadChapter(nextChap, -1, true);
+
+      } else {
+
+        stopSpeech();
+
+        statusText.textContent = "Finished reading.";
+
+      }
+
+    }
+
+  };
+
+
+
+  synth.speak(utter);
+
+}
+
+
+
+function stopSpeech() {
+
+  isPlaying = false;
+
+  if (synth) synth.cancel();
+
+  playBtn.textContent = "▶ Read";
+
+  statusText.textContent = "Paused";
+
+}
+
+
+
+function togglePlay() {
+
+  if (!BOOK.length) return;
+
+  if (isPlaying) stopSpeech();
+
+  else speakCurrentSegment();
+
+}
+
+
+
+function stepSegment(delta) {
+
+  if (!BOOK.length) return;
+
+  if (curSeg >= 0 && curSeg < BOOK[curChap].segments.length && isMarkdownTableText(BOOK[curChap].segments[curSeg])) {
+
+    const rawTable = BOOK[curChap].segments[curSeg];
+
+    const lines = rawTable.split('\n').map(l => l.trim()).filter(Boolean);
+
+    const rowCount = Math.max(0, lines.length - 2);
+
+    const nextRow = curTableRow + delta;
+
+    if (nextRow >= 0 && nextRow < rowCount) {
+
+      curTableRow = nextRow;
+
+      highlightTableRow(curChap, curSeg, curTableRow);
+
+      if (isPlaying) speakCurrentSegment();
+
+      return;
+
+    }
+
+  }
+
+  curTableRow = -1;
+
+  if (!BOOK.length) return;
+
+  const next = curSeg + delta;
+
+  if (next >= -1 && next < BOOK[curChap].segments.length) {
+
+    curSeg = next;
+
+    highlightSegment(curSeg);
+
+    if (isPlaying) speakCurrentSegment();
+
+  } else if (delta > 0) {
+
+    const nextChap = nextReadableChapterIndex(curChap);
+
+    if (nextChap !== -1) loadChapter(nextChap, -1, isPlaying);
+
+  } else if (delta < 0) {
+
+    const prevChap = prevReadableChapterIndex(curChap);
+
+    if (prevChap !== -1) loadChapter(prevChap, BOOK[prevChap].segments.length - 1, isPlaying);
+
+  }
+
+}
+
+
+
+function updateSpeed(val) {
+
+  speechRate = parseFloat(val);
+
+  if (isPlaying) speakCurrentSegment();
+
+}
+
+
+
+function adjustFont(delta) {
+
+  fontSize = Math.max(14, Math.min(32, fontSize + delta));
+
+  document.documentElement.style.setProperty('--font-size', fontSize + 'px');
+
+}
+
+
+
+function toggleTheme() {
+
+  const dark = document.body.getAttribute('data-theme') === 'dark';
+
+  document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+
+}
+
+
+
+
+
+
+
+function getCoverTargetRole() {
+
+  const sel = document.getElementById('cover-target-role');
+
+  return sel && sel.value === 'back' ? 'back' : 'front';
+
+}
+
+
+
+function renderCoverDialogPreview() {
+
+  const box = document.getElementById('cover-preview-box');
+
+  const removeBtn = document.getElementById('cover-remove-btn');
+
+  if (!box) return;
+
+  box.replaceChildren();
+
+  const roleSelect = document.getElementById('cover-target-role');
+
+  const hasFront = BOOK.length && BOOK[0] && BOOK[0].cover_image;
+
+  const hasBack = BOOK.length && BOOK[BOOK.length - 1] && BOOK[BOOK.length - 1].back_image;
+
+
+
+  if (!roleSelect && (hasFront || hasBack)) {
+
+    if (hasFront) {
+
+      const frontWrap = document.createElement('div');
+
+      frontWrap.style.cssText = 'display:inline-block;margin:6px 12px;vertical-align:top';
+
+      const fImg = document.createElement('img');
+
+      fImg.src = BOOK[0].cover_image;
+
+      fImg.alt = BOOK[0].cover_caption || 'Front cover';
+
+      fImg.style.cssText = 'max-height:220px;max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+
+      const fCap = document.createElement('div');
+
+      fCap.style.cssText = 'font-size:0.8rem;opacity:0.8;margin-top:3px';
+
+      fCap.textContent = 'Front Cover: ' + (BOOK[0].cover_caption || document.title);
+
+      frontWrap.append(fImg, fCap);
+
+      box.appendChild(frontWrap);
+
+    }
+
+    if (hasBack) {
+
+      const backWrap = document.createElement('div');
+
+      backWrap.style.cssText = 'display:inline-block;margin:6px 12px;vertical-align:top';
+
+      const bImg = document.createElement('img');
+
+      bImg.src = BOOK[BOOK.length - 1].back_image;
+
+      bImg.alt = BOOK[BOOK.length - 1].back_caption || 'Back cover';
+
+      bImg.style.cssText = 'max-height:220px;max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+
+      const bCap = document.createElement('div');
+
+      bCap.style.cssText = 'font-size:0.8rem;opacity:0.8;margin-top:3px';
+
+      bCap.textContent = 'Back Cover: ' + (BOOK[BOOK.length - 1].back_caption || document.title);
+
+      backWrap.append(bImg, bCap);
+
+      box.appendChild(backWrap);
+
+    }
+
+    return;
+
+  }
+
+
+
+  const role = getCoverTargetRole();
+
+  const activeImg = role === 'back' ? (hasBack ? BOOK[BOOK.length - 1].back_image : null) : (hasFront ? BOOK[0].cover_image : null);
+
+  const activeCap = role === 'back' ? (hasBack ? BOOK[BOOK.length - 1].back_caption : '') : (hasFront ? BOOK[0].cover_caption : '');
+
+  if (removeBtn) removeBtn.disabled = !activeImg;
+
+  if (activeImg) {
+
+    const img = document.createElement('img');
+
+    img.src = activeImg;
+
+    img.alt = activeCap || (role === 'back' ? 'Back cover' : 'Front cover');
+
+    img.style.cssText = 'max-height:220px;max-width:100%;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.25)';
+
+    const cap = document.createElement('div');
+
+    cap.style.cssText = 'font-size:0.8rem;opacity:0.8;margin-top:3px';
+
+    cap.textContent = (role === 'back' ? 'Current Back Cover: ' : 'Current Front Cover: ') + (activeCap || document.title);
+
+    box.append(img, cap);
+
+  } else {
+
+    const empty = document.createElement('p');
+
+    empty.style.cssText = 'font-size:0.88rem;opacity:0.75;margin:6px 0';
+
+    empty.textContent = 'No ' + (role === 'back' ? 'back' : 'front') + ' cover image is currently set for this book.';
+
+    box.appendChild(empty);
+
+  }
+
+}
+
+
+
+function openCoverDialog() {
+
+  const dlg = document.getElementById('cover-dialog');
+
+  if (!dlg) return;
+
+  const qInput = document.getElementById('cover-search-query');
+
+  if (qInput && !qInput.value && document.title && document.title !== 'Ebook Reader') {
+
+    qInput.value = document.title;
+
+  }
+
+  const statusEl = document.getElementById('cover-dialog-status');
+
+  if (statusEl) statusEl.textContent = '';
+
+  renderCoverDialogPreview();
+
+  dlg.showModal();
+
+  if (typeof browseCoverArt === 'function') browseCoverArt(false);
+
+}
+
+
+
+
+
+
+
+
+
+
+
+init();
+
+
+
+
+
+</script>
+
+</body>
+
+</html>
+
