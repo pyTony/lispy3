@@ -18,6 +18,15 @@ from lispy_support import syntax_highlight as SH
 FAKE = os.path.join(TESTS_DIR, 'fixtures', 'fake_pil_engine.py')
 
 
+def have_nasm():
+    """NASM on PATH, from the NASM setting, or where the Windows installer puts it."""
+    try:
+        PE.find_nasm()
+    except PE.PilError:
+        return False
+    return True
+
+
 class FakeEngineMixin:
     def setUp(self):
         super().setUp()
@@ -145,7 +154,7 @@ class AssemblyTest(unittest.TestCase):
         self.assertEqual(PE.nasm_error_line('/tmp/x/buffer.asm:7: error: invalid combination'), 7)
         self.assertIsNone(PE.nasm_error_line('warning only'))
 
-    @unittest.skipUnless(shutil.which('nasm'), 'NASM is not installed')
+    @unittest.skipUnless(have_nasm(), 'NASM is not installed')
     def test_assemble_com(self):
         source = "        org 100h\n        mov ah,4ch\n        int 21h\n"
         with tempfile.TemporaryDirectory() as folder:
