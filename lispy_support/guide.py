@@ -23,6 +23,7 @@ PAGES = [
     ("Quick reference",  "QUICK_REFERENCE.md"),
     ("Unit tests",       "UNIT_TESTS.md"),
     ("PIL x86 engine",   "PIL.md"),
+    ("Feature matrix",   "FEATURE_MATRIX.md"),
     ("Built-ins",        None),
 ]
 BUILTINS_PAGE = "Built-ins"
