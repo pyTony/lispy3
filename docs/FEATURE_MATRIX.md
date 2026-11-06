@@ -4,7 +4,7 @@ What Lispy has today, at a glance: the Lisp language, the mini-basic BASIC
 (BBC and MBASIC styles), and the Lispy Machine editor. Each row links to the
 page that explains it.
 
-**Last checked: 2026-10-31, `dev` after PR #133.**
+**Last checked: 2026-11-06, `dev` after PR #136.**
 
 ✅ works · 🟡 partly, see the note · ❌ not yet
 
@@ -98,19 +98,21 @@ compatibility option, not a complete MBASIC dialect. Details in [mini-basic](MIN
 | `=` `+=` `-=` `*=` `/=`, SWAP, CLEAR | ✅ | ✅ | PR #125 |
 | `MID$(a$,p,n)=` assignment | ✅ | ✅ | PR #125 |
 | String functions, `STRING$`, `EVAL`, string `<` `>` | ✅ | ✅ | PR #125 |
-| `SPACE$`, `HEX$`, `OCT$`, `FIX`, `CINT`, `MKI$`/`CVI` | ❌ | ❌ | `STR$~` gives hex in BBC style |
-| `DIV`, `MOD`, `EOR`, `&hex` | ✅ | 🟡 | MBASIC `\` integer division not yet |
-| `XOR`, `EQV`, `IMP` | — | ❌ | |
+| `SPACE$`, `HEX$`, `OCT$`, `FIX`, `CINT`, `CSNG`, `CDBL` | ❌ | ✅ | PR #136; `STR$~` gives hex in BBC style |
+| `MKI$`/`CVI`, `PEEK` | ❌ | ❌ | |
+| `DIV`, `MOD`, `EOR`, `&hex`; MBASIC `\` and `MOD` | ✅ | ✅ | MBASIC operator precedence (PR #136) |
+| `XOR`, `EQV`, `IMP` | — | ✅ | PR #136 |
 | IF/THEN/ELSE, block IF, FOR/NEXT, REPEAT, WHILE/ENDWHILE, WHILE/WEND, CASE | ✅ | ✅ | `WEND` in MBASIC style |
 | GOTO, GOSUB, ON GOTO/GOSUB, line numbers, `(label)` labels | ✅ | 🟡 | MBASIC: ON out of range should fall through |
-| DEF PROC / DEF FN, LOCAL, multi-line FN | ✅ | 🟡 | MBASIC `DEF FN NAME(x)` with a space not yet |
+| DEF PROC / DEF FN, LOCAL, multi-line FN | ✅ | ✅ | MBASIC `DEF FN NAME(x)` with a space (PR #136) |
 | `RETURN` parameters, `LOCAL a()`, whole-array parameters, `ON x PROC` | ❌ | — | |
 | DATA/READ/RESTORE, DIM arrays, whole-array arithmetic, SUM | ✅ | ✅ | |
-| OPTION BASE, ERASE, DEFINT, RANDOMIZE, TRON/TROFF | — | ❌ | |
+| RANDOMIZE | — | 🟡 | accepted; does not repeat the 5.21 RND sequence (PR #136) |
+| OPTION BASE, ERASE, DEFINT/DEFDBL, TRON/TROFF | — | ❌ | |
 | ON ERROR, ON ERROR LOCAL/OFF, ERR, ERL, REPORT$, ERROR n | ✅ | 🟡 | MBASIC `RESUME` not yet; BBC ERROR EXT not yet |
 | INPUT, INPUT LINE / LINE INPUT, GET, GET$, INKEY, INKEY$ | ✅ | ✅ | keys from the MODE window or typed lines |
 | TIME, WAIT, END, STOP, QUIT | ✅ | ✅ | |
-| RND | ✅ | 🟡 | MBASIC RND sequence differs |
+| RND | ✅ | ✅ | bare `RND` is `RND(1)` in MBASIC style |
 | Text files: OPENIN/OPENOUT/BGET/BPUT, MBASIC OPEN | ✅ | 🟡 | CHAIN, MERGE, KILL, random files not yet |
 | Memory: `DIM m n`, `?` `!` `$` indirection, structures | ❌ | — | |
 | SOUND, INSTALL | ❌ | — | |
@@ -118,7 +120,7 @@ compatibility option, not a complete MBASIC dialect. Details in [mini-basic](MIN
 | Graphics: MODE, GCOL, MOVE/DRAW/PLOT, CIRCLE, RECTANGLE, `*REFRESH` | ✅ | — | ([BASIC graphics](BASIC_GRAPHICS.md)) |
 | Interactive BASIC REPL (`BASIC>`) | ✅ | ✅ | ([BASIC REPL](BASIC_REPL.md)) |
 
-**MBASIC 5.21 golden programs: 10 pass, 2 spacing only, 27 fail (of 39).**
+**MBASIC 5.21 golden programs: 19 pass, 2 spacing only, 18 fail (of 39).**
 These numbers come from `EXPECTED` in `tests/test_mbasic_compat.py` and are
 checked against it. See [MBASIC compatibility](MBASIC_COMPAT.md).
 
