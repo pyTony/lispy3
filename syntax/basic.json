@@ -9,5 +9,5 @@
     {"tag": "number", "pattern": "&[0-9A-F]+|\\b\\d+(?:\\.\\d*)?(?:E[-+]?\\d+)?"}
   ],
   "word_pattern": "[A-Z_][A-Z0-9_]*[%$]?",
-  "words": {"special": ["FOR", "TO", "STEP", "NEXT", "IF", "THEN", "ELSE", "ENDIF", "WHILE", "ENDWHILE", "REPEAT", "UNTIL", "CASE", "OF", "WHEN", "OTHERWISE", "ENDCASE", "DEF", "PROC", "FN", "ENDPROC", "LOCAL", "LET", "PRINT", "INPUT", "GOTO", "GOSUB", "RETURN", "ON", "END", "STOP", "REM", "DIM", "AND", "OR", "NOT", "MOD", "DIV", "TRUE", "FALSE", "MODE", "GCOL", "COLOUR", "COLOR", "VDU", "ANSI", "CLS", "CLG", "MOVE", "DRAW", "PLOT", "ORIGIN", "TIME", "TAB", "ERROR", "ERR", "ERL", "REPORT", "OFF", "SWAP", "CLEAR", "QUIT"]}
+  "words": {"special": ["FOR", "TO", "STEP", "NEXT", "IF", "THEN", "ELSE", "ENDIF", "WHILE", "ENDWHILE", "REPEAT", "UNTIL", "CASE", "OF", "WHEN", "OTHERWISE", "ENDCASE", "DEF", "PROC", "FN", "ENDPROC", "LOCAL", "LET", "PRINT", "INPUT", "GOTO", "GOSUB", "RETURN", "ON", "END", "STOP", "REM", "DIM", "AND", "OR", "NOT", "MOD", "DIV", "TRUE", "FALSE", "MODE", "GCOL", "COLOUR", "COLOR", "VDU", "ANSI", "CLS", "CLG", "MOVE", "DRAW", "PLOT", "ORIGIN", "TIME", "TAB", "ERROR", "ERR", "ERL", "REPORT", "OFF", "SWAP", "CLEAR", "QUIT", "XOR", "EQV", "IMP", "RANDOMIZE"]}
 }

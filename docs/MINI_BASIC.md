@@ -58,12 +58,40 @@ point, so `PRINT 1/3` gives ` .333333 ` and `PRINT 3.14159265*25` gives
 filter off and shows the full value (useful for `#` doubles). `WEND` ends a
 `WHILE` loop like `ENDWHILE`.
 
+MBASIC style also reads MBASIC's own operators, functions and spellings
+(`lisp/mini-basic-mbasic.lisp`):
+
+```basic
+PRINT 17 \ 5, 17 MOD 5            ' 3 and 2: integer division and remainder
+PRINT 5 XOR 3, 5 EQV 3, 5 IMP 3   ' 6, -7 and -5, bit by bit like AND and OR
+PRINT FIX(-2.7), CINT(-2.7)       ' -2 (toward zero) and -3 (nearest)
+PRINT HEX$(255), OCT$(8)          ' FF and 10
+A$ = "A" + SPACE$(5) + STR$(42)   ' "A      42": STR$ keeps the sign space
+B! = CSNG(X#) : D# = CDBL(C!)
+RANDOMIZE 42 : PRINT RND          ' the same numbers again after RANDOMIZE 42
+DEF FN SQUARE(X) = X * X : PRINT FN SQUARE(5)
+```
+
+The operators bind as in MBASIC, tightest first: `^`, unary `-`, `*` `/`,
+`\`, `MOD`, `+` `-`, comparisons, `NOT`, `AND`, `OR`, `XOR`, `EQV`, `IMP`.
+So `-2^2` is -4, `10 + 7 MOD 3` is 11 and `NOT A = B` is `NOT (A = B)`.
+`\` and `MOD` round their operands to whole numbers first, as `CINT` does,
+and so does assigning to an integer variable: `A% = 10.7` gives 11. `CINT`
+rounds halves away from zero and gives Overflow outside -32768 to 32767;
+`HEX$` and `OCT$` show a negative number as its 16-bit pattern (`HEX$(-1)` is
+`FFFF`). `STRING$(5, 42)` repeats the character with code 42. `RND` on its own
+is `RND(1)`, a number from 0 up to 1. `RANDOMIZE n` restarts the generator from
+seed n; `RANDOMIZE` alone takes a seed from the clock instead of asking for
+one. `'` starts a comment like `REM`, and a Ctrl-Z ends the program text, as
+it ends a CP/M file. In the BBC style none of these words are keywords and
+`\` is an error.
+
 This is a limited compatibility option, not a complete MBASIC dialect.
-Strings, `STR$` of whole numbers (no added spaces),
-explicit hexadecimal/USING formatting and existing comma-zone widths retain
+Explicit USING formatting and existing comma-zone widths retain
 their current behavior. Cursor tracking includes the added spaces, so TAB/SPC
-still use the actual output column. It does not change RND or other dialect
-semantics, or configure the external Python/native BBC backends.
+still use the actual output column. Arithmetic is done in double precision,
+`#` doubles print as singles, and RND is not MBASIC's generator. It does not
+configure the external Python/native BBC backends.
 
 ## Random numbers
 
