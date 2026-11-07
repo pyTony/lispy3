@@ -4,7 +4,7 @@ What Lispy has today, at a glance: the Lisp language, the mini-basic BASIC
 (BBC and MBASIC styles), and the Lispy Machine editor. Each row links to the
 page that explains it.
 
-**Last checked: 2026-11-06, `dev` after PR #136.**
+**Last checked: 2026-11-07, `dev` after PR #138, with disassembly.**
 
 ✅ works · 🟡 partly, see the note · ❌ not yet
 
@@ -48,7 +48,7 @@ or a new MBASIC result is not reflected here. See
 | Turtle graphics and L-systems | ✅ | `push-pose`/`pop-pose`, `onscroll` |
 | Framebuffer graphics from Lisp | ✅ | ([BASIC graphics](BASIC_GRAPHICS.md#lisp-primitives)) |
 | NumPy arrays (`lispy3-numpy.py`) | ✅ | `make-num-vector`, `dot`, `matmul` ([README](../README.md#faster-runs-with-lispy3-numpypy)) |
-| PIL x86 engine | ✅ | `pil`, `pil-run`; needs a built PIL ([PIL](PIL.md), PR #129) |
+| PIL x86 engine | ✅ | `pil`, `pil-run`; needs a built PIL ([PIL](PIL.md), PR #129); `pil-disassemble` needs only NASM |
 | `define-record-type`, `defstruct` | ❌ | use maps |
 
 ### Built-ins by help topic
@@ -67,7 +67,7 @@ the count here changes with it, and the PR updates the feature rows above.
 | Lazy streams | 15 |
 | Text streams | 17 |
 | Turtle graphics | 6 |
-| PIL x86 engine | 5 |
+| PIL x86 engine | 6 |
 
 ### Compared with real Lisps
 
@@ -143,6 +143,7 @@ checked against it. See [MBASIC compatibility](MBASIC_COMPAT.md).
 | Run with real BBC BASIC for SDL | ✅ | ([BBCSDL](BBCSDL.md)) |
 | PIL x86: run `.asm` buffers | ✅ | needs PIL and NASM ([PIL](PIL.md)) |
 | PIL x86: run binary `.hex`, `.bin`, `.com` buffers | ✅ | no NASM needed; `.bin`/`.com` open as editable hex and save back as bytes (PR #138) |
+| PIL x86: disassemble `.com`, `.bin`, `.hex` into an `.asm` buffer | ✅ | ndisasm from NASM; jump targets become labels; F5 reassembles to the same bytes ([PIL](PIL.md#disassembling)); not `.exe` |
 | Startup file, reopen last session | ✅ | View → Startup Settings |
 | Settings saved in `~/.lispy3_machine.json` | ✅ | a hidden file on Windows now saves too (PRs #130, #132, #133) |
 | Help window with this guide (F1) | ✅ | |

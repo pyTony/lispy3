@@ -198,6 +198,66 @@ class BinaryTest(unittest.TestCase):
         self.assertEqual(override.suffix, '.COM')
 
 
+@unittest.skipUnless(have_nasm(), 'NASM is not installed')
+class DisassembleTest(unittest.TestCase):
+
+    def test_round_trip_with_labels(self):
+        # a loop printing "Hi" through DOS, then a string the disassembler sees as code
+        source = """        org 100h
+        mov si,msg
+again:  lodsb
+        cmp al,'$'
+        je done
+        mov dl,al
+        mov ah,2
+        int 21h
+        jmp again
+done:   mov ax,4c00h
+        int 21h
+msg:    db 'Hi$'
+"""
+        with tempfile.TemporaryDirectory() as folder:
+            program = PE.assemble(source, cwd=folder).read_bytes()
+        text = PE.disassemble(program, name='HI.COM')
+        self.assertIn('; pil: dos', text)
+        self.assertRegex(text, r'(?m)^L0103:$')
+        self.assertIn('jmp short L0103', text)
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(PE.assemble(text, cwd=folder).read_bytes(), program)
+
+    def test_other_encodings_become_db(self):
+        # 03 D8 is "add bx,ax" too, but NASM writes it as 01 C3
+        program = bytes([0x03, 0xd8, 0xc3])
+        text = PE.disassemble(program, mode='monitor')
+        self.assertIn('db 0x03,0xd8  ; add bx,ax', text)
+        self.assertIn('; pil: monitor', text)
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(PE.assemble(text, cwd=folder).read_bytes(), program)
+
+    def test_read_program(self):
+        with tempfile.TemporaryDirectory() as folder:
+            hex_file = Path(folder) / 'a.hex'
+            hex_file.write_text('; pil: monitor\nb0 48 f4\n')
+            self.assertEqual(PE.read_program(hex_file), bytes([0xb0, 0x48, 0xf4]))
+            exe = Path(folder) / 'A.EXE'
+            exe.write_bytes(b'MZ' + bytes(30))
+            with self.assertRaisesRegex(PE.PilError, 'MZ .EXE'):
+                PE.read_program(exe)
+
+
+@unittest.skipUnless(have_nasm(), 'NASM is not installed')
+class LispDisassembleTest(LispyTestCase):
+
+    def test_pil_disassemble(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'EXIT.COM'
+            path.write_bytes(bytes([0xb4, 0x4c, 0xcd, 0x21]))
+            text = self.ev(f'(pil-disassemble "{path.as_posix()}")').value
+        self.assertIn('; pil: dos', text)
+        self.assertIn('mov ah,0x4c', text)
+        self.assertIn('int 0x21', text)
+
+
 class SyntaxTest(unittest.TestCase):
 
     def test_pil_and_x86_languages(self):

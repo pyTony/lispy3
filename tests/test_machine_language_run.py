@@ -218,3 +218,45 @@ class PilLanguageRunTest(TestCase):
                 self.assertFalse(machine.LispMachine._save_tab_to_path(app, app.tab, dest))
             error_box.assert_called_once()
             self.assertFalse(Path(dest).exists())
+
+
+class DisassembleTest(TestCase):
+    """Eval > PIL x86 engine > Disassemble x86 program… / binary buffer."""
+
+    def _app(self, content='', name='prog.com'):
+        app = _FakeMachine(content)
+        app.tab.name = name
+        app.new_buffer = Mock()
+        return app
+
+    def test_binary_buffer_opens_asm_buffer_with_its_mode(self):
+        app = self._app('; pil: monitor\nb0 48 e6 e9 f4\n', 'hello.hex')
+        with patch.object(machine.PE, 'disassemble', return_value='        org 0x100\n') as dis:
+            self.assertTrue(machine.LispMachine.disassemble_x86_buffer(app, app.tab))
+        self.assertEqual(dis.call_args[0][0], bytes([0xb0, 0x48, 0xe6, 0xe9, 0xf4]))
+        self.assertEqual(dis.call_args[1]['mode'], 'monitor')
+        app.new_buffer.assert_called_once_with('hello.asm', '        org 0x100\n')
+
+    def test_com_file_defaults_to_dos(self):
+        import tempfile
+        from pathlib import Path
+        app = self._app()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'EXIT.COM'
+            path.write_bytes(bytes([0xb4, 0x4c, 0xcd, 0x21]))
+            with patch.object(machine.PE, 'disassemble', return_value='x') as dis:
+                self.assertTrue(machine.LispMachine.disassemble_x86_file(app, str(path)))
+        self.assertEqual(dis.call_args[1]['mode'], 'dos')
+        app.new_buffer.assert_called_once_with('EXIT.asm', 'x')
+
+    def test_other_buffers_and_exe_files_are_refused(self):
+        import tempfile
+        from pathlib import Path
+        app = self._app('(+ 1 2)', 'prog.lisp')
+        self.assertFalse(machine.LispMachine.disassemble_x86_buffer(app, app.tab))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'PROG.EXE'
+            path.write_bytes(b'MZ' + bytes(30))
+            self.assertFalse(machine.LispMachine.disassemble_x86_file(app, str(path)))
+        app.new_buffer.assert_not_called()
+        self.assertTrue(any('MZ .EXE' in line for line in app.lines))

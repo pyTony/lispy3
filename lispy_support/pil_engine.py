@@ -214,6 +214,145 @@ def assemble(source: str, *, cwd, name: str = 'buffer', nasm: str = '') -> Path:
     return output
 
 
+# --- disassembly: ndisasm (it comes with NASM) turns a binary back into source --
+
+NDISASM_LINE = re.compile(r'^([0-9A-Fa-f]{8})\s+([0-9A-Fa-f]+)\s+(.*?)\s*$')
+NDISASM_MORE = re.compile(r'^\s+-([0-9A-Fa-f]+)\s*$')
+BRANCH = re.compile(r'^(j[a-z]+|call|loop[a-z]*)\s+(?:short\s+|near\s+)?0x([0-9a-f]+)$')
+SHORT_OPCODES = set(range(0x70, 0x80)) | {0xEB, 0xE0, 0xE1, 0xE2, 0xE3}
+MAX_REPAIRS = 200
+
+
+def find_ndisasm(nasm: str = '') -> Path:
+    """ndisasm, from the NASM folder or PATH."""
+    assembler = find_nasm(nasm)
+    beside = assembler.with_name('ndisasm' + assembler.suffix)
+    if beside.is_file():
+        return beside
+    found = shutil.which('ndisasm')
+    if found:
+        return Path(found).resolve()
+    raise PilError(f'ndisasm not found beside {assembler}. It comes with NASM; reinstall NASM to get it.')
+
+
+def read_program(path) -> bytes:
+    """The bytes of a .COM, .BIN or .HEX program (hex text for .hex)."""
+    path = Path(path).expanduser()
+    if path.suffix.lower() == '.hex':
+        return parse_hex_bytes(path.read_text(encoding='utf-8'))
+    data = path.read_bytes()
+    if data[:2] in (b'MZ', b'ZM'):
+        raise PilError(f'{path.name} is an MZ .EXE; only .COM, .BIN and hex programs can be disassembled')
+    if not data:
+        raise PilError(f'{path.name} is empty')
+    return data
+
+
+def _ndisasm(data: bytes, origin: int, bits: int, nasm: str) -> list[tuple[int, bytes, str]]:
+    """(address, bytes, instruction) for each instruction ndisasm decodes."""
+    with tempfile.TemporaryDirectory(prefix='lispy-pil-') as folder:
+        image = Path(folder) / 'program.bin'
+        image.write_bytes(data)
+        try:
+            result = subprocess.run([str(find_ndisasm(nasm)), '-b', str(bits), '-o', hex(origin), str(image)],
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise PilError(f'Cannot run ndisasm: {error}') from None
+    if result.returncode:
+        raise PilError(result.stderr.strip() or f'ndisasm failed with status {result.returncode}')
+    rows = []
+    for line in result.stdout.splitlines():
+        match = NDISASM_LINE.match(line)
+        if match:
+            rows.append([int(match[1], 16), bytes.fromhex(match[2]), match[3]])
+            continue
+        more = NDISASM_MORE.match(line)
+        if more and rows:
+            rows[-1][1] += bytes.fromhex(more[1])
+    return [tuple(row) for row in rows]
+
+
+def _db(code: bytes) -> str:
+    return 'db ' + ','.join(f'0x{b:02x}' for b in code)
+
+
+def _with_labels(rows) -> tuple[list[str], set[int]]:
+    """Instruction text with jump and call targets inside the program turned into labels."""
+    starts = {address for address, _, _ in rows}
+    texts, targets = [], set()
+    for address, code, text in rows:
+        match = BRANCH.match(text)
+        if match and int(match[2], 16) in starts:
+            target = int(match[2], 16)
+            targets.add(target)
+            size = ''
+            if match[1] != 'call' and not match[1].startswith('loop') and match[1] not in ('jcxz', 'jecxz'):
+                size = 'short ' if code[0] in SHORT_OPCODES else 'near '
+            text = f'{match[1]} {size}L{target:04X}'
+        texts.append(text)
+    return texts, targets
+
+
+def _source(rows, texts, targets, origin, header) -> str:
+    lines = list(header) + [f'        org {origin:#x}', '']
+    for (address, code, _), text in zip(rows, texts):
+        if address in targets:
+            lines.append(f'L{address:04X}:')
+        ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in code)
+        lines.append(f'        {text:<31} ; {address:04X}  {code.hex().upper():<12}  {ascii_text}'.rstrip())
+    return '\n'.join(lines) + '\n'
+
+
+def disassemble(data: bytes, *, origin: int = 0x100, bits: int = 16, mode: str = 'dos',
+                name: str = 'program', nasm: str = '') -> str:
+    """NASM source for a binary that NASM assembles back to the same bytes.
+
+    ndisasm decodes the bytes; jump and call targets become labels, so code can
+    be inserted. Each line NASM would encode differently (and data that only
+    looks like code) is written as `db` bytes with the instruction as a comment.
+    """
+    rows = _ndisasm(data, origin, bits, nasm)
+    texts, targets = _with_labels(rows)
+    header = [f'; {name}: {len(data)} bytes, disassembled by ndisasm',
+              '; F5/F6 assembles it again with NASM and runs it in PIL.',
+              f'; pil: {mode}']
+    for _ in range(MAX_REPAIRS):
+        source = _source(rows, texts, targets, origin, header)
+        with tempfile.TemporaryDirectory(prefix='lispy-pil-') as folder:
+            try:
+                built = assemble(source, cwd=folder, name=name).read_bytes()
+                error_line = None
+            except PilError as error:
+                built, error_line = None, nasm_error_line(str(error))
+                if error_line is None:
+                    raise
+        if built == data:
+            return source
+        bad = _first_bad_row(rows, source, built, error_line, origin)
+        if bad is None or texts[bad].startswith('db '):
+            break
+        texts[bad] = _db(rows[bad][1]) + '  ; ' + rows[bad][2] if not rows[bad][2].startswith('db ') else _db(rows[bad][1])
+    raise PilError('ndisasm output does not assemble back to the same bytes')
+
+
+def _first_bad_row(rows, source, built, error_line, origin):
+    """The row NASM rejected, or the first whose bytes came out different."""
+    if error_line is not None:
+        lines = source.splitlines()
+        if 1 <= error_line <= len(lines):
+            comment = lines[error_line - 1].rsplit('; ', 1)[-1].split()[0]
+            for index, (address, _, _) in enumerate(rows):
+                if f'{address:04X}' == comment:
+                    return index
+        return None
+    for index, (address, code, _) in enumerate(rows):
+        offset = address - origin
+        if built[offset:offset + len(code)] != code:
+            return index
+    return len(rows) - 1 if rows else None
+
+
 def launch_command(program, options: dict, *, engine=None, python=None) -> list[str]:
     """The PIL frontend command that runs an assembled program."""
     engine = str(engine or find_engine())
@@ -396,7 +535,7 @@ def run(steps: int, write=None) -> dict:
 
 
 def install(env, Procedure, String) -> None:
-    """Lisp procedures: pil, pil-start, pil-run, pil-state, pil-stop."""
+    """Lisp procedures: pil, pil-start, pil-run, pil-state, pil-stop, pil-disassemble."""
     def write(text):
         sys.stdout.write(text)
         sys.stdout.flush()
@@ -421,12 +560,18 @@ def install(env, Procedure, String) -> None:
         return {key: String(value) if isinstance(value, str) and key != 'status' else value
                 for key, value in state_map(session().last).items()}
 
+    def pil_disassemble(path, origin=0x100):
+        path = lisp_text(path)
+        mode = 'dos' if Path(path).suffix.lower() == '.com' else 'monitor'
+        return String(disassemble(read_program(path), origin=origin, mode=mode, name=Path(path).name))
+
     procedures = {
         'pil': pil,
         'pil-start': pil_start,
         'pil-run': pil_run,
         'pil-state': pil_state,
         'pil-stop': stop,
+        'pil-disassemble': pil_disassemble,
     }
     for name, function in procedures.items():
         env[name] = Procedure(parms=['*args'], body=None, env=env, native_fn=function, name=name)

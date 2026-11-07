@@ -127,3 +127,23 @@ class PilProgramsTest(unittest.TestCase):
                     self.assertEqual(program.read_bytes(), built.read_bytes())
                 finally:
                     shutil.rmtree(program.parent, ignore_errors=True)
+
+
+@unittest.skipIf(CHECKOUT is None, 'no PIL checkout (set PIL_DIRECTORY)')
+@unittest.skipIf(NASM is None, 'NASM is not installed')
+class DisassembleProgramsTest(unittest.TestCase):
+    """PIL's own .COM files disassemble to source that assembles back to the same bytes."""
+
+    def test_dos_programs_round_trip(self):
+        programs = sorted((CHECKOUT / 'programs' / 'dos').glob('*.COM'))
+        if not programs:
+            self.skipTest('the PIL checkout has no programs/dos/*.COM')
+        for program in programs:
+            with self.subTest(program=program.name):
+                data = program.read_bytes()
+                source = PE.disassemble(data, name=program.name)
+                built = PE.assemble(source, cwd=program.parent, name=program.name)
+                try:
+                    self.assertEqual(built.read_bytes(), data)
+                finally:
+                    shutil.rmtree(built.parent, ignore_errors=True)

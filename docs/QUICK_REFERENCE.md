@@ -180,6 +180,7 @@ Needs a built [PIL](PIL.md) engine; see Eval > PIL x86 engine > PIL Settings.
 | `(pil-run 1000)` | run up to 1000 instructions; the stop status, such as `halt` |
 | `(pil-state)` | map of `eax` ... `edi`, `eip`, `flags`, `status`, `demo` |
 | `(pil-start)` / `(pil-start "raw.bin")` / `(pil-stop)` | fresh engine, optionally with a raw image; end it |
+| `(pil-disassemble "PROG.COM")` | NASM source for a `.com`, `.bin` or `.hex` program; needs NASM only |
 
 ## Unit tests
 

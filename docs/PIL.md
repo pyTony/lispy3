@@ -121,6 +121,41 @@ them directly in PIL without needing NASM:
 As with assembly buffers, `; pil: dos`, `; pil: monitor` and `; pil-args: TEXT`
 choose how the binary runs. Any byte format error highlights the faulty line.
 
+## Disassembling
+
+**Eval > PIL x86 engine > Disassemble x86 program…** turns a `.com`, `.bin`
+or `.hex` program back into NASM source and opens it as an `.asm` buffer.
+**Disassemble x86 binary buffer** does the same for the hex buffer you are in.
+From Lisp, `(pil-disassemble "PROG.COM")` returns the source as a string.
+It uses `ndisasm`, which comes with NASM; PIL itself is not needed.
+
+```nasm
+; FACTOR.COM: 293 bytes, disassembled by ndisasm
+; F5/F6 assembles it again with NASM and runs it in PIL.
+; pil: dos
+        org 0x100
+
+        mov si,0x81                     ; 0100  BE8100        ...
+L0107:
+        lodsb                           ; 0107  AC            .
+        cmp al,0x20                     ; 0108  3C20          .
+        jz short L0107                  ; 010A  74FB          t.
+```
+
+- The buffer assembles back to exactly the same bytes, so F5 runs the
+  program again: a `.com` gets `; pil: dos` and runs in PIL's DOS window,
+  a `.bin` or `.hex` gets `; pil: monitor` and runs in the PIL debugger.
+- Jump, call and loop targets become labels (`L0107`), so you can insert
+  code. Data addresses such as `mov dx,0x1d7` stay numbers: after an edit
+  that moves the data, change them to labels yourself.
+- Each comment gives the address, the bytes and their ASCII, which shows
+  where text is. The disassembler cannot tell data from code, so text comes
+  out as odd instructions.
+- A line NASM would encode differently, or would not accept, is written as
+  `db` bytes with ndisasm's instruction after it.
+- Programs load at 100h and decode as 16-bit code. MZ `.exe` files are not
+  disassembled.
+
 ## `.pil` buffers
 
 `.pil` description files are coloured too. The engine has its descriptions
