@@ -34,9 +34,9 @@ class NumberPrintingTest(ReaderTestCase):
         self.assertEqual(self.run_bbc('PRINT -2;0;1.5'), '-2  0  1.5 \n')
         self.assertEqual(self.run_bbc('PRINT 1;2;'), ' 1  2 ')
 
-    def test_strings_and_str_dollar_are_unchanged(self):
+    def test_strings_unchanged_and_str_dollar_keeps_the_sign_space(self):
         self.mbasic()
-        self.assertEqual(self.run_bbc('PRINT "x";STR$(19);"y"'), 'x19y\n')
+        self.assertEqual(self.run_bbc('PRINT "x";STR$(19);"y";STR$(-2)'), 'x 19y-2\n')
 
     def test_cursor_columns_include_numeric_padding(self):
         self.mbasic()

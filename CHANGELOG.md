@@ -10,6 +10,15 @@ All notable changes to Lispy3 and the Lispy Machine editor.
   to editable hex with the appropriate `; pil: monitor` or `; pil: dos` header,
   and saving them writes the raw binary bytes back to disk.
 
+- mini-basic MBASIC style: `\` integer division, MBASIC operator precedence,
+  `XOR`, `EQV`, `IMP`, `FIX`, `CINT`, `CSNG`, `CDBL`, `HEX$`, `OCT$`, `SPACE$`,
+  `RANDOMIZE`, bare `RND`, `DEF FN NAME(x)` with a space, `'` comments.
+  MBASIC 5.21 golden programs: 10 -> 19 pass.
+
+- Docs: [feature matrix](docs/FEATURE_MATRIX.md) of the Lisp, BASIC (BBC and
+  MBASIC) and Lispy Machine features, also in the Help window. Feature PRs now
+  update it in the same PR; `tests/test_feature_matrix.py` checks it.
+
 - PIL x86 engine: NASM is documented as an optional extra (where to get it
   on Windows, Linux and macOS, and where Lispy finds it off PATH), and the
   README lists all optional extras. New `tests/test_pil_live.py` checks the

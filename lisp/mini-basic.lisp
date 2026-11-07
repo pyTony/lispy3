@@ -841,6 +841,12 @@
           ((eq? c #\:)
            (emit :colon #f)
            (set! i (+ i 1)))
+          ((and (equal? (str c) (bbc-chr 26)) (eq? bbc-number-print-style :mbasic))
+           ;; Ctrl-Z ends a CP/M text file; the rest is padding
+           (set! i n))
+          ((and (eq? c #\') (eq? bbc-number-print-style :mbasic))
+           ;; MBASIC's ' starts a comment, like REM
+           (set! i (scan-while i (lambda (d) (not (eq? d #\newline))))))
           ((equal? (substring text i (min n (+ i 3))) ">>>")
            (emit :op ">>>")
            (set! line-start #f)
@@ -851,6 +857,11 @@
            (set! i (+ i 2)))
           ((>= (bbc-one-char-ops/find (str c)) 0)
            (emit :op (str c))
+           (set! line-start #f)
+           (set! i (+ i 1)))
+          ((and (eq? c #\\) (eq? bbc-number-print-style :mbasic))
+           ;; MBASIC integer division (mini-basic-mbasic.lisp)
+           (emit :op "\\")
            (set! line-start #f)
            (set! i (+ i 1)))
           (else
@@ -1467,3 +1478,4 @@
 (load "mini-basic-num")
 (load "mini-basic-error")
 (load "mini-basic-more")
+(load "mini-basic-mbasic")

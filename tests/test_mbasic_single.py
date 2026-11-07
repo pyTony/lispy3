@@ -24,7 +24,7 @@ class MBasicSingleTest(LispyTestCase):
                          ' .333333 \n 78.5398 \n-.666667 \n 2.5 \n')
         self.assertEqual(self.run_bbc('PRINT 1E7/1 : PRINT .00001 : PRINT 4000000/2'),
                          ' 1E+07 \n 1E-05 \n 2000000 \n')
-        self.assertEqual(self.run_bbc('PRINT STR$(1/3)'), '.333333\n')
+        self.assertEqual(self.run_bbc('PRINT STR$(1/3)'), ' .333333\n')
 
     def test_the_filter_can_be_turned_off(self):
         self.ev('(set! bbc-single-precision #f)')

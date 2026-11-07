@@ -4,6 +4,7 @@
 ;;;   MID$(a$, 2, 3) = "xyz"                 ; overwrite part of a string in place
 ;;;   a *= 2 : a /= 4                        ; besides += and -=
 ;;;   PRINT STRING$(3, "ab"), EVAL("2*PI")   ; ababab and 6.28318531
+;;;   PRINT STRING$(3, 42)                   ; ***: a number is a character code
 ;;;   k = GET : k$ = GET$ : k = INKEY(50)    ; keys; INKEY waits up to 50 cs
 ;;;   k$ = INKEY$(0) : k$ = INKEY$           ; "" when no key is waiting
 ;;;   PRINT POS, VPOS                        ; text column and row
@@ -24,9 +25,11 @@
 ;;; --- Run-time support ---
 
 (define (bbc-string-repeat n s)
-  (let [k (trunc n)]
+  ;; STRING$(5, "ab"); MBASIC's STRING$(5, 42) repeats the character with code 42
+  (let [k (trunc n)
+        text (if (number? s) (bbc-chr s) s)]
     (if (< k 0) (error "STRING$: the count must not be negative"))
-    (str/join (map (lambda (_) s) (range k)))))
+    (str/join (map (lambda (_) text) (range k)))))
 
 (define (bbc-mid-replace s p new & n)
   ;; MID$(s$, p, n) = new$: overwrite from position p, never changing the length

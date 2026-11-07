@@ -4,6 +4,8 @@ Base branch: `dev`. Release PRs into `main` come from `tools/release_main.py`.
 
 Describe the problem, resulting behavior and relevant validation.
 
+- [ ] Feature change: [docs/FEATURE_MATRIX.md](../docs/FEATURE_MATRIX.md), CHANGELOG and help updated (or no feature change)
+
 ## Agent coordination
 
 - Owner:

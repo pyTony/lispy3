@@ -26,26 +26,26 @@ FILES = 'CHAIN, MERGE, KILL or random files not implemented'
 SEMANTICS = 'different MBASIC semantics'
 
 EXPECTED = {
-    'log10k': MISSING + ': \\', 'test_binary_conversion': MISSING + ': MKI$, CVI',
-    'test_type_conversion': MISSING + ': CINT',
+    'log10k': MISSING + ': DEFINT, DEFDBL', 'test_binary_conversion': MISSING + ': MKI$, CVI',
+    'test_type_conversion': SEMANTICS + ': # doubles print as singles',
     'test_chain': FILES, 'test_merge': FILES, 'test_file_io': FILES, 'test_random_files': FILES,
     'test_data_read': PASS, 'test_dim_arrays': PASS, 'test_goto': PASS,
     'test_input': PASS, 'test_simple': PASS,
     'test_gosub': SPACING, 'test_tab_spc': SPACING,
-    'test_def_fn': MISSING + ': DEF FN', 'test_deftypes': MISSING + ': DEFINT',
-    'test_eqv_imp': MISSING + ': EQV, IMP', 'test_erase': MISSING + ': ERASE',
-    'test_error_handling': MISSING + ': ON ERROR, RESUME', 'test_hex_oct': MISSING + ': HEX$, OCT$',
-    'test_logical_ops': MISSING + ': XOR',
-    'test_math_functions': MISSING,
-    'test_mod_intdiv': MISSING + ': \\', 'test_operator_precedence': MISSING + ': \\',
+    'test_def_fn': SEMANTICS + ': single-precision arithmetic', 'test_deftypes': MISSING + ': DEFINT',
+    'test_eqv_imp': PASS, 'test_erase': MISSING + ': ERASE',
+    'test_error_handling': MISSING + ': ON ERROR, RESUME', 'test_hex_oct': PASS,
+    'test_logical_ops': PASS,
+    'test_math_functions': PASS,
+    'test_mod_intdiv': PASS, 'test_operator_precedence': PASS,
     'test_option_base': MISSING + ': OPTION BASE', 'test_peek': MISSING + ': PEEK',
-    'test_print_using': MISSING + ': PRINT USING', 'test_randomize': MISSING + ': RANDOMIZE',
-    'test_rounding': MISSING + ': FIX', 'test_string_functions': MISSING + ': SPACE$',
+    'test_print_using': MISSING + ': PRINT USING', 'test_randomize': SEMANTICS + ': RANDOMIZE does not repeat the RND sequence in 5.21',
+    'test_rounding': PASS, 'test_string_functions': PASS,
     'test_tron_troff': MISSING + ': TRON, TROFF',
     'test_while_wend': PASS, 'test_if_then_else': PASS, 'test_inkey': PASS,
     'test_mid_assignment': PASS, 'test_swap': PASS,
     'test_on_goto_gosub': SEMANTICS + ': ON out of range falls through',
-    'test_for_next': SEMANTICS + ': output differs', 'test_rnd': SEMANTICS + ': RND sequence',
+    'test_for_next': SEMANTICS + ': output differs', 'test_rnd': PASS,
 }
 
 
