@@ -1250,11 +1250,21 @@ def read_file_arg(arg: str, settings=None):
     failures raise RuntimeError and text read failures raise OSError.
     """
     path = source_arg_path(arg)
-    if os.path.splitext(path)[1].lower() == '.bbc':
+    ext = os.path.splitext(path)[1].lower()
+    if ext == '.bbc':
         settings = settings or {}
         content = BR.detokenize_bbc(path, executable=settings.get('basic_python'),
                                    package_root=settings.get('basic_directory', ''))
         return os.path.splitext(os.path.basename(path))[0]+'.bas', content, None
+    if ext in ('.com', '.bin'):
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            mode = 'dos' if ext == '.com' else 'monitor'
+            content = PE.format_hex_bytes(data, mode=mode)
+        except FileNotFoundError:
+            content = f'; pil: {"dos" if ext == ".com" else "monitor"}\n'
+        return os.path.basename(path), content, path
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -2350,7 +2360,8 @@ class LispMachine(tk.Tk):
                 self.after_idle(tab.text.focus_set)
                 return
         try:
-            if os.path.splitext(path)[1].lower() == '.bbc':
+            ext = os.path.splitext(path)[1].lower()
+            if ext == '.bbc' or ext in ('.com', '.bin'):
                 name, content, target = read_file_arg(path, self.settings)
             else:
                 with open(path, 'r', encoding='utf-8') as source:
@@ -2378,18 +2389,27 @@ class LispMachine(tk.Tk):
         return True
 
     def _save_tab_to_path(self, tab, path):
-        if os.path.splitext(path)[1].lower() == '.bbc':
+        ext = os.path.splitext(path)[1].lower()
+        if ext == '.bbc':
             messagebox.showerror('Save failed', '.bbc is reserved for tokenized programs. Save editable text as .bas.')
             return False
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(tab.get_content())
-            tab.disk_content = tab.get_content()
+            content = tab.get_content()
+            if ext in ('.com', '.bin'):
+                raw = PE.parse_hex_bytes(content)
+                with open(path, "wb") as f:
+                    f.write(raw)
+            else:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            tab.disk_content = content
             tab.dirty = False
-            tab.text.edit_modified(False)
-            self.status_right.configure(text=f"saved: {path}")
+            if hasattr(tab, 'text'):
+                tab.text.edit_modified(False)
+            if hasattr(self, 'status_right'):
+                self.status_right.configure(text=f"saved: {path}")
             return True
-        except OSError as e:
+        except (OSError, PE.PilError) as e:
             messagebox.showerror("Save failed", str(e))
             return False
 
@@ -2734,7 +2754,7 @@ class LispMachine(tk.Tk):
         if language == 'PIL':
             self.listener_write(PIL_BUFFER_NOTE, 'info')
             return
-        if language == 'x86 assembly':
+        if language in ('x86 assembly', 'x86 binary'):
             self.run_asm_buffer(tab)
             return
         if language != 'Lisp':
@@ -3116,28 +3136,38 @@ class LispMachine(tk.Tk):
         return False
 
     def run_asm_buffer(self, tab=None):
-        """Assemble an x86 buffer with NASM and run it in PIL (DOS .COM, or ; pil: monitor)."""
+        """Assemble an x86 buffer with NASM or load an x86 binary buffer and run it in PIL (DOS .COM, or ; pil: monitor)."""
         tab = tab or self.current_tab()
         if tab is None:
             return False
         source = tab.get_content()
         origin = buffer_source_path(tab)
         cwd = os.path.dirname(os.path.abspath(origin)) if origin else os.getcwd()
+        name = getattr(tab, 'path', None) or tab.name
+        ext = os.path.splitext(name)[1].lower()
+        is_binary = ext in ('.hex', '.bin', '.com') or execution_language(tab) == 'x86 binary'
         try:
-            options = PE.run_options(source)
-            program = PE.assemble(source, cwd=cwd, name=getattr(tab, 'path', None) or tab.name)
+            if is_binary:
+                default_mode = 'dos' if ext == '.com' else 'monitor'
+                options = PE.run_options(source, default_mode=default_mode)
+                program = PE.prepare_binary(source, ext=ext, name=name, default_mode=default_mode)
+                action = 'Loaded'
+            else:
+                options = PE.run_options(source)
+                program = PE.assemble(source, cwd=cwd, name=name)
+                action = 'Assembled'
             command = PE.launch_command(program, options)
             subprocess.Popen(command, cwd=str(Path(command[1]).parent.parent))
         except (PE.PilError, OSError) as error:
             self.listener_write(f';; {error}\n', 'error')
-            line = PE.nasm_error_line(str(error))
+            line = PE.hex_error_line(str(error)) if is_binary else PE.nasm_error_line(str(error))
             if line is not None:
-                highlight = SyntaxError('NASM error')
+                highlight = SyntaxError('Hex error' if is_binary else 'NASM error')
                 highlight.lineno, highlight.offset, highlight.whole_line = line, 1, True
                 LispMachine._highlight_source_error(self, tab, highlight)
             return False
         where = 'the PIL debugger' if options['mode'] == 'monitor' else 'a PIL DOS window'
-        self.listener_write(f';; Assembled {program.name} ({program.stat().st_size} bytes); running it in {where}.\n', 'info')
+        self.listener_write(f';; {action} {program.name} ({program.stat().st_size} bytes); running it in {where}.\n', 'info')
         return True
 
     def _save_pil_settings(self):
@@ -3339,7 +3369,7 @@ class LispMachine(tk.Tk):
             if language == 'PIL':
                 self.listener_write(PIL_BUFFER_NOTE, 'info')
                 return
-            if language == 'x86 assembly':
+            if language in ('x86 assembly', 'x86 binary'):
                 self.run_asm_buffer(tab)
                 return
             if not basic and not python_source and language != 'Lisp':

@@ -138,3 +138,83 @@ class PilLanguageRunTest(TestCase):
             self.assertFalse(machine.LispMachine.run_asm_buffer(app, app.tab))
         self.assertEqual(highlight.call_args[0][2].lineno, 2)
         self.assertTrue(any('invalid combination' in line for line in app.lines))
+    def test_f5_and_f6_run_x86_binary_buffers(self):
+        for ext in ('.hex', '.bin', '.com'):
+            for run in (machine.LispMachine.eval_buffer, machine.LispMachine.eval_form_at_cursor):
+                app = _FakeMachine('b0 48 f4\n')
+                app.tab.name = 'demo' + ext
+                app.run_asm_buffer = Mock()
+                run(app)
+                app.run_asm_buffer.assert_called_once_with(app.tab)
+
+    def test_run_hex_buffer_launches_pil_monitor_without_nasm(self):
+        import tempfile
+        from pathlib import Path
+        app = _FakeMachine('b0 48 f4\n')
+        app.tab.name = 'hello.hex'
+        with tempfile.TemporaryDirectory() as folder:
+            program = Path(folder) / 'HELLO.BIN'
+            program.write_bytes(bytes([0xb0, 0x48, 0xf4]))
+            with patch.object(machine.PE, 'prepare_binary', return_value=program) as prep,                  patch.object(machine.PE, 'assemble') as assemble,                  patch.object(machine.PE, 'launch_command', return_value=['py', '/pil/tools/pil_debugger.py']) as launch,                  patch.object(machine.subprocess, 'Popen') as popen:
+                self.assertTrue(machine.LispMachine.run_asm_buffer(app, app.tab))
+        prep.assert_called_once()
+        assemble.assert_not_called()
+        launch.assert_called_once_with(program, {'mode': 'monitor', 'args': ''})
+        popen.assert_called_once()
+        self.assertTrue(any('Loaded HELLO.BIN (3 bytes); running it in the PIL debugger.' in line for line in app.lines))
+
+    def test_run_com_buffer_launches_pil_dos_without_nasm(self):
+        import tempfile
+        from pathlib import Path
+        app = _FakeMachine('; pil-args: 42\nb4 4c cd 21\n')
+        app.tab.name = 'factor.com'
+        with tempfile.TemporaryDirectory() as folder:
+            program = Path(folder) / 'FACTOR.COM'
+            program.write_bytes(bytes([0xb4, 0x4c, 0xcd, 0x21]))
+            with patch.object(machine.PE, 'prepare_binary', return_value=program) as prep,                  patch.object(machine.PE, 'assemble') as assemble,                  patch.object(machine.PE, 'launch_command', return_value=['py', '/pil/tools/dos_terminal.py']) as launch,                  patch.object(machine.subprocess, 'Popen') as popen:
+                self.assertTrue(machine.LispMachine.run_asm_buffer(app, app.tab))
+        prep.assert_called_once()
+        assemble.assert_not_called()
+        launch.assert_called_once_with(program, {'mode': 'dos', 'args': '42'})
+        popen.assert_called_once()
+        self.assertTrue(any('Loaded FACTOR.COM (4 bytes); running it in a PIL DOS window.' in line for line in app.lines))
+
+    def test_run_binary_buffer_reports_hex_error_line(self):
+        app = _FakeMachine('b0 48\nzz 01\n')
+        app.tab.name = 'bad.hex'
+        with patch.object(machine.LispMachine, '_highlight_source_error') as highlight:
+            self.assertFalse(machine.LispMachine.run_asm_buffer(app, app.tab))
+        self.assertEqual(highlight.call_args[0][2].lineno, 2)
+        self.assertTrue(any('invalid hex byte' in line for line in app.lines))
+
+    def test_read_file_arg_opens_binary_file_as_hex(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            p = Path(folder) / 'test.com'
+            p.write_bytes(bytes([0xb4, 0x4c, 0xcd, 0x21]))
+            name, content, target = machine.read_file_arg(str(p))
+            self.assertEqual(name, 'test.com')
+            self.assertEqual(target, str(p))
+            self.assertIn('; pil: dos', content)
+            self.assertIn('b4 4c cd 21', content)
+
+    def test_save_binary_tab_writes_raw_bytes(self):
+        import tempfile
+        from pathlib import Path
+        app = _FakeMachine('; pil: dos\nb4 4c cd 21\n')
+        with tempfile.TemporaryDirectory() as folder:
+            dest = str(Path(folder) / 'out.com')
+            self.assertTrue(machine.LispMachine._save_tab_to_path(app, app.tab, dest))
+            self.assertEqual(Path(dest).read_bytes(), bytes([0xb4, 0x4c, 0xcd, 0x21]))
+
+    def test_save_binary_tab_rejects_invalid_hex(self):
+        import tempfile
+        from pathlib import Path
+        app = _FakeMachine('; pil: dos\nzz 4c\n')
+        with tempfile.TemporaryDirectory() as folder:
+            dest = str(Path(folder) / 'bad.com')
+            with patch.object(machine.messagebox, 'showerror') as error_box:
+                self.assertFalse(machine.LispMachine._save_tab_to_path(app, app.tab, dest))
+            error_box.assert_called_once()
+            self.assertFalse(Path(dest).exists())

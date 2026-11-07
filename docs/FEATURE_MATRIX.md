@@ -142,6 +142,7 @@ checked against it. See [MBASIC compatibility](MBASIC_COMPAT.md).
 | Run BASIC with Python mini_basic (F7/F8) | ✅ | needs a mini_basic clone |
 | Run with real BBC BASIC for SDL | ✅ | ([BBCSDL](BBCSDL.md)) |
 | PIL x86: run `.asm` buffers | ✅ | needs PIL and NASM ([PIL](PIL.md)) |
+| PIL x86: run binary `.hex`, `.bin`, `.com` buffers | ✅ | no NASM needed; `.bin`/`.com` open as editable hex and save back as bytes (PR #138) |
 | Startup file, reopen last session | ✅ | View → Startup Settings |
 | Settings saved in `~/.lispy3_machine.json` | ✅ | a hidden file on Windows now saves too (PRs #130, #132, #133) |
 | Help window with this guide (F1) | ✅ | |

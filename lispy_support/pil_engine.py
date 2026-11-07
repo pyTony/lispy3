@@ -98,15 +98,16 @@ def find_tool(name: str, directory: str = '') -> Path:
 
 # --- x86 assembly buffers: NASM builds them, PIL runs them -----------------
 
-# Comment lines NASM ignores and Lispy reads:  ; pil: dos | monitor   ; pil-args: 30
-RUN_COMMENT = re.compile(r'^[ \t]*;[ \t]*pil(-args)?[ \t]*:[ \t]*(.*?)[ \t]*$', re.IGNORECASE | re.MULTILINE)
+# Comment lines NASM/PIL ignores and Lispy reads:  ; pil: dos | monitor   ; pil-args: 30
+RUN_COMMENT = re.compile(r'^[ \t]*[;#][ \t]*pil(-args)?[ \t]*:[ \t]*(.*?)[ \t]*$', re.IGNORECASE | re.MULTILINE)
 RUN_MODES = ('dos', 'monitor')
 NASM_ERROR = re.compile(r'^(?:.*?):(\d+): (?:error|fatal)', re.MULTILINE)
+HEX_ERROR = re.compile(r'^Line (\d+):')
 
 
-def run_options(source: str) -> dict:
-    """How to launch an assembled buffer: DOS .COM (default) or the monitor's raw image."""
-    options = {'mode': 'dos', 'args': ''}
+def run_options(source: str, default_mode: str = 'dos') -> dict:
+    """How to launch an assembled or binary buffer: DOS .COM (default) or the monitor's raw image."""
+    options = {'mode': default_mode, 'args': ''}
     for match in RUN_COMMENT.finditer(source):
         if match[1]:
             options['args'] = match[2]
@@ -116,6 +117,58 @@ def run_options(source: str) -> dict:
                 raise PilError(f'Unknown "; pil: {match[2]}" line: use ; pil: dos or ; pil: monitor')
             options['mode'] = mode
     return options
+
+
+def parse_hex_bytes(source: str, max_bytes: int = 65536) -> bytes:
+    """Parse whitespace-separated hex bytes, ignoring comments starting with ';' or '#'."""
+    raw = bytearray()
+    for lineno, line in enumerate(source.splitlines(), start=1):
+        clean = line.split(';', 1)[0].split('#', 1)[0].strip()
+        for token in clean.split():
+            clean_token = token.removeprefix('0x').removeprefix('0X')
+            try:
+                val = int(clean_token, 16)
+                if not 0 <= val <= 255:
+                    raise ValueError
+                raw.append(val)
+            except ValueError:
+                raise PilError(f"Line {lineno}: invalid hex byte: {token!r}") from None
+            if len(raw) > max_bytes:
+                raise PilError(f"Line {lineno}: program exceeds {max_bytes} byte limit")
+    if not raw:
+        raise PilError("No hex bytes found in buffer")
+    return bytes(raw)
+
+
+def hex_error_line(message: str) -> int | None:
+    """The source line of a hex format error, or None."""
+    match = HEX_ERROR.search(message)
+    return int(match[1]) if match else None
+
+
+def format_hex_bytes(data: bytes, mode: str = 'dos') -> str:
+    """Format binary bytes as hex text with an optional run directive comment."""
+    lines = [f'; pil: {mode}'] if mode else []
+    if not data:
+        return '\n'.join(lines) + ('\n' if lines else '')
+    for i in range(0, len(data), 16):
+        chunk = data[i:i + 16]
+        lines.append(' '.join(f'{b:02x}' for b in chunk))
+    return '\n'.join(lines) + '\n'
+
+
+def prepare_binary(source: str, *, ext: str = '', name: str = 'buffer', default_mode: str = '') -> Path:
+    """Extract and validate raw bytes from hex text and write them to a temp binary image."""
+    raw = parse_hex_bytes(source)
+    if not default_mode:
+        default_mode = 'dos' if ext.lower() in ('.com', '.exe') else 'monitor'
+    options = run_options(source, default_mode=default_mode)
+    stem = re.sub(r'[^A-Za-z0-9_-]', '', Path(name).stem)[:8].upper() or 'BUFFER'
+    suffix = '.COM' if options['mode'] == 'dos' else '.BIN'
+    folder = Path(tempfile.mkdtemp(prefix='lispy-pil-'))
+    output = folder / (stem + suffix)
+    output.write_bytes(raw)
+    return output
 
 
 def find_nasm(nasm: str = '') -> Path:

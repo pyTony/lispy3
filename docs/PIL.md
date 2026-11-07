@@ -104,6 +104,23 @@ Two optional comment lines, which NASM ignores, choose how Lispy runs it:
 | `; pil: monitor` | load the raw bytes into the PIL debugger at CS:0100, without DOS; output goes to port E9 (`out 0e9h,al`) |
 | `; pil-args: TEXT` | the program's command line, as in `FACTOR 30` |
 
+## x86 binary buffers
+
+Files ending `.hex`, `.bin` or `.com` are coloured as x86 binary. F5 or F6 runs
+them directly in PIL without needing NASM:
+
+- `.hex` files hold whitespace-separated hex bytes (e.g. `b0 48 e6 e9 f4`) and
+  comments starting with `;` or `#`. They default to running in the PIL
+  debugger (`monitor` mode).
+- `.bin` files are raw monitor images. Opening a `.bin` file in the Machine
+  formats it as hex text with an initial `; pil: monitor` directive; saving
+  writes raw bytes back to disk.
+- `.com` files are DOS executables. Opening a `.com` file formats it as hex text
+  with an initial `; pil: dos` directive; saving writes raw bytes back to disk.
+
+As with assembly buffers, `; pil: dos`, `; pil: monitor` and `; pil-args: TEXT`
+choose how the binary runs. Any byte format error highlights the faulty line.
+
 ## `.pil` buffers
 
 `.pil` description files are coloured too. The engine has its descriptions

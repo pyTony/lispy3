@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- PIL x86 engine: the Machine loader opens and runs binary files (`.hex`, `.bin`,
+  `.com`) directly in PIL (F5/F6) without requiring NASM. `.hex` files hold
+  hexadecimal byte text and comments; opening `.bin` or `.com` files decodes them
+  to editable hex with the appropriate `; pil: monitor` or `; pil: dos` header,
+  and saving them writes the raw binary bytes back to disk.
+
 - mini-basic MBASIC style: `\` integer division, MBASIC operator precedence,
   `XOR`, `EQV`, `IMP`, `FIX`, `CINT`, `CSNG`, `CDBL`, `HEX$`, `OCT$`, `SPACE$`,
   `RANDOMIZE`, bare `RND`, `DEF FN NAME(x)` with a space, `'` comments.

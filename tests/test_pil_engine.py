@@ -166,6 +166,38 @@ class AssemblyTest(unittest.TestCase):
             self.assertEqual(PE.nasm_error_line(str(caught.exception)), 2)
 
 
+class BinaryTest(unittest.TestCase):
+
+    def test_parse_hex_bytes(self):
+        self.assertEqual(PE.parse_hex_bytes('; comment\nb0 48\n# hash\ne6 e9 f4'),
+                         bytes([0xb0, 0x48, 0xe6, 0xe9, 0xf4]))
+        self.assertEqual(PE.parse_hex_bytes('0xb0 0X48'), bytes([0xb0, 0x48]))
+        with self.assertRaises(PE.PilError) as caught:
+            PE.parse_hex_bytes('b0\nzz\n')
+        self.assertEqual(PE.hex_error_line(str(caught.exception)), 2)
+        with self.assertRaises(PE.PilError) as caught:
+            PE.parse_hex_bytes('100\n')
+        self.assertEqual(PE.hex_error_line(str(caught.exception)), 1)
+        with self.assertRaisesRegex(PE.PilError, 'No hex bytes'):
+            PE.parse_hex_bytes('; comment only\n')
+
+    def test_format_hex_bytes(self):
+        self.assertEqual(PE.format_hex_bytes(b'\xb4\x4c', mode='dos'),
+                         '; pil: dos\nb4 4c\n')
+        self.assertEqual(PE.format_hex_bytes(b'\xb0\x48', mode='monitor'),
+                         '; pil: monitor\nb0 48\n')
+
+    def test_prepare_binary(self):
+        prog = PE.prepare_binary('b0 48 f4', ext='.bin', name='demo.bin')
+        self.assertEqual(prog.suffix, '.BIN')
+        self.assertEqual(prog.read_bytes(), bytes([0xb0, 0x48, 0xf4]))
+        com = PE.prepare_binary('b4 4c cd 21', ext='.com', name='test.com')
+        self.assertEqual(com.suffix, '.COM')
+        self.assertEqual(com.read_bytes(), bytes([0xb4, 0x4c, 0xcd, 0x21]))
+        override = PE.prepare_binary('; pil: dos\nb0 48 f4', ext='.bin', name='demo.bin')
+        self.assertEqual(override.suffix, '.COM')
+
+
 class SyntaxTest(unittest.TestCase):
 
     def test_pil_and_x86_languages(self):
@@ -173,7 +205,11 @@ class SyntaxTest(unittest.TestCase):
         self.assertEqual(errors, [])
         pil = SH.language_for('add.pil', languages)
         asm = SH.language_for('factor.asm', languages)
-        self.assertEqual((pil.name, asm.name), ('PIL', 'x86 assembly'))
+        bin_lang = SH.language_for('demo.hex', languages)
+        self.assertEqual((pil.name, asm.name, bin_lang.name),
+                         ('PIL', 'x86 assembly', 'x86 binary'))
+        self.assertEqual(SH.language_for('test.bin', languages).name, 'x86 binary')
+        self.assertEqual(SH.language_for('test.com', languages).name, 'x86 binary')
         text = 'read a dst $W\nflag CF cf\nretire # done'
         tags = {text[s:e]: tag for tag, s, e in pil.spans(text)}
         self.assertEqual((tags['read'], tags['dst'], tags['$W'], tags['CF'], tags['# done']),
@@ -182,6 +218,10 @@ class SyntaxTest(unittest.TestCase):
         tags = {text[s:e]: tag for tag, s, e in asm.spans(text)}
         self.assertEqual((tags['.skip:'], tags['lodsb'], tags['org'], tags['100h'], tags['; go']),
                          ('function', 'keyword', 'special', 'number', 'comment'))
+        text = '; pil: monitor\nb0 48'
+        tags = {text[s:e]: tag for tag, s, e in bin_lang.spans(text)}
+        self.assertEqual((tags['; pil: monitor'], tags['b0'], tags['48']),
+                         ('comment', 'number', 'number'))
 
 
 if __name__ == '__main__':

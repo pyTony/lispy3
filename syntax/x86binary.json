@@ -1,0 +1,29 @@
+{
+  "name": "x86 binary",
+  "extensions": [
+    ".hex",
+    ".bin",
+    ".com"
+  ],
+  "line_comment": "; ",
+  "case_insensitive": true,
+  "rules": [
+    {
+      "tag": "comment",
+      "pattern": "[;#][^\\n]*"
+    },
+    {
+      "tag": "number",
+      "pattern": "\\b(?:0x[0-9a-fA-F]+|[0-9a-fA-F]{1,2})\\b"
+    }
+  ],
+  "word_pattern": "[A-Za-z_][\\w-]*",
+  "words": {
+    "special": [
+      "pil",
+      "pil-args",
+      "dos",
+      "monitor"
+    ]
+  }
+}
