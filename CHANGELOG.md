@@ -4,6 +4,13 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- PIL x86: disassembly. **Eval > PIL x86 engine > Disassemble x86 program…**
+  and **Disassemble x86 binary buffer** open a `.com`, `.bin` or `.hex`
+  program as an `.asm` buffer, using NASM's `ndisasm`. Jump and call targets
+  become labels, comments show address, bytes and ASCII, and lines NASM would
+  encode differently become `db`, so F5 reassembles the same bytes and runs
+  them in PIL. Lisp: `(pil-disassemble "PROG.COM")`. See docs/PIL.md.
+
 - PIL x86 engine: the Machine loader opens and runs binary files (`.hex`, `.bin`,
   `.com`) directly in PIL (F5/F6) without requiring NASM. `.hex` files hold
   hexadecimal byte text and comments; opening `.bin` or `.com` files decodes them

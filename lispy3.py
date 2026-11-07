@@ -461,6 +461,7 @@ HELP_TOPICS: dict[str, list[tuple[str, str]]] = {
         ("pil-state", "(pil-state) - registers, eip, flags, status and demo as a map: (get (pil-state) 'eax)"),
         ("pil-start", "(pil-start [\"raw.bin\"]) - start a fresh PIL engine, optionally with a raw image at CS:0100"),
         ("pil-stop", "(pil-stop) - end the PIL engine process"),
+        ("pil-disassemble", "(pil-disassemble \"PROG.COM\") - NASM source for a .com, .bin or .hex program (needs NASM, not PIL)"),
     ],
 }
 

@@ -1887,6 +1887,8 @@ class LispMachine(tk.Tk):
         pil_m.add_command(label='Open PIL debugger', command=self.open_pil_debugger)
         pil_m.add_command(label='Run DOS program in PIL…', command=self.run_pil_dos_program)
         pil_m.add_command(label='Assemble and run x86 buffer', command=self.run_asm_buffer)
+        pil_m.add_command(label='Disassemble x86 program…', command=self.disassemble_x86_file)
+        pil_m.add_command(label='Disassemble x86 binary buffer', command=self.disassemble_x86_buffer)
         pil_m.add_command(label='PIL Settings…', command=self._open_pil_settings)
         eval_m.add_cascade(label='PIL x86 engine', menu=pil_m)
         eval_m.add_command(label="Inspect symbol at cursor", accelerator="Shift+F7", command=self.inspect_at_cursor)
@@ -3134,6 +3136,50 @@ class LispMachine(tk.Tk):
         if path:
             return LispMachine._launch_pil_tool(self, 'dos_terminal.py', path)
         return False
+
+    def disassemble_x86_file(self, path=None):
+        """Open a .COM, .BIN or .HEX program as an .asm buffer that F5 assembles and runs again."""
+        path = path or filedialog.askopenfilename(title='x86 program to disassemble',
+            filetypes=[('x86 programs', '*.com *.COM *.bin *.BIN *.hex *.HEX'), ('All files', '*')])
+        if not path:
+            return False
+        try:
+            data = PE.read_program(path)
+        except (PE.PilError, OSError) as error:
+            self.listener_write(f';; {error}\n', 'error')
+            return False
+        return LispMachine._open_disassembly(self, data, os.path.basename(path))
+
+    def disassemble_x86_buffer(self, tab=None):
+        """Disassemble the hex bytes of an x86 binary buffer (.com, .bin, .hex) into a new .asm buffer."""
+        tab = tab or self.current_tab()
+        if tab is None:
+            return False
+        name = getattr(tab, 'path', None) or tab.name
+        if execution_language(tab) != 'x86 binary':
+            self.listener_write(';; Disassemble works on a .com, .bin or .hex buffer; '
+                                'use Disassemble x86 program… for a file.\n', 'error')
+            return False
+        source = tab.get_content()
+        default_mode = 'dos' if name.lower().endswith('.com') else 'monitor'
+        try:
+            data = PE.parse_hex_bytes(source)
+            mode = PE.run_options(source, default_mode=default_mode)['mode']
+        except PE.PilError as error:
+            self.listener_write(f';; {error}\n', 'error')
+            return False
+        return LispMachine._open_disassembly(self, data, os.path.basename(name), mode=mode)
+
+    def _open_disassembly(self, data, name, mode=None):
+        mode = mode or ('dos' if name.lower().endswith('.com') else 'monitor')
+        try:
+            source = PE.disassemble(data, mode=mode, name=name)
+        except PE.PilError as error:
+            self.listener_write(f';; {error}\n', 'error')
+            return False
+        self.new_buffer(os.path.splitext(name)[0] + '.asm', source)
+        self.listener_write(f';; Disassembled {name} ({len(data)} bytes). F5 assembles it again and runs it in PIL.\n', 'info')
+        return True
 
     def run_asm_buffer(self, tab=None):
         """Assemble an x86 buffer with NASM or load an x86 binary buffer and run it in PIL (DOS .COM, or ; pil: monitor)."""
