@@ -222,6 +222,119 @@
   (let [inner (reduce (fn [a i] (aget ^objects a (int (bbc-int i)))) arr (butlast indices))]
     (aset ^objects inner (int (bbc-int (last indices))) val)))
 
+;;; --- Files: OPENIN, OPENOUT, OPENUP, PRINT#, INPUT#, BPUT#, BGET#, GET$# ---
+;;; The byte layout of BBC BASIC for SDL, as in lisp/mini-basic-io.lisp:
+;;; PRINT# writes a string and CR, a whole number as &40 and 4 bytes and any
+;;; other number as &FF and an 8-byte double, least significant byte first.
+;;; A channel is a java.io.RandomAccessFile.
+
+(defmacro bbc-let [bindings & body] `(let [~@(apply concat bindings)] ~@body))
+(defmacro bbc-lambda [args & body] `(fn [~@args] ~@body))
+
+(def channels (atom {}))
+(def next-channel (atom 1))
+
+(defn ^java.io.RandomAccessFile bbc-channel [n]
+  (or (@channels (long (bbc-int n))) (throw (ex-info (str "Invalid channel " n) {}))))
+
+(defn bbc-open
+  "A new channel number, or 0 when the file cannot be opened."
+  [^String name mode]
+  (let [file (java.io.File. name)
+        f (try (case mode
+                 "rb" (java.io.RandomAccessFile. file "r")
+                 "w+b" (doto (java.io.RandomAccessFile. file "rw") (.setLength 0))
+                 (when (.exists file) (java.io.RandomAccessFile. file "rw")))
+               (catch java.io.IOException _ nil))]
+    (if f
+      (let [ch @next-channel]
+        (swap! channels assoc ch f)
+        (swap! next-channel inc)
+        ch)
+      0)))
+
+(defn bbc-close
+  "CLOSE#0 closes every file."
+  [n]
+  (if (zero? (bbc-int n))
+    (doseq [ch (keys @channels)] (bbc-close ch))
+    (do (.close (bbc-channel n))
+        (swap! channels dissoc (long (bbc-int n))))))
+
+(defn bbc-close-text
+  "MBASIC's CLOSE n, ... and bare CLOSE; the ports have only BBC channels."
+  [& numbers]
+  (if (seq numbers) (run! bbc-close numbers) (bbc-close 0))
+  nil)
+
+(defn bbc-text-channel? [_n] false)
+(defn bbc-print-to [_n _body] (throw (ex-info "MBASIC text files are lispy3 only" {})))
+
+(defn bbc-ptr [n] (.getFilePointer (bbc-channel n)))
+(defn bbc-set-ptr! [n p] (.seek (bbc-channel n) (long (bbc-int p))))
+(defn bbc-ext [n] (.length (bbc-channel n)))
+
+(defn bbc-eof [n]
+  (let [f (bbc-channel n)]
+    (if (>= (.getFilePointer f) (.length f)) -1 0)))
+
+(defn- read-byte! [^java.io.RandomAccessFile f]
+  (let [b (.read f)]
+    (if (neg? b) (throw (ex-info "End of file" {})) b)))
+
+(defn- write-string! [^java.io.RandomAccessFile f ^String s]
+  (doseq [c s] (.write f (int (min 255 (int c))))))
+
+(defn- write-le! [^java.io.RandomAccessFile f n count]
+  (dotimes [i count] (.write f (int (bit-and (bit-shift-right (long n) (* 8 i)) 255)))))
+
+(defn- read-le [f count]
+  (reduce (fn [n i] (bit-or n (bit-shift-left (long (read-byte! f)) (* 8 i)))) 0 (range count)))
+
+(defn bbc-print-file [n & items]
+  (let [f (bbc-channel n)]
+    (doseq [x items]
+      (cond (string? x) (do (write-string! f x) (.write f 13))
+            (and (integer? x) (<= -2147483648 x 2147483647)) (do (.write f 64) (write-le! f x 4))
+            :else (do (.write f 255) (write-le! f (Double/doubleToRawLongBits (double x)) 8))))))
+
+(defn- read-until
+  "[text stop]: the bytes up to one in stops, or the end of the file (stop -1)."
+  [^java.io.RandomAccessFile f stops]
+  (loop [sb (StringBuilder.)]
+    (let [b (.read f)]
+      (if (or (neg? b) (stops b))
+        [(str sb) b]
+        (recur (.append sb (char b)))))))
+
+(defn bbc-input-file [n kind]
+  (let [f (bbc-channel n)]
+    (if (= kind :str)
+      (first (read-until f #{13}))
+      (case (long (read-byte! f))
+        64 (long (unchecked-int (read-le f 4)))
+        255 (Double/longBitsToDouble (read-le f 8))
+        (throw (ex-info "Type mismatch: INPUT# expected a number" {}))))))
+
+(defn bbc-bput [n x newline]
+  (let [f (bbc-channel n)]
+    (if (string? x)
+      (do (write-string! f x)
+          (when newline (.write f 10)))
+      (.write f (int (bit-and (long (bbc-int x)) 255))))))
+
+(defn bbc-bget [n] (read-byte! (bbc-channel n)))
+
+(defn bbc-get-line
+  "GET$#: up to CR, LF or NUL; a CR LF pair counts as one line end."
+  [n]
+  (let [f (bbc-channel n)
+        [text stop] (read-until f #{13 10 0})]
+    (when (= stop 13)
+      (let [here (.getFilePointer f)]
+        (when-not (= (.read f) 10) (.seek f here))))
+    text))
+
 ;;; --- Helpers the macros use while they expand ---
 
 (defn marker? [x nm]
@@ -587,6 +700,8 @@
        (declare ~@(map #(def-name (if (form? % "DEF-FN") "FN" "PROC") (first (second %))) defs))
        ~@defs
        (binding [~@(mapcat (fn [v] [v (bbc-default v)]) vars)]
-         ~(if (uses? ["END"] (apply list stmts)) (catching :end run) run))
+         (try
+           ~(if (uses? ["END"] (apply list stmts)) (catching :end run) run)
+           (finally (bbc-close 0))))
        (flush)
        nil)))

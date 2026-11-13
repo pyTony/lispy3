@@ -1414,7 +1414,8 @@
     (quotient bbc-quotient) (remainder bbc-remainder) (trunc bbc-trunc) (float bbc-float)
     (expt bbc-expt) (abs bbc-abs) (floor bbc-floor) (sqrt bbc-sqrt) (sin bbc-sin)
     (cos bbc-cos) (tan bbc-tan) (atan bbc-atan) (log bbc-log) (log10 bbc-log10)
-    (exp bbc-exp) (pi bbc-pi) (length bbc-length) (string-append bbc-string-append)))
+    (exp bbc-exp) (pi bbc-pi) (length bbc-length) (string-append bbc-string-append)
+    (let bbc-let) (lambda bbc-lambda)))
 
 (define (bbc-rename sym)
   (let loop ((names bbc-foreign-names))
@@ -1452,8 +1453,9 @@
 
 (define (bbc-foreign-text x target)
   ;; Code x as SBCL (target :sbcl) or Clojure (:clojure) source text
-  (cond ((eq? x #t) (if (eq? target :sbcl) "t" "true"))
-        ((eq? x #f) (if (eq? target :sbcl) "nil" "false"))
+  ;; cl:t and cl:nil, as package bbc-user does not use CL
+  (cond ((eq? x #t) (if (eq? target :sbcl) "cl:t" "true"))
+        ((eq? x #f) (if (eq? target :sbcl) "cl:nil" "false"))
         ((string? x) (bbc-foreign-string x))
         ((number? x) (bbc-foreign-number x target))
         ((and (symbol? x) (equal? (substring (symbol->string x) 0 1) ":")) (symbol->string x))

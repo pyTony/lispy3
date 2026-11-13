@@ -4,6 +4,11 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- compare/: BBC BASIC file I/O in the SBCL and Clojure mini-basic ports:
+  `OPENIN`, `OPENOUT`, `OPENUP`, `PRINT#`, `INPUT#`, `BPUT#`, `BGET#`, `GET$#`,
+  `EOF#`, `PTR#`, `EXT#` and `CLOSE#`, writing the same bytes as lispy3.
+  Golden example `basic/examples/files.bas`.
+
 - compare/: the SBCL and Clojure mini-basic ports run `GOTO`, `GOSUB`/`RETURN`
   and `ON ... GOTO/GOSUB [ELSE]`, to line numbers and `(label)` names. SBCL
   uses `tagbody`/`go`; Clojure cuts a body into segments at its labels. Golden
