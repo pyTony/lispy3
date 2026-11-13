@@ -310,6 +310,105 @@
 (defn def-name [kind nm]
   (symbol (str kind "-" (name nm))))
 
+;;; --- Labels: GOTO, GOSUB and ON ---
+;;; Clojure has no TAGBODY, so a body with labels and jumps is cut at its
+;;; labels into segments, one fn each, and a loop runs them in turn from a
+;;; program counter. GOTO throws, as END does; the nearest body that has the
+;;; label catches it and goes on from there. At the top of a program or a
+;;; PROC/FN, GOSUB calls (gosub-run label), which runs the same segments from
+;;; the label until RETURN throws.
+
+(defn label? [x] (form? x "LABEL"))
+
+(defn target-tag
+  "A line number, or a label name, which the reader quotes."
+  [target]
+  (cond (or (number? target) (symbol? target)) target
+        (form? target "quote") (second target)
+        :else (throw (ex-info "A calculated GOTO, GOSUB or ON is lispy3 only" {}))))
+
+(defn segments
+  "[segments labels]: the statements cut at each (LABEL tag), and tag -> segment."
+  [stmts]
+  (reduce (fn [[segs labels] stmt]
+            (if (label? stmt)
+              [(conj segs []) (assoc labels (target-tag (second stmt)) (count segs))]
+              [(conj (pop segs) (conj (peek segs) stmt)) labels]))
+          [[[]] {}]
+          stmts))
+
+(defn bbc-goto-missing [tag]
+  (throw (ex-info (str "GOTO: unknown label " tag) {})))
+
+(defn segment-loop
+  "Code that runs the segments from pc and gives the last value; a GOTO to a
+  label not here goes on out, or is an error when missing is true."
+  [stmts pc missing]
+  (let [[segs labels] (segments stmts)
+        fns (gensym "segs")
+        e (gensym "e")]
+    `(let [~fns [~@(map (fn [seg] `(fn [] nil ~@seg)) segs)]]
+       (loop [pc# ~pc value# nil]
+         (if (< pc# ~(count segs))
+           (let [[next# v#]
+                 (try [(inc pc#) ((nth ~fns pc#))]
+                      (catch clojure.lang.ExceptionInfo ~e
+                        (let [tag# (bbc-exit-value ::goto ~e)
+                              at# (get '~labels tag#)]
+                          (cond at# [at# nil]
+                                ~missing (bbc-goto-missing tag#)
+                                :else (throw ~e)))))]
+             (recur next# v#))
+           value#)))))
+
+(defn seg-body
+  "The statements of a structured body, as segments when it has labels and jumps."
+  [stmts]
+  (if (and (some label? stmts) (uses? ["GOTO" "ON-GOTO"] (apply list stmts)))
+    [(segment-loop stmts 0 false)]
+    stmts))
+
+(defn jump-body
+  "The top level of a program or PROC/FN, which GOSUB can also start at a label."
+  [stmts]
+  (if (uses? ["GOSUB" "ON-GOSUB" "RETURN"] (apply list stmts))
+    (let [labels (second (segments stmts))
+          pc (gensym "pc")]
+      [`(letfn [(~'gosub-run [~'gosub-start]
+                  (if (nil? ~'gosub-start)
+                    ~(segment-loop stmts 0 true)
+                    (let [~pc (get '~labels ~'gosub-start)]
+                      (when-not ~pc
+                        (throw (ex-info (str "GOSUB: unknown label " ~'gosub-start) {})))
+                      (try ~(segment-loop stmts pc true)
+                           (throw (ex-info "GOSUB reached end without RETURN" {}))
+                           (catch clojure.lang.ExceptionInfo e#
+                             (bbc-exit-value ::gosub-return e#))))))]
+          (~'gosub-run nil))])
+    (if (some label? stmts)
+      [(segment-loop stmts 0 true)]
+      stmts)))
+
+(defmacro LABEL [_tag] nil)
+
+(defmacro GOTO [target] `(bbc-exit ::goto '~(target-tag target)))
+(defmacro GOSUB [target] `(~'gosub-run '~(target-tag target)))
+
+(defmacro RETURN []
+  `(if ~'gosub-start
+     (bbc-exit ::gosub-return nil)
+     (throw (ex-info "RETURN without GOSUB" {}))))
+
+(defn on-code [transfer idx targets else-stmts]
+  `(case (long (bbc-int ~idx))
+     ~@(mapcat (fn [i target] [i `(~transfer ~target)]) (iterate inc 1) targets)
+     ~(if (seq else-stmts)
+        `(do ~@else-stmts)
+        `(throw (ex-info "ON range" {})))))
+
+(defmacro ON-GOTO [idx targets else-stmts] (on-code `GOTO idx targets else-stmts))
+(defmacro ON-GOSUB [idx targets else-stmts] (on-code `GOSUB idx targets else-stmts))
+
 ;;; --- Statements ---
 
 (defn typed-value
@@ -354,8 +453,8 @@
 (defmacro IF [test & body]
   (let [[then else] (split-at-marker body "ELSE")]
     `(if ~(bbc-test test)
-       (do ~@then)
-       ~@(when else [`(do ~@else)]))))
+       (do ~@(seg-body then))
+       ~@(when else [`(do ~@(seg-body else))]))))
 
 (defmacro FOR [var from to & more]
   (let [has-step (marker? (first more) "STEP")
@@ -368,7 +467,7 @@
                     :else `(<= ~var ~lim))
         run `(let [~lim ~to ~st ~step]
                (loop []
-                 ~@body
+                 ~@(seg-body body)
                  (LET ~var (+ ~var ~st))
                  (when ~more? (recur))))]
     `(do
@@ -378,14 +477,14 @@
 (defmacro REPEAT [& body]
   (let [[stmts until] (split-at-marker body "UNTIL")
         run `(loop []
-               ~@stmts
+               ~@(seg-body stmts)
                (when-not ~(bbc-test (first until)) (recur)))]
     (if (uses? ["EXIT-REPEAT"] stmts) (catching :exit-repeat run) run)))
 
 (defmacro WHILE [test & body]
   (let [run `(loop []
                (when ~(bbc-test test)
-                 ~@body
+                 ~@(seg-body body)
                  (recur)))]
     (if (uses? ["EXIT-WHILE"] body) (catching :exit-while run) run)))
 
@@ -394,9 +493,9 @@
     `(let [~v ~exp]
        (cond ~@(mapcat (fn [clause]
                          (if (form? clause "OTHERWISE")
-                           [:else `(do ~@(rest clause))]
+                           [:else `(do ~@(seg-body (rest clause)))]
                            [`(or ~@(map (fn [w] `(bbc-equal ~v ~w)) (second clause)))
-                            `(do ~@(nnext clause))]))
+                            `(do ~@(seg-body (nnext clause)))]))
                        clauses)))))
 
 (defmacro EXIT-FOR [] `(bbc-exit :exit-for nil))
@@ -442,7 +541,7 @@
   (let [args (map #(gensym (name %)) parms)
         locals (remove (set parms) (collect-forms ["LOCAL"] rest (apply list body)))
         tail-body (tail body)
-        run `(do nil ~@tail-body)]
+        run `(do nil ~@(jump-body tail-body))]
     `(defn ~(def-name kind nm) [~@args]
        (binding [~@(interleave parms args) ~@(interleave locals locals)]
          ~(if (uses? ["FN=" "ENDPROC"] run) (catching :return run) run)))))
@@ -482,7 +581,7 @@
         run `(do (reset! col 0)
                  (reset! data [~@(data-items stmts)])
                  (reset! data-ptr 0)
-                 ~@(remove def? stmts))]
+                 ~@(jump-body (remove def? stmts)))]
     `(do
        ~@(map (fn [v] `(def ~(with-meta v {:dynamic true}) ~(bbc-default v))) vars)
        (declare ~@(map #(def-name (if (form? % "DEF-FN") "FN" "PROC") (first (second %))) defs))

@@ -4,6 +4,12 @@ All notable changes to Lispy3 and the Lispy Machine editor.
 
 ## Unreleased
 
+- compare/: the SBCL and Clojure mini-basic ports run `GOTO`, `GOSUB`/`RETURN`
+  and `ON ... GOTO/GOSUB [ELSE]`, to line numbers and `(label)` names. SBCL
+  uses `tagbody`/`go`; Clojure cuts a body into segments at its labels. Golden
+  examples `basic/examples/jumps.bas` and `labels.bas`; mini_basic's classic
+  `SIEVE.bbc` now runs in all three Lisps.
+
 - PIL x86: disassembly. **Eval > PIL x86 engine > Disassemble x86 program…**
   and **Disassemble x86 binary buffer** open a `.com`, `.bin` or `.hex`
   program as an `.asm` buffer, using NASM's `ndisasm`. Jump and call targets

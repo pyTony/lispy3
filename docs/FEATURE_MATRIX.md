@@ -4,7 +4,7 @@ What Lispy has today, at a glance: the Lisp language, the mini-basic BASIC
 (BBC and MBASIC styles), and the Lispy Machine editor. Each row links to the
 page that explains it.
 
-**Last checked: 2026-11-07, `dev` after PR #138, with disassembly.**
+**Last checked: 2026-11-13, `dev` after PR #140, with GOTO/GOSUB/ON in the SBCL and Clojure ports.**
 
 ✅ works · 🟡 partly, see the note · ❌ not yet
 
@@ -103,7 +103,7 @@ compatibility option, not a complete MBASIC dialect. Details in [mini-basic](MIN
 | `DIV`, `MOD`, `EOR`, `&hex`; MBASIC `\` and `MOD` | ✅ | ✅ | MBASIC operator precedence (PR #136) |
 | `XOR`, `EQV`, `IMP` | — | ✅ | PR #136 |
 | IF/THEN/ELSE, block IF, FOR/NEXT, REPEAT, WHILE/ENDWHILE, WHILE/WEND, CASE | ✅ | ✅ | `WEND` in MBASIC style |
-| GOTO, GOSUB, ON GOTO/GOSUB, line numbers, `(label)` labels | ✅ | 🟡 | MBASIC: ON out of range should fall through |
+| GOTO, GOSUB, ON GOTO/GOSUB, line numbers, `(label)` labels | ✅ | 🟡 | MBASIC: ON out of range should fall through; also in the SBCL and Clojure ports ([compare](../compare/README.md)) |
 | DEF PROC / DEF FN, LOCAL, multi-line FN | ✅ | ✅ | MBASIC `DEF FN NAME(x)` with a space (PR #136) |
 | `RETURN` parameters, `LOCAL a()`, whole-array parameters, `ON x PROC` | ❌ | — | |
 | DATA/READ/RESTORE, DIM arrays, whole-array arithmetic, SUM | ✅ | ✅ | |
