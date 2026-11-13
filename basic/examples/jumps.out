@@ -1,0 +1,10 @@
+start
+i% = 3
+in sub
+one
+two
+three
+on goto
+         1         2         3
+left the loop at 4
+done

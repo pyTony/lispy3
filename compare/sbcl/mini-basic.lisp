@@ -15,11 +15,12 @@
 
 (defpackage :mini-basic
   (:use :cl)
-  (:shadow #:print #:if #:let #:case #:aref #:read)
+  (:shadow #:print #:if #:let #:case #:aref #:read #:return)
   (:export #:bbc-program #:let #:print #:if #:for #:repeat #:while #:case
            #:def-proc #:def-fn #:proc #:fn #:fn= #:local #:endproc #:end
            #:exit-for #:exit-repeat #:exit-while #:true #:false
            #:dim #:aref #:aset! #:data #:read #:restore
+           #:label #:goto #:gosub #:return #:on-goto #:on-gosub
            ;; What the BBC BASIC text reader writes for operators and functions
            #:bbc= #:bbc< #:bbc> #:bbc<= #:bbc>= #:bbc-eq? #:bbc-if
            #:bbc-quotient #:bbc-remainder #:bbc-trunc #:bbc-float #:bbc-expt
@@ -306,6 +307,83 @@
 (defun def-name (kind name)
   (intern (format nil "~a-~a" kind (symbol-name name)) (symbol-package name)))
 
+;;; --- Labels: GOTO is GO in a TAGBODY ---
+;;; A (LABEL n) in a list of statements becomes the tag n of a TAGBODY around
+;;; them, so GOTO is a plain GO, to the label of this body or of an enclosing
+;;; one. GOSUB calls a local function that starts its body at the label;
+;;; RETURN returns from that call.
+
+(defun label-p (x) (form-p x "LABEL"))
+
+(defun uses-p (names x)
+  ;; Does x contain a form whose head is one of names?
+  (and (consp x)
+       (or (some (lambda (n) (form-p x n)) names)
+           (loop for rest on x
+                 while (consp rest)
+                 thereis (uses-p names (car rest))))))
+
+(defun target-tag (target)
+  ;; A line number, or a label name, which the reader quotes
+  (cond ((or (integerp target) (symbolp target)) target)
+        ;; lispy3's quote comes over as |quote|
+        ((and (consp target) (symbolp (car target))
+              (string-equal (symbol-name (car target)) "QUOTE"))
+         (second target))
+        (t (error "A calculated GOTO, GOSUB or ON is lispy3 only"))))
+
+(defun tagged (stmts)
+  (mapcar (lambda (s) (cl:if (label-p s) (target-tag (second s)) s)) stmts))
+
+(defun body (stmts)
+  ;; The statements of a structured body, in a TAGBODY when they have labels
+  (cl:if (some #'label-p stmts)
+      `((tagbody ,@(tagged stmts)))
+      stmts))
+
+(defun jump-body (stmts)
+  ;; The top level of a program or PROC/FN: GOSUB (gosub-run tag) runs the
+  ;; same statements from tag, so RETURN goes back to after the GOSUB
+  (cl:if (uses-p '("GOSUB" "ON-GOSUB" "RETURN") stmts)
+      (cl:let ((tags (mapcar (lambda (s) (target-tag (second s)))
+                             (remove-if-not #'label-p stmts))))
+        `((labels ((gosub-run (gosub-start)
+                     (block gosub-body
+                       (tagbody
+                          (cl:case gosub-start
+                            ((nil))
+                            ,@(mapcar (lambda (tag) `((,tag) (go ,tag))) tags)
+                            (t (error "GOSUB: unknown label ~a" gosub-start)))
+                          ,@(tagged stmts))
+                       (when gosub-start (error "GOSUB reached end without RETURN")))))
+            (gosub-run nil))))
+      (body stmts)))
+
+(defmacro mini-basic:label (name)
+  (declare (ignore name))
+  nil)
+
+(defmacro mini-basic:goto (target) `(go ,(target-tag target)))
+(defmacro mini-basic:gosub (target) `(gosub-run ',(target-tag target)))
+
+(defmacro mini-basic:return ()
+  '(cl:if gosub-start (return-from gosub-body) (error "RETURN without GOSUB")))
+
+(defun on-code (transfer idx targets else-stmts)
+  (cl:let ((k (gensym "ON")))
+    `(cl:let ((,k (bbc-int ,idx)))
+       (cl:case ,k
+         ,@(loop for target in targets
+                 for i from 1
+                 collect `(,i (,transfer ,target)))
+         (t ,@(or else-stmts '((error "ON range"))))))))
+
+(defmacro mini-basic:on-goto (idx targets else-stmts)
+  (on-code 'mini-basic:goto idx targets else-stmts))
+
+(defmacro mini-basic:on-gosub (idx targets else-stmts)
+  (on-code 'mini-basic:gosub idx targets else-stmts))
+
 ;;; --- Statements ---
 
 (defun typed-value (var exp)
@@ -349,8 +427,8 @@
 (defmacro mini-basic:if (test &rest body)
   (multiple-value-bind (then else) (split-at body "ELSE")
     `(cl:if ,(bbc-test test)
-            (progn ,@then)
-            ,@(unless (eq else :none) `((progn ,@else))))))
+            (progn ,@(body then))
+            ,@(unless (eq else :none) `((progn ,@(body else)))))))
 
 (defmacro mini-basic:for (var from to &rest more)
   (cl:let* ((has-step (marker-p (car more) "STEP"))
@@ -366,7 +444,7 @@
        (cl:let ((,lim ,to) (,st ,step))
          (block exit-for
            (loop
-             ,@body
+             ,@(body body)
              (mini-basic:let ,var (+ ,var ,st))
              (when ,done (return-from exit-for))))))))
 
@@ -374,23 +452,23 @@
   (multiple-value-bind (stmts until) (split-at body "UNTIL")
     `(block exit-repeat
        (loop
-         ,@stmts
+         ,@(body stmts)
          (when ,(bbc-test (car until)) (return-from exit-repeat))))))
 
 (defmacro mini-basic:while (test &rest body)
   `(block exit-while
      (loop
        (unless ,(bbc-test test) (return-from exit-while))
-       ,@body)))
+       ,@(body body))))
 
 (defmacro mini-basic:case (exp &rest clauses)
   (cl:let ((v (gensym "CASE")))
     `(cl:let ((,v ,exp))
        (cond ,@(mapcar (lambda (clause)
                          (cl:if (form-p clause "OTHERWISE")
-                             `(t nil ,@(cdr clause))
+                             `(t nil ,@(body (cdr clause)))
                              `((or ,@(mapcar (lambda (w) `(bbc-equal ,v ,w)) (second clause)))
-                               nil ,@(cddr clause))))
+                               nil ,@(body (cddr clause)))))
                        clauses)))))
 
 (defmacro mini-basic:exit-for () '(return-from exit-for))
@@ -416,7 +494,7 @@
                 ,@(mapcar (lambda (v) (list v v)) locals))
          (declare (special ,@parms ,@locals))
          (block ,(cl:if (string= kind "FN") 'fn 'proc)
-           ,@body)))))
+           ,@(jump-body body))))))
 
 (defmacro mini-basic:def-proc (head &rest body) (def-code "PROC" head body))
 (defmacro mini-basic:def-fn (head &rest body) (def-code "FN" head body))
@@ -465,5 +543,5 @@
        (setf *col* 0
              *data* (vector ,@(data-items stmts))
              *data-ptr* 0)
-       (catch 'end ,@(remove-if #'def-p stmts))
+       (catch 'end ,@(jump-body (remove-if #'def-p stmts)))
        nil)))

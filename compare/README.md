@@ -62,8 +62,8 @@ The SBCL and Clojure times are `(time (run-sbcl (slurp "basic/bench/primes.bas")
 from lispy3, so they include starting the other Lisp: about 0.1 s for SBCL
 and 1 s for Clojure. mini_basic and lispy3 remember the results of a pure
 `DEF FN`, so `FNfib` runs once for each `n` there; without the cache lispy3
-takes 2.5 s. The classic sieve (mini_basic's `examples/SIEVE.bbc`) needs
-`DIM`, `GOTO` and `TIME`, which the reader does not have yet.
+takes 2.5 s. The classic sieve (mini_basic's `examples/SIEVE.bbc`, with `DIM`,
+`GOTO` and `TIME`) runs in all three Lisps and finds its 1899 primes.
 
 ```lisp
 (time (run-lispy (slurp "basic/bench/primes.bas")))   ; also run-sbcl, run-clojure
@@ -92,10 +92,22 @@ pure `DEF FN`.
 
 The SBCL and Clojure ports have the statements above plus BBC BASIC for SDL
 numbers (`%1010`, `<<`, `>>`, `>>>`, `PRINT ~`, `STR$~`, `A%`/`A%%`/`A&`/`A#`),
-`TIME`, `DATA`/`READ`/`RESTORE` and `DIM` arrays; the golden examples
-`basic/examples/numbers.bas` and `data.bas` check them. GOTO, GOSUB and ON,
-`RESTORE` to a label, terminal control (CLS, COLOUR, VDU, ANSI), file I/O and
-graphics are lispy3 only.
+`TIME`, `DATA`/`READ`/`RESTORE`, `DIM` arrays, and `GOTO`, `GOSUB`/`RETURN` and
+`ON ... GOTO/GOSUB [ELSE]` to line numbers and `(label)` names; the golden
+examples `basic/examples/numbers.bas`, `data.bas`, `jumps.bas` and `labels.bas`
+check them. A calculated GOTO, `RESTORE` to a label, `ON ERROR`, terminal control
+(CLS, COLOUR, VDU, ANSI), file I/O and graphics are lispy3 only.
+
+How the jumps are made:
+
+- **SBCL** has them built in. A body with `(LABEL n)` forms becomes a `tagbody`
+  with the labels as tags, so `GOTO` is `go`, to this body or an enclosing one.
+  `GOSUB` calls a local function `gosub-run` that enters the same `tagbody` at
+  the label, and `RETURN` is `return-from` it.
+- **Clojure** has no `tagbody`, so a body with labels and jumps is cut at its
+  labels into segments, one `fn` each, run in turn from a program counter, as
+  lispy3 does. `GOTO` throws and the nearest body with the label catches it;
+  `GOSUB` and `RETURN` work as in SBCL, with `RETURN` throwing.
 
 The Lisp-form programs in `programs/` run directly:
 
