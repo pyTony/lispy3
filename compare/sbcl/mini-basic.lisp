@@ -21,6 +21,10 @@
            #:exit-for #:exit-repeat #:exit-while #:true #:false
            #:dim #:aref #:aset! #:data #:read #:restore
            #:label #:goto #:gosub #:return #:on-goto #:on-gosub
+           ;; File I/O, as the reader writes it (lisp/mini-basic-io.lisp)
+           #:bbc-let #:bbc-lambda #:bbc-open #:bbc-close #:bbc-close-text #:bbc-eof
+           #:bbc-ptr #:bbc-set-ptr! #:bbc-ext #:bbc-print-file #:bbc-input-file
+           #:bbc-bput #:bbc-bget #:bbc-get-line #:bbc-text-channel? #:bbc-print-to
            ;; What the BBC BASIC text reader writes for operators and functions
            #:bbc= #:bbc< #:bbc> #:bbc<= #:bbc>= #:bbc-eq? #:bbc-if
            #:bbc-quotient #:bbc-remainder #:bbc-trunc #:bbc-float #:bbc-expt
@@ -220,6 +224,130 @@
 
 (defun bbc-make-array (dims fill)
   (make-array (mapcar (lambda (d) (1+ (bbc-int d))) dims) :initial-element fill))
+
+;;; --- Files: OPENIN, OPENOUT, OPENUP, PRINT#, INPUT#, BPUT#, BGET#, GET$# ---
+;;; The byte layout of BBC BASIC for SDL, as in lisp/mini-basic-io.lisp:
+;;; PRINT# writes a string and CR, a whole number as &40 and 4 bytes and any
+;;; other number as &FF and an 8-byte double, least significant byte first.
+
+(defmacro mini-basic:bbc-let (bindings &body body) `(cl:let ,bindings ,@body))
+(defmacro mini-basic:bbc-lambda (args &body body) `(lambda ,args ,@body))
+
+(defvar *channels* (make-hash-table))
+(defvar *next-channel* 1)
+
+(defun bbc-channel (n)
+  (or (gethash (bbc-int n) *channels*) (error "Invalid channel ~a" n)))
+
+(defun mini-basic:bbc-open (name mode)
+  ;; A new channel number, or 0 when the file cannot be opened
+  (cl:let ((stream (ignore-errors
+                    (cond ((string= mode "rb")
+                           (open name :element-type '(unsigned-byte 8) :if-does-not-exist nil))
+                          ((string= mode "w+b")
+                           (open name :element-type '(unsigned-byte 8) :direction :io
+                                      :if-exists :supersede :if-does-not-exist :create))
+                          (t
+                           (open name :element-type '(unsigned-byte 8) :direction :io
+                                      :if-exists :overwrite :if-does-not-exist nil))))))
+    (cl:if stream
+        (prog1 *next-channel*
+          (setf (gethash *next-channel* *channels*) stream)
+          (incf *next-channel*))
+        0)))
+
+(defun mini-basic:bbc-close (n)
+  ;; CLOSE#0 closes every file
+  (cl:if (zerop (bbc-int n))
+      (loop for ch being the hash-keys of *channels* do (mini-basic:bbc-close ch))
+      (progn (close (bbc-channel n))
+             (remhash (bbc-int n) *channels*))))
+
+(defun mini-basic:bbc-close-text (&rest numbers)
+  ;; MBASIC's CLOSE n, ... and bare CLOSE; the ports have only BBC channels
+  (cl:if numbers
+      (mapc #'mini-basic:bbc-close numbers)
+      (mini-basic:bbc-close 0))
+  nil)
+
+(defun mini-basic:bbc-text-channel? (n) (declare (ignore n)) nil)
+(defun mini-basic:bbc-print-to (n body)
+  (declare (ignore n body))
+  (error "MBASIC text files are lispy3 only"))
+
+(defun mini-basic:bbc-ptr (n) (file-position (bbc-channel n)))
+(defun mini-basic:bbc-set-ptr! (n p) (file-position (bbc-channel n) (bbc-int p)))
+(defun mini-basic:bbc-ext (n) (file-length (bbc-channel n)))
+
+(defun mini-basic:bbc-eof (n)
+  (cl:let ((f (bbc-channel n)))
+    (cl:if (>= (file-position f) (file-length f)) -1 0)))
+
+(defun bbc-read-byte (f)
+  (or (read-byte f nil) (error "End of file")))
+
+(defun bbc-write-string (f s)
+  (loop for c across s do (write-byte (min 255 (char-code c)) f)))
+
+(defun bbc-write-le (f n count)
+  (dotimes (i count) (write-byte (ldb (byte 8 (* 8 i)) n) f)))
+
+(defun bbc-read-le (f count)
+  (cl:let ((n 0))
+    (dotimes (i count n) (setf n (dpb (bbc-read-byte f) (byte 8 (* 8 i)) n)))))
+
+(defun mini-basic:bbc-print-file (n &rest items)
+  (cl:let ((f (bbc-channel n)))
+    (dolist (x items)
+      (cond ((stringp x) (bbc-write-string f x) (write-byte 13 f))
+            ((and (integerp x) (<= (- (expt 2 31)) x (1- (expt 2 31))))
+             (write-byte 64 f)
+             (bbc-write-le f x 4))
+            (t
+             (cl:let ((d (float x 1d0)))
+               (write-byte 255 f)
+               (bbc-write-le f (logior (ash (ldb (byte 32 0) (sb-kernel:double-float-high-bits d)) 32)
+                                       (sb-kernel:double-float-low-bits d))
+                             8)))))))
+
+(defun bbc-read-until (f stops)
+  ;; (values text stop): the bytes up to one in stops, or the end of the file
+  (cl:let ((out (make-string-output-stream)))
+    (loop for b = (read-byte f nil)
+          until (or (null b) (member b stops))
+          do (write-char (code-char b) out)
+          finally (return (values (get-output-stream-string out) b)))))
+
+(defun mini-basic:bbc-input-file (n kind)
+  (cl:let ((f (bbc-channel n)))
+    (cl:if (eq kind :str)
+        (values (bbc-read-until f '(13)))
+        (cl:case (bbc-read-byte f)
+          (64 (cl:let ((u (bbc-read-le f 4)))
+                (cl:if (>= u (expt 2 31)) (- u (expt 2 32)) u)))
+          (255 (cl:let ((bits (bbc-read-le f 8)))
+                 (sb-kernel:make-double-float
+                  (cl:let ((hi (ldb (byte 32 32) bits))) (cl:if (>= hi (expt 2 31)) (- hi (expt 2 32)) hi))
+                  (ldb (byte 32 0) bits))))
+          (t (error "Type mismatch: INPUT# expected a number"))))))
+
+(defun mini-basic:bbc-bput (n x newline)
+  (cl:let ((f (bbc-channel n)))
+    (cl:if (stringp x)
+        (progn (bbc-write-string f x)
+               (when newline (write-byte 10 f)))
+        (write-byte (ldb (byte 8 0) (bbc-int x)) f))))
+
+(defun mini-basic:bbc-bget (n) (bbc-read-byte (bbc-channel n)))
+
+(defun mini-basic:bbc-get-line (n)
+  ;; GET$#: up to CR, LF or NUL; a CR LF pair counts as one line end
+  (cl:let ((f (bbc-channel n)))
+    (multiple-value-bind (text stop) (bbc-read-until f '(13 10 0))
+      (when (eql stop 13)
+        (cl:let ((here (file-position f)))
+          (unless (eql (read-byte f nil) 10) (file-position f here))))
+      text)))
 
 ;;; --- Helpers the macros use while they expand ---
 
@@ -543,5 +671,7 @@
        (setf *col* 0
              *data* (vector ,@(data-items stmts))
              *data-ptr* 0)
-       (catch 'end ,@(jump-body (remove-if #'def-p stmts)))
+       (unwind-protect
+            (catch 'end ,@(jump-body (remove-if #'def-p stmts)))
+         (mini-basic:bbc-close 0))
        nil)))

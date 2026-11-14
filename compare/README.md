@@ -95,8 +95,12 @@ numbers (`%1010`, `<<`, `>>`, `>>>`, `PRINT ~`, `STR$~`, `A%`/`A%%`/`A&`/`A#`),
 `TIME`, `DATA`/`READ`/`RESTORE`, `DIM` arrays, and `GOTO`, `GOSUB`/`RETURN` and
 `ON ... GOTO/GOSUB [ELSE]` to line numbers and `(label)` names; the golden
 examples `basic/examples/numbers.bas`, `data.bas`, `jumps.bas` and `labels.bas`
-check them. A calculated GOTO, `RESTORE` to a label, `ON ERROR`, terminal control
-(CLS, COLOUR, VDU, ANSI), file I/O and graphics are lispy3 only.
+check them. They also have BBC BASIC file I/O (`OPENIN`, `OPENOUT`, `OPENUP`,
+`PRINT#`, `INPUT#`, `BPUT#`, `BGET#`, `GET$#`, `EOF#`, `PTR#`, `EXT#`, `CLOSE#`)
+with BBC BASIC for SDL's byte layout, checked by `files.bas`: SBCL uses byte
+streams, Clojure `java.io.RandomAccessFile`. A calculated GOTO, `RESTORE` to a
+label, `ON ERROR`, MBASIC text files (`OPEN`), terminal control (CLS, COLOUR,
+VDU, ANSI) and graphics are lispy3 only.
 
 How the jumps are made:
 

@@ -4,7 +4,7 @@ What Lispy has today, at a glance: the Lisp language, the mini-basic BASIC
 (BBC and MBASIC styles), and the Lispy Machine editor. Each row links to the
 page that explains it.
 
-**Last checked: 2026-11-13, `dev` after PR #140, with GOTO/GOSUB/ON in the SBCL and Clojure ports.**
+**Last checked: 2026-11-13, `dev` after PR #140, with GOTO/GOSUB/ON and file I/O in the SBCL and Clojure ports.**
 
 ✅ works · 🟡 partly, see the note · ❌ not yet
 
@@ -113,7 +113,7 @@ compatibility option, not a complete MBASIC dialect. Details in [mini-basic](MIN
 | INPUT, INPUT LINE / LINE INPUT, GET, GET$, INKEY, INKEY$ | ✅ | ✅ | keys from the MODE window or typed lines |
 | TIME, WAIT, END, STOP, QUIT | ✅ | ✅ | |
 | RND | ✅ | ✅ | bare `RND` is `RND(1)` in MBASIC style |
-| Text files: OPENIN/OPENOUT/BGET/BPUT, MBASIC OPEN | ✅ | 🟡 | CHAIN, MERGE, KILL, random files not yet |
+| Text files: OPENIN/OPENOUT/BGET/BPUT, MBASIC OPEN | ✅ | 🟡 | CHAIN, MERGE, KILL, random files not yet; BBC channels also in the SBCL and Clojure ports ([compare](../compare/README.md)) |
 | Memory: `DIM m n`, `?` `!` `$` indirection, structures | ❌ | — | |
 | SOUND, INSTALL | ❌ | — | |
 | VDU subset and raw ANSI | ✅ | — | ([terminal output](TERMINAL_OUTPUT.md)) |

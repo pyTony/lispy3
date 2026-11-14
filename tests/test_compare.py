@@ -10,6 +10,7 @@ import io
 import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 
 from support import REPO_DIR, LispyTestCase, lispy3
@@ -25,6 +26,18 @@ BASIC_PROGRAMS = [os.path.splitext(path)[0] + '.bas' for path in
 def expected_output(program: str) -> str:
     with open(os.path.splitext(program)[0] + '.out', encoding='utf-8') as f:
         return f.read()
+
+
+@contextlib.contextmanager
+def in_temp_dir():
+    """Run a program in an empty folder, so files it writes (files.bas) go there."""
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory() as folder:
+        os.chdir(folder)
+        try:
+            yield
+        finally:
+            os.chdir(here)
 
 
 def clojure_command() -> list[str] | None:
@@ -81,7 +94,7 @@ class LispyCompareTest(LispyTestCase):
                 lispy3.global_env.clear()
                 lispy3.global_env.update(lispy3.standard_env())
                 lispy3.load_workspace('mini-basic')
-                with contextlib.redirect_stdout(io.StringIO()) as out:
+                with in_temp_dir(), contextlib.redirect_stdout(io.StringIO()) as out:
                     # FIX: Escape Windows backslashes so the Lisp parser reads them as literal path blocks
                     escaped_program = program.replace('\\', '\\\\')
                     self.ev(f'(bbc-load "{escaped_program}")')
@@ -99,7 +112,9 @@ class SbclCompareTest(CompareTestCase):
             with self.subTest(program=os.path.basename(program)):
                 # FIX: Escape Windows backslashes here too!
                 escaped_program = program.replace('\\', '\\\\')
-                self.assertEqual(run_in_lispy(f'(run-sbcl (slurp "{escaped_program}"))'), expected_output(program))
+                with in_temp_dir():
+                    output = run_in_lispy(f'(run-sbcl (slurp "{escaped_program}"))')
+                self.assertEqual(output, expected_output(program))
 
 
 @unittest.skipUnless(clojure_command(), 'Clojure is not installed (or set CLOJURE_CP)')
@@ -118,7 +133,9 @@ class RunClojureTest(unittest.TestCase):
             with self.subTest(program=os.path.basename(program)):
                 # FIX: Escape Windows backslashes here too!
                 escaped_program = program.replace('\\', '\\\\')
-                self.assertEqual(run_in_lispy(f'(run-clojure (slurp "{escaped_program}"))'), expected_output(program))
+                with in_temp_dir():
+                    output = run_in_lispy(f'(run-clojure (slurp "{escaped_program}"))')
+                self.assertEqual(output, expected_output(program))
 
 if __name__ == '__main__':
     unittest.main()
